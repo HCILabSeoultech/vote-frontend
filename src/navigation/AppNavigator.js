@@ -1,40 +1,18 @@
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { NavigationContainer } from '@react-navigation/native';
+import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
-import HomeScreen from '../screens/HomeScreen';
-import ProfileScreen from '../screens/ProfileScreen';
-import CreatePostScreen from '../screens/CreatePostScreen';
-import { Ionicons } from '@expo/vector-icons';
+import { NavigationContainer } from '@react-navigation/native';
+import MainScreen from '../screens/MainScreen';
+import SignupScreen from '../screens/SignupScreen';
 
-const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
-
-const HomeStack = () => (
-  <Stack.Navigator>
-    <Stack.Screen name="Home" component={HomeScreen} />
-    <Stack.Screen name="CreatePost" component={CreatePostScreen} />
-  </Stack.Navigator>
-);
 
 const AppNavigator = () => {
   return (
     <NavigationContainer>
-      <Tab.Navigator
-        screenOptions={({ route }) => ({
-          tabBarIcon: ({ color, size }) => {
-            let iconName;
-            if (route.name === 'Home') {
-              iconName = 'home';
-            } else if (route.name === 'Profile') {
-              iconName = 'person';
-            }
-            return <Ionicons name={iconName} size={size} color={color} />;
-          },
-        })}
-      >
-        <Tab.Screen name="Home" component={HomeStack} />
-        <Tab.Screen name="Profile" component={ProfileScreen} />
-      </Tab.Navigator>
+      <Stack.Navigator>
+        <Stack.Screen name="Main" component={MainScreen} options={{ title: '홈' }} />
+        <Stack.Screen name="Signup" component={SignupScreen} options={{ title: '회원가입' }} />
+      </Stack.Navigator>
     </NavigationContainer>
   );
 };
