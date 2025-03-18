@@ -10,12 +10,12 @@ const SignupScreen = ({ navigation }) => {
   const [name, setName] = useState('');
   const [gender, setGender] = useState('');
   const [phone, setPhone] = useState('');
-  const [birthDate, setBirthDate] = useState('');
+  const [birthdate, setBirthdate] = useState('');
   const [address, setAddress] = useState('');
   const [introduction, setIntroduction] = useState('');
 
   const handleSignup = async () => {
-    const userData = { username, password, name, gender, phone, birthDate, address, introduction, profileImage: "default.jpg" };
+    const userData = { username, password, name, gender, phone, birthdate, address, introduction, profileImage: "default.jpg" };
 
     try {
         await signup(userData);
@@ -42,7 +42,7 @@ const SignupScreen = ({ navigation }) => {
       <InputField placeholder="이름" value={name} onChangeText={setName} />
       <InputField placeholder="성별" value={gender} onChangeText={setGender} />
       <InputField placeholder="전화번호" value={phone} onChangeText={setPhone} />
-      <InputField placeholder="생년월일 (YYYY-MM-DD)" value={birthDate} onChangeText={setBirthDate} />
+      <InputField placeholder="생년월일 (YYYY-MM-DD)" value={birthdate} onChangeText={setBirthdate} />
       <InputField placeholder="주소" value={address} onChangeText={setAddress} />
       <InputField placeholder="자기소개" value={introduction} onChangeText={setIntroduction} />
       <Button title="회원가입" onPress={handleSignup} />
