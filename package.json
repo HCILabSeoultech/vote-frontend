@@ -2,7 +2,7 @@
   "name": "vote-front",
   "license": "0BSD",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "index.tsx",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
@@ -25,7 +25,10 @@
     "react-native-vector-icons": "^10.2.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.20.0"
+    "@babel/core": "^7.20.0",
+    "@types/react": "~18.3.12",
+    "@types/react-native": "^0.72.8",
+    "typescript": "^5.8.2"
   },
   "private": true
 }

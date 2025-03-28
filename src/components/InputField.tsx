@@ -1,7 +1,19 @@
 import React from 'react';
 import { TextInput, View, StyleSheet } from 'react-native';
 
-const InputField = ({ value, onChangeText, placeholder, secureTextEntry }) => {
+type InputFieldProps = {
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder?: string;
+  secureTextEntry?: boolean;
+};
+
+const InputField: React.FC<InputFieldProps> = ({
+  value,
+  onChangeText,
+  placeholder,
+  secureTextEntry = false,
+}) => {
   return (
     <View style={styles.container}>
       <TextInput
@@ -25,6 +37,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     padding: 10,
     fontSize: 16,
+    width: '100%',
   },
 });
 
