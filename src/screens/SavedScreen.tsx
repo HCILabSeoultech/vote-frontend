@@ -4,7 +4,7 @@ import { View, Text, StyleSheet } from 'react-native';
 const SavedScreen: React.FC = () => {
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>메인 페이지입니다</Text>
+      <Text style={styles.text}>저장고 페이지입니다</Text>
     </View>
   );
 };

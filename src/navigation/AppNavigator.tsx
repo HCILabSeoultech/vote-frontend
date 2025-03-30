@@ -4,8 +4,8 @@ import { createStackNavigator } from '@react-navigation/stack';
 import LoginScreen from '../screens/LoginScreen';
 import SignupScreen from '../screens/SignupScreen';
 import CategorySelectionScreen from '../screens/CategorySelectionScreen';
-import MainScreen from '../screens/MainScreen';
 import { UserData } from '../types/UserData'
+import MainTabs from './MainTabs'
 
 export type RootStackParamList = {
   Login: undefined;
@@ -19,11 +19,12 @@ const Stack = createStackNavigator<RootStackParamList>();
 const AppNavigator = () => (
   <NavigationContainer>
     <Stack.Navigator 
-      initialRouteName="Login">        
+      initialRouteName="Login"
+      screenOptions={{ headerShown: false }}>        
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Signup" component={SignupScreen} />
       <Stack.Screen name="CategorySelection" component={CategorySelectionScreen} />
-      <Stack.Screen name="Main" component={MainScreen} />
+      <Stack.Screen name="Main" component={MainTabs} />
     </Stack.Navigator>
   </NavigationContainer>
 );

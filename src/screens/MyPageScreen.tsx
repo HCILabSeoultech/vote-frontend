@@ -1,10 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
-const SavedScreen: React.FC = () => {
+const MyPageScreen: React.FC = () => {
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>메인 페이지입니다</Text>
+      <Text style={styles.text}>마이페이지입니다</Text>
     </View>
   );
 };
@@ -21,4 +21,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default SavedScreen;
+export default MyPageScreen;
