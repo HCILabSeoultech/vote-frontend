@@ -10,6 +10,7 @@ import {
   Image,
   Alert,
 } from 'react-native';
+import Animated, { FadeInLeft } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getMainPageVotes, selectVoteOption } from '../api/post';
 import { VoteResponse } from '../types/Vote';
@@ -22,6 +23,7 @@ const SavedScreen: React.FC = () => {
   const [page, setPage] = useState(0);
   const [isLast, setIsLast] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({});
   const isFocused = useIsFocused();
 
   const fetchVotes = async (nextPage: number) => {
@@ -50,19 +52,47 @@ const SavedScreen: React.FC = () => {
   }, [isFocused]);
 
   const isVoteClosed = (finishTime: string) => {
-    return new Date(finishTime).getTime() < new Date().getTime(); 
+    return new Date(finishTime).getTime() < new Date().getTime();
   };
 
   const handleVote = async (voteId: number, optionId: number) => {
     try {
-      const token = await AsyncStorage.getItem('token'); 
+      const token = await AsyncStorage.getItem('token');
       if (!token) {
         Alert.alert('인증 오류', '로그인이 필요합니다.');
         return;
       }
 
-      await selectVoteOption(voteId, optionId); // 
-      Alert.alert('투표 완료', '투표가 성공적으로 저장되었습니다.');
+      await selectVoteOption(voteId, optionId);
+
+      setVotes((prevVotes) =>
+        prevVotes.map((vote) => {
+          if (vote.voteId !== voteId) return vote;
+
+          const isFirstVote = vote.selectedOptionId === undefined;
+
+          const updatedOptions = vote.voteOptions.map((opt) => {
+            if (opt.id === optionId) {
+              return { ...opt, voteCount: opt.voteCount + 1 };
+            }
+            if (!isFirstVote && vote.selectedOptionId === opt.id) {
+              return { ...opt, voteCount: opt.voteCount - 1 };
+            }
+            return opt;
+          });
+
+          return {
+            ...vote,
+            voteOptions: updatedOptions,
+            selectedOptionId: optionId,
+          };
+        })
+      );
+
+      setSelectedOptions((prev) => ({
+        ...prev,
+        [voteId]: optionId,
+      }));
     } catch (error) {
       console.error('투표 실패:', error);
       Alert.alert('에러', '투표 중 오류가 발생했습니다.');
@@ -71,27 +101,20 @@ const SavedScreen: React.FC = () => {
 
   const renderItem = ({ item }: { item: VoteResponse }) => {
     const closed = isVoteClosed(item.finishTime);
+    const selectedOptionId = item.selectedOptionId ?? selectedOptions[item.voteId];
+    const hasVoted = !!selectedOptionId;
+    const showGauge = closed || hasVoted;
+
+    // ✅ 퍼센트 계산을 voteCount 합으로 직접 처리
+    const totalCount = item.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0);
 
     return (
-      <View
-        style={[
-          styles.voteItem,
-          closed && { backgroundColor: '#ddd' }, 
-        ]}
-      >
-        <Text style={styles.title}>
-          {item.title} {closed && ' (마감)'} 
-        </Text>
-        <Text style={styles.meta}>
-          작성자: {item.username} | 카테고리: {item.categoryName}
-        </Text>
-        <Text style={styles.meta}>
-          마감일: {new Date(item.finishTime).toLocaleDateString()}
-        </Text>
+      <View style={[styles.voteItem, closed && { backgroundColor: '#ddd' }]}>
+        <Text style={styles.title}>{item.title} {closed && ' (마감)'}</Text>
+        <Text style={styles.meta}>작성자: {item.username} | 카테고리: {item.categoryName}</Text>
+        <Text style={styles.meta}>마감일: {new Date(item.finishTime).toLocaleDateString()}</Text>
 
-        <Text numberOfLines={2} style={styles.content}>
-          {item.content}
-        </Text>
+        <Text numberOfLines={2} style={styles.content}>{item.content}</Text>
 
         {item.images.length > 0 && (
           <View style={styles.imageContainer}>
@@ -108,27 +131,47 @@ const SavedScreen: React.FC = () => {
 
         {item.voteOptions.length > 0 && (
           <View style={styles.optionContainer}>
-            {item.voteOptions.map((opt) => (
-              <TouchableOpacity
-                key={opt.id}
-                style={[
-                  styles.optionButton,
-                  closed && { backgroundColor: '#eee', borderColor: '#ccc' }, 
-                ]}
-                onPress={() => handleVote(item.voteId, opt.id)}
-                disabled={closed}
-              >
-                <Text style={styles.optionButtonText}>{opt.content}</Text>
-              </TouchableOpacity>
-            ))}
+            {item.voteOptions.map((opt) => {
+              const isSelected = selectedOptionId === opt.id;
+              const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
+
+              return (
+                <View key={opt.id} style={styles.optionWrapper}>
+                  {showGauge && (
+                    <Animated.View
+                      entering={FadeInLeft}
+                      style={[
+                        styles.gaugeBar,
+                        {
+                          width: `${percentage}%`,
+                          backgroundColor: isSelected ? '#007bff' : '#d0e6ff',
+                        },
+                      ]}
+                    />
+                  )}
+                  <TouchableOpacity
+                    style={[
+                      styles.optionButton,
+                      closed && { backgroundColor: '#eee', borderColor: '#ccc' },
+                      !closed && isSelected && { borderColor: '#007bff', borderWidth: 2 },
+                    ]}
+                    onPress={() => handleVote(item.voteId, opt.id)}
+                    disabled={closed || isSelected} // ✅ 선택한 옵션은 다시 못 누르게
+                  >
+                    <Text style={styles.optionButtonText}>{opt.content}</Text>
+                    {showGauge && (
+                      <Text style={styles.percentageText}>{percentage}%</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
           </View>
         )}
 
         <View style={styles.reactionRow}>
           <TouchableOpacity style={styles.reactionItem}>
-            <Text style={styles.reactionIcon}>
-              {item.isLiked ? '❤️' : '🤍'}
-            </Text>
+            <Text style={styles.reactionIcon}>{item.isLiked ? '❤️' : '🤍'}</Text>
             <Text style={styles.reactionText}>{item.likeCount}</Text>
           </TouchableOpacity>
 
@@ -138,9 +181,11 @@ const SavedScreen: React.FC = () => {
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.reactionItem}>
-            <Text style={styles.reactionIcon}>
-              {item.isBookmarked ? '🔖' : '📄'}
-            </Text>
+            <Text style={styles.reactionIcon}>{item.isBookmarked ? '🔖' : '📄'}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.reactionItem}>
+            <Text style={styles.reactionIcon}>📊</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -178,6 +223,18 @@ const styles = StyleSheet.create({
   imageContainer: { marginTop: 8 },
   image: { width: '100%', height: 200, borderRadius: 8, marginTop: 8 },
   optionContainer: { marginTop: 12 },
+  optionWrapper: {
+    position: 'relative',
+    marginVertical: 6,
+  },
+  gaugeBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 10,
+    zIndex: -1,
+  },
   optionButton: {
     backgroundColor: '#ffffff',
     borderColor: '#888',
@@ -185,10 +242,16 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 14,
     paddingHorizontal: 16,
-    marginVertical: 6,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
   optionButtonText: { fontSize: 16, color: '#333' },
+  percentageText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+  },
   reactionRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',

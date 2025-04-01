@@ -15,6 +15,7 @@ export type CreateVoteRequest = {
     export type VoteOption = {
       id: number;
       content: string;
+      voteCount: number;
     };
   
   export type VoteResponse = {
@@ -31,6 +32,9 @@ export type CreateVoteRequest = {
       isBookmarked: boolean;
       images: VoteImage[];
       voteOptions: VoteOption[];
+
+      selectedOptionId?: number;
+        totalVotes: number;
     };
   
     export type VotePageResponse = {
