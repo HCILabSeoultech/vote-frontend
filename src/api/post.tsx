@@ -38,3 +38,22 @@ export const getMainPageVotes = async (page = 0, size = 10): Promise<VotePageRes
     return res.data;
   };
   
+  //투표 참여
+export const selectVoteOption = async (voteId: number, optionId: number) => {
+  const token = await AsyncStorage.getItem('token');
+  if (!token) throw new Error('JWT 토큰이 없습니다.');
+
+  return await axios.post(
+    `${SERVER_URL}/vote/select`,
+    {
+      voteId,
+      optionId,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+};

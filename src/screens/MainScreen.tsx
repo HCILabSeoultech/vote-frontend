@@ -8,12 +8,14 @@ import {
   SafeAreaView,
   TouchableOpacity,
   Image,
+  Alert,
 } from 'react-native';
-import { getMainPageVotes } from '../api/post';
-import { VoteResponse} from '../types/Vote';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getMainPageVotes, selectVoteOption } from '../api/post';
+import { VoteResponse } from '../types/Vote';
 import { useIsFocused } from '@react-navigation/native';
 
-const IMAGE_BASE_URL = 'http://localhost:8080'; 
+const IMAGE_BASE_URL = 'http://localhost:8080';
 
 const SavedScreen: React.FC = () => {
   const [votes, setVotes] = useState<VoteResponse[]>([]);
@@ -38,82 +40,112 @@ const SavedScreen: React.FC = () => {
     }
   };
 
-  // 화면이 포커스 될 때마다 새로 불러오기
   useEffect(() => {
     if (isFocused) {
-      setVotes([]);       // 초기화
+      setVotes([]);
       setPage(0);
       setIsLast(false);
-      fetchVotes(0);       // 첫 페이지부터 다시 불러오기
+      fetchVotes(0);
     }
   }, [isFocused]);
 
-  const renderItem = ({ item }: { item: VoteResponse }) => (
-    <View style={styles.voteItem}>
-      <Text style={styles.title}>{item.title}</Text>
-      <Text style={styles.meta}>
-        작성자: {item.username} | 카테고리: {item.categoryName}
-      </Text>
-      <Text style={styles.meta}>
-        마감일: {new Date(item.finishTime).toLocaleDateString()}
-      </Text>
+  const isVoteClosed = (finishTime: string) => {
+    return new Date(finishTime).getTime() < new Date().getTime(); 
+  };
 
-      <Text numberOfLines={2} style={styles.content}>
-        {item.content}
-      </Text>
+  const handleVote = async (voteId: number, optionId: number) => {
+    try {
+      const token = await AsyncStorage.getItem('token'); 
+      if (!token) {
+        Alert.alert('인증 오류', '로그인이 필요합니다.');
+        return;
+      }
 
-      {item.images.length > 0 && (
-        <View style={styles.imageContainer}>
-          {item.images.map((img) => (
-            <Image
-              key={img.id}
-              source={{ uri: `${IMAGE_BASE_URL}${img.imageUrl}` }}
-              style={styles.image}
-              resizeMode="cover"
-            />
-          ))}
+      await selectVoteOption(voteId, optionId); // 
+      Alert.alert('투표 완료', '투표가 성공적으로 저장되었습니다.');
+    } catch (error) {
+      console.error('투표 실패:', error);
+      Alert.alert('에러', '투표 중 오류가 발생했습니다.');
+    }
+  };
+
+  const renderItem = ({ item }: { item: VoteResponse }) => {
+    const closed = isVoteClosed(item.finishTime);
+
+    return (
+      <View
+        style={[
+          styles.voteItem,
+          closed && { backgroundColor: '#ddd' }, 
+        ]}
+      >
+        <Text style={styles.title}>
+          {item.title} {closed && ' (마감)'} 
+        </Text>
+        <Text style={styles.meta}>
+          작성자: {item.username} | 카테고리: {item.categoryName}
+        </Text>
+        <Text style={styles.meta}>
+          마감일: {new Date(item.finishTime).toLocaleDateString()}
+        </Text>
+
+        <Text numberOfLines={2} style={styles.content}>
+          {item.content}
+        </Text>
+
+        {item.images.length > 0 && (
+          <View style={styles.imageContainer}>
+            {item.images.map((img) => (
+              <Image
+                key={img.id}
+                source={{ uri: `${IMAGE_BASE_URL}${img.imageUrl}` }}
+                style={styles.image}
+                resizeMode="cover"
+              />
+            ))}
+          </View>
+        )}
+
+        {item.voteOptions.length > 0 && (
+          <View style={styles.optionContainer}>
+            {item.voteOptions.map((opt) => (
+              <TouchableOpacity
+                key={opt.id}
+                style={[
+                  styles.optionButton,
+                  closed && { backgroundColor: '#eee', borderColor: '#ccc' }, 
+                ]}
+                onPress={() => handleVote(item.voteId, opt.id)}
+                disabled={closed}
+              >
+                <Text style={styles.optionButtonText}>{opt.content}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        <View style={styles.reactionRow}>
+          <TouchableOpacity style={styles.reactionItem}>
+            <Text style={styles.reactionIcon}>
+              {item.isLiked ? '❤️' : '🤍'}
+            </Text>
+            <Text style={styles.reactionText}>{item.likeCount}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.reactionItem}>
+            <Text style={styles.reactionIcon}>💬</Text>
+            <Text style={styles.reactionText}>{item.commentCount}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.reactionItem}>
+            <Text style={styles.reactionIcon}>
+              {item.isBookmarked ? '🔖' : '📄'}
+            </Text>
+          </TouchableOpacity>
         </View>
-      )}
-
-      {item.voteOptions.length > 0 && (
-        <View style={styles.optionContainer}>
-          {item.voteOptions.map((opt) => (
-            <TouchableOpacity
-              key={opt.id}
-              style={styles.optionButton}
-              onPress={() => console.log(`투표 선택: ${opt.content}`)}
-            >
-              <Text style={styles.optionButtonText}>{opt.content}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-
-      <View style={styles.reactionRow}>
-        <TouchableOpacity style={styles.reactionItem}>
-          <Text style={styles.reactionIcon}>
-            {item.isLiked ? '❤️' : '🤍'}
-          </Text>
-          <Text style={styles.reactionText}>{item.likeCount}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.reactionItem}>
-          <Text style={styles.reactionIcon}>💬</Text>
-          <Text style={styles.reactionText}>{item.commentCount}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.reactionItem}>
-          <Text style={styles.reactionIcon}>
-            {item.isBookmarked ? '🔖' : '📄'}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.reactionItem}>
-          <Text style={styles.reactionIcon}>📊</Text>
-        </TouchableOpacity>
       </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -131,13 +163,8 @@ const SavedScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  container: {
-    padding: 16,
-  },
+  safeArea: { flex: 1, backgroundColor: '#fff' },
+  container: { padding: 16 },
   voteItem: {
     marginBottom: 20,
     padding: 16,
@@ -145,31 +172,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     elevation: 2,
   },
-  title: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  meta: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 2,
-  },
-  content: {
-    fontSize: 14,
-    marginVertical: 8,
-  },
-  imageContainer: {
-    marginTop: 8,
-  },
-  image: {
-    width: '100%',
-    height: 200,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  optionContainer: {
-    marginTop: 12,
-  },
+  title: { fontSize: 18, fontWeight: 'bold' },
+  meta: { fontSize: 12, color: '#888', marginTop: 2 },
+  content: { fontSize: 14, marginVertical: 8 },
+  imageContainer: { marginTop: 8 },
+  image: { width: '100%', height: 200, borderRadius: 8, marginTop: 8 },
+  optionContainer: { marginTop: 12 },
   optionButton: {
     backgroundColor: '#ffffff',
     borderColor: '#888',
@@ -180,10 +188,7 @@ const styles = StyleSheet.create({
     marginVertical: 6,
     alignItems: 'center',
   },
-  optionButtonText: {
-    fontSize: 16,
-    color: '#333',
-  },
+  optionButtonText: { fontSize: 16, color: '#333' },
   reactionRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
