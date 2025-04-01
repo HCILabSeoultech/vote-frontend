@@ -9,7 +9,8 @@ import {
   TouchableOpacity,
   Image,
 } from 'react-native';
-import { getMainPageVotes, VoteResponse } from '../api/post';
+import { getMainPageVotes } from '../api/post';
+import { VoteResponse} from '../types/Vote';
 import { useIsFocused } from '@react-navigation/native';
 
 const IMAGE_BASE_URL = 'http://localhost:8080'; 
@@ -37,7 +38,7 @@ const SavedScreen: React.FC = () => {
     }
   };
 
-  // ✅ 화면이 포커스 될 때마다 새로 불러오기
+  // 화면이 포커스 될 때마다 새로 불러오기
   useEffect(() => {
     if (isFocused) {
       setVotes([]);       // 초기화
