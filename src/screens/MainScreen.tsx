@@ -13,6 +13,8 @@ import {
 import Animated, { FadeInLeft } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getMainPageVotes, selectVoteOption } from '../api/post';
+import { toggleLike, toggleBookmark } from '../api/reaction';
+
 import { VoteResponse } from '../types/Vote';
 import { useIsFocused } from '@react-navigation/native';
 
@@ -99,13 +101,70 @@ const SavedScreen: React.FC = () => {
     }
   };
 
+  const handleToggleLike = async (voteId: number) => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert('인증 오류', '로그인이 필요합니다.');
+        return;
+      }
+  
+      await toggleLike(voteId);
+  
+      //좋아요 상태 업데이트
+      setVotes((prevVotes) =>
+        prevVotes.map((vote) => {
+          if (vote.voteId !== voteId) return vote;
+          const isLiked = vote.isLiked;
+          const newLikeCount = isLiked ? vote.likeCount - 1 : vote.likeCount + 1;
+          return {
+            ...vote,
+            isLiked: !isLiked,
+            likeCount: newLikeCount,
+          };
+        })
+      );
+    } catch (err) {
+      console.error('좋아요 실패:', err);
+      Alert.alert('에러', '좋아요 처리 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleToggleBookmark = async (voteId: number) => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert('인증 오류', '로그인이 필요합니다.');
+        return;
+      }
+  
+      await toggleBookmark(voteId);
+  
+      //북마크 상태 업데이트
+      setVotes((prevVotes) =>
+        prevVotes.map((vote) => {
+          if (vote.voteId !== voteId) return vote;
+          const isBookmarked = vote.isBookmarked;
+          return {
+            ...vote,
+            isBookmarked: !isBookmarked,
+          };
+        })
+      );
+    } catch (err) {
+      console.error('좋아요 실패:', err);
+      Alert.alert('에러', '좋아요 처리 중 오류가 발생했습니다.');
+    }
+  };
+  
+
   const renderItem = ({ item }: { item: VoteResponse }) => {
     const closed = isVoteClosed(item.finishTime);
     const selectedOptionId = item.selectedOptionId ?? selectedOptions[item.voteId];
     const hasVoted = !!selectedOptionId;
     const showGauge = closed || hasVoted;
 
-    // ✅ 퍼센트 계산을 voteCount 합으로 직접 처리
+    // 퍼센트 계산을 voteCount 합으로 직접 처리
     const totalCount = item.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0);
 
     return (
@@ -156,7 +215,7 @@ const SavedScreen: React.FC = () => {
                       !closed && isSelected && { borderColor: '#007bff', borderWidth: 2 },
                     ]}
                     onPress={() => handleVote(item.voteId, opt.id)}
-                    disabled={closed || isSelected} // ✅ 선택한 옵션은 다시 못 누르게
+                    disabled={closed || isSelected} 
                   >
                     <Text style={styles.optionButtonText}>{opt.content}</Text>
                     {showGauge && (
@@ -170,7 +229,8 @@ const SavedScreen: React.FC = () => {
         )}
 
         <View style={styles.reactionRow}>
-          <TouchableOpacity style={styles.reactionItem}>
+          <TouchableOpacity style={styles.reactionItem}
+            onPress={() => handleToggleLike(item.voteId)}>
             <Text style={styles.reactionIcon}>{item.isLiked ? '❤️' : '🤍'}</Text>
             <Text style={styles.reactionText}>{item.likeCount}</Text>
           </TouchableOpacity>
@@ -180,7 +240,8 @@ const SavedScreen: React.FC = () => {
             <Text style={styles.reactionText}>{item.commentCount}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.reactionItem}>
+          <TouchableOpacity style={styles.reactionItem}
+            onPress={() => handleToggleBookmark(item.voteId)}>
             <Text style={styles.reactionIcon}>{item.isBookmarked ? '🔖' : '📄'}</Text>
           </TouchableOpacity>
 
