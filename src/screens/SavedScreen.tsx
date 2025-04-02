@@ -164,7 +164,6 @@ const StorageScreen: React.FC = () => {
         <View style={styles.reactionRow}>
           <TouchableOpacity style={styles.reactionItem} onPress={() => handleToggleLike(item.voteId)}>
             <Text style={styles.reactionIcon}>{item.isLiked ? '❤️' : '🤍'}</Text>
-            <Text style={styles.reactionText}>{item.likeCount}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.reactionItem}>

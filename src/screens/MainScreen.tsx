@@ -37,6 +37,7 @@ const SavedScreen: React.FC = () => {
       setVotes((prev) => [...prev, ...res.content]);
       setPage(res.number + 1);
       setIsLast(res.last);
+
     } catch (err) {
       console.error('투표 불러오기 실패:', err);
     } finally {
@@ -109,18 +110,16 @@ const SavedScreen: React.FC = () => {
         return;
       }
   
-      await toggleLike(voteId);
+      const updatedVote = await toggleLike(voteId);
   
       //좋아요 상태 업데이트
       setVotes((prevVotes) =>
         prevVotes.map((vote) => {
           if (vote.voteId !== voteId) return vote;
           const isLiked = vote.isLiked;
-          const newLikeCount = isLiked ? vote.likeCount - 1 : vote.likeCount + 1;
           return {
             ...vote,
             isLiked: !isLiked,
-            likeCount: newLikeCount,
           };
         })
       );
@@ -232,7 +231,6 @@ const SavedScreen: React.FC = () => {
           <TouchableOpacity style={styles.reactionItem}
             onPress={() => handleToggleLike(item.voteId)}>
             <Text style={styles.reactionIcon}>{item.isLiked ? '❤️' : '🤍'}</Text>
-            <Text style={styles.reactionText}>{item.likeCount}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.reactionItem}>

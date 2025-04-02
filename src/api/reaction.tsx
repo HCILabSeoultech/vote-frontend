@@ -5,7 +5,7 @@ const API_URL = 'http://localhost:8080/reaction';
 
 export const toggleLike = async (voteId: number) => {
   const token = await AsyncStorage.getItem('token');
-  await axios.post(
+  const res = await axios.post(
     `${API_URL}/like?voteId=${voteId}`,
     {},
     {
@@ -14,6 +14,7 @@ export const toggleLike = async (voteId: number) => {
       },
     }
   );
+  return res.data;
 };
 
 export const toggleBookmark = async (voteId: number) => {

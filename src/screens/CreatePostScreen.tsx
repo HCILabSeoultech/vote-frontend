@@ -16,6 +16,7 @@ import { createVotePost } from '../api/post';
 import { useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { TabParamList } from '../types/TabParam';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const SERVER_URL = 'http://localhost:8080';
 
@@ -133,91 +134,93 @@ const CreatePostScreen: React.FC = () => {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.label}>제목</Text>
-      <TextInput placeholder="제목을 입력하세요" value={title} onChangeText={setTitle} style={styles.input} />
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+      <ScrollView contentContainerStyle={styles.container}>
+        <Text style={styles.label}>제목</Text>
+        <TextInput placeholder="제목을 입력하세요" value={title} onChangeText={setTitle} style={styles.input} />
 
-      <Text style={styles.label}>내용</Text>
-      <TextInput
-        placeholder="내용을 입력하세요"
-        value={content}
-        onChangeText={setContent}
-        multiline
-        numberOfLines={4}
-        style={[styles.input, { height: 100 }]}
-      />
-
-      <Text style={styles.label}>투표 옵션</Text>
-      {options.map((opt, index) => (
+        <Text style={styles.label}>내용</Text>
         <TextInput
-          key={index}
-          placeholder={`옵션 ${index + 1}`}
-          value={opt}
-          onChangeText={(value) => handleOptionChange(index, value)}
-          style={styles.input}
+          placeholder="내용을 입력하세요"
+          value={content}
+          onChangeText={setContent}
+          multiline
+          numberOfLines={4}
+          style={[styles.input, { height: 100 }]}
         />
-      ))}
-      <TouchableOpacity style={styles.addOptionButton} onPress={handleAddOption}>
-        <Text style={styles.addOptionText}>➕ 옵션 추가</Text>
-      </TouchableOpacity>
 
-      <Text style={styles.label}>카테고리 선택</Text>
-      <View style={styles.categoryWrapper}>
-        {categories.map((cat) => (
-          <TouchableOpacity
-            key={cat.id}
-            style={[styles.categoryButton, categoryId === cat.id && styles.selected]}
-            onPress={() => setCategoryId(cat.id)}
-          >
-            <Text style={categoryId === cat.id ? styles.selectedText : styles.unselectedText}>{cat.name}</Text>
-          </TouchableOpacity>
+        <Text style={styles.label}>투표 옵션</Text>
+        {options.map((opt, index) => (
+          <TextInput
+            key={index}
+            placeholder={`옵션 ${index + 1}`}
+            value={opt}
+            onChangeText={(value) => handleOptionChange(index, value)}
+            style={styles.input}
+          />
         ))}
-      </View>
+        <TouchableOpacity style={styles.addOptionButton} onPress={handleAddOption}>
+          <Text style={styles.addOptionText}>➕ 옵션 추가</Text>
+        </TouchableOpacity>
 
-      <Text style={styles.label}>마감일</Text>
-      <TouchableOpacity style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
-        <Text style={styles.dateButtonText}>📅 마감일 선택</Text>
-      </TouchableOpacity>
+        <Text style={styles.label}>카테고리 선택</Text>
+        <View style={styles.categoryWrapper}>
+          {categories.map((cat) => (
+            <TouchableOpacity
+              key={cat.id}
+              style={[styles.categoryButton, categoryId === cat.id && styles.selected]}
+              onPress={() => setCategoryId(cat.id)}
+            >
+              <Text style={categoryId === cat.id ? styles.selectedText : styles.unselectedText}>{cat.name}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-      <Text style={styles.centeredText}>{finishTime.toLocaleString()}</Text>
-      {showDatePicker && (
-        <DateTimePicker
-          value={finishTime}
-          mode="datetime"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={(_, date) => {
-            setShowDatePicker(false);
-            if (date) setFinishTime(date);
-          }}
-        />
-      )}
+        <Text style={styles.label}>마감일</Text>
+        <TouchableOpacity style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
+          <Text style={styles.dateButtonText}>📅 마감일 선택</Text>
+        </TouchableOpacity>
 
-      <Text style={styles.label}>이미지 첨부</Text>
-      <TouchableOpacity style={styles.uploadButton} onPress={handleSelectImage}>
-        <Text style={styles.uploadButtonText}>🖼 이미지 선택</Text>
-      </TouchableOpacity>
+        <Text style={styles.centeredText}>{finishTime.toLocaleString()}</Text>
+        {showDatePicker && (
+          <DateTimePicker
+            value={finishTime}
+            mode="datetime"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={(_, date) => {
+              setShowDatePicker(false);
+              if (date) setFinishTime(date);
+            }}
+          />
+        )}
 
-      {imageUrl && (
-        <Image source={{ uri: `${SERVER_URL}${imageUrl}` }} style={styles.image} />
-      )}
+        <Text style={styles.label}>이미지 첨부</Text>
+        <TouchableOpacity style={styles.uploadButton} onPress={handleSelectImage}>
+          <Text style={styles.uploadButtonText}>🖼 이미지 선택</Text>
+        </TouchableOpacity>
 
-      <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-        <Text style={styles.submitText}>✅ 투표 생성</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        {imageUrl && (
+          <Image source={{ uri: `${SERVER_URL}${imageUrl}` }} style={styles.image} />
+        )}
+
+        <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+          <Text style={styles.submitText}>투표 생성</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 30,
-    paddingVertical: 50,
+    paddingVertical: 5,
     backgroundColor: '#fff',
   },
   label: {
     fontSize: 16,
     fontWeight: 'bold',
-    marginTop: 20,
+    marginTop: 1,
     marginBottom: 8,
   },
   input: {
@@ -231,7 +234,7 @@ const styles = StyleSheet.create({
   categoryWrapper: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: 10,
+    marginBottom: 1,
   },
   categoryButton: {
     paddingVertical: 6,
@@ -255,7 +258,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#eee',
     borderRadius: 10,
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 2,
   },
   dateButtonText: {
     fontSize: 14,
@@ -265,7 +268,7 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 10,
     alignItems: 'center',
-    marginVertical: 10,
+    marginVertical: 1,
   },
   uploadButtonText: {
     fontSize: 14,
@@ -283,11 +286,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   submitButton: {
-    backgroundColor: '#28a745',
+    backgroundColor: '#007bff',
     padding: 14,
     borderRadius: 10,
     alignItems: 'center',
-    marginVertical: 20,
+    marginVertical: 10,
   },
   submitText: {
     color: '#fff',
