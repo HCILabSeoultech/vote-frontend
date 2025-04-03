@@ -1,24 +1,296 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  Image,
+  SafeAreaView,
+  ActivityIndicator,
+  Alert,
+  TouchableOpacity,
+} from 'react-native';
+import Animated, { FadeInLeft } from 'react-native-reanimated';
+import { getMyPage } from '../api/user';
+import { toggleLike, toggleBookmark } from '../api/reaction';
+import { selectVoteOption } from '../api/post';
+import { VoteResponse } from '../types/Vote';
+
+const IMAGE_BASE_URL = 'http://localhost:8080';
 
 const MyPageScreen: React.FC = () => {
+  const [profile, setProfile] = useState<any>(null);
+  const [posts, setPosts] = useState<VoteResponse[]>([]);
+  const [page, setPage] = useState(0);
+  const [isLast, setIsLast] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const fetchData = async (nextPage: number) => {
+    if (loading || isLast) return;
+    setLoading(true);
+    try {
+      const res = await getMyPage(nextPage);
+      if (nextPage === 0) setProfile(res);
+      setPosts(prev => nextPage === 0 ? res.posts.content : [...prev, ...res.posts.content]);
+      setPage(res.posts.number + 1);
+      setIsLast(res.posts.last);
+    } catch (err) {
+      Alert.alert('에러', '마이페이지 정보를 불러오지 못했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData(0);
+  }, []);
+
+  const isVoteClosed = (finishTime: string) =>
+    new Date(finishTime).getTime() < new Date().getTime();
+
+  const handleToggleLike = async (voteId: number) => {
+    try {
+      await toggleLike(voteId);
+      setPosts(prev =>
+        prev.map(p =>
+          p.voteId === voteId
+            ? {
+                ...p,
+                isLiked: !p.isLiked,
+                likeCount: p.isLiked ? p.likeCount - 1 : p.likeCount + 1,
+              }
+            : p
+        )
+      );
+    } catch (err) {
+      Alert.alert('에러', '좋아요 처리 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleToggleBookmark = async (voteId: number) => {
+    try {
+      await toggleBookmark(voteId);
+      setPosts(prev =>
+        prev.map(p =>
+          p.voteId === voteId
+            ? {
+                ...p,
+                isBookmarked: !p.isBookmarked,
+              }
+            : p
+        )
+      );
+    } catch (err) {
+      Alert.alert('에러', '북마크 처리 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleVote = async (voteId: number, optionId: number) => {
+    try {
+      await selectVoteOption(voteId, optionId);
+      setPosts(prev =>
+        prev.map(v => {
+          if (v.voteId !== voteId) return v;
+          const updatedOptions = v.voteOptions.map(opt => {
+            if (opt.id === optionId) return { ...opt, voteCount: opt.voteCount + 1 };
+            if (opt.id === v.selectedOptionId) return { ...opt, voteCount: opt.voteCount - 1 };
+            return opt;
+          });
+          return {
+            ...v,
+            voteOptions: updatedOptions,
+            selectedOptionId: optionId,
+          };
+        })
+      );
+    } catch (err) {
+      Alert.alert('에러', '투표 중 오류가 발생했습니다.');
+    }
+  };
+
+  const renderPost = ({ item }: { item: VoteResponse }) => {
+    const closed = isVoteClosed(item.finishTime);
+    const totalCount = item.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0);
+    const selectedOptionId = item.selectedOptionId;
+    const hasVoted = !!selectedOptionId;
+    const showGauge = closed || hasVoted;
+
+    return (
+      <View style={[styles.voteItem, closed && { backgroundColor: '#ddd' }]}>
+        <Text style={styles.title}>{item.title} {closed && ' (마감)'}</Text>
+        <Text style={styles.meta}>카테고리: {item.categoryName}</Text>
+        <Text style={styles.meta}>마감일: {new Date(item.finishTime).toLocaleDateString()}</Text>
+        <Text numberOfLines={2} style={styles.content}>{item.content}</Text>
+
+        {item.images.length > 0 && (
+          <View style={styles.imageContainer}>
+            {item.images.map((img) => (
+              <Image
+                key={img.id}
+                source={{ uri: `${IMAGE_BASE_URL}${img.imageUrl}` }}
+                style={styles.image}
+              />
+            ))}
+          </View>
+        )}
+
+        <View style={styles.optionContainer}>
+          {item.voteOptions.map((opt) => {
+            const isSelected = selectedOptionId === opt.id;
+            const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
+
+            return (
+              <View key={opt.id} style={styles.optionWrapper}>
+                {showGauge && (
+                  <Animated.View
+                    entering={FadeInLeft}
+                    style={[styles.gaugeBar, {
+                      width: `${percentage}%`,
+                      backgroundColor: isSelected ? '#007bff' : '#d0e6ff',
+                    }]}
+                  />
+                )}
+                <TouchableOpacity
+                  style={[
+                    styles.optionButton,
+                    closed && { backgroundColor: '#eee', borderColor: '#ccc' },
+                    !closed && isSelected && { borderColor: '#007bff', borderWidth: 2 },
+                  ]}
+                  onPress={() => handleVote(item.voteId, opt.id)}
+                  disabled={closed || isSelected}
+                >
+                  <Text style={styles.optionButtonText}>{opt.content}</Text>
+                  {showGauge && <Text style={styles.percentageText}>{percentage}%</Text>}
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+        </View>
+
+        <View style={styles.reactionRow}>
+          <TouchableOpacity style={styles.reactionItem} onPress={() => handleToggleLike(item.voteId)}>
+            <Text style={styles.reactionIcon}>{item.isLiked ? '❤️' : '🤍'}</Text>
+            <Text style={styles.reactionText}>{item.likeCount}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.reactionItem}>
+            <Text style={styles.reactionIcon}>💬</Text>
+            <Text style={styles.reactionText}>{item.commentCount}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.reactionItem} onPress={() => handleToggleBookmark(item.voteId)}>
+            <Text style={styles.reactionIcon}>{item.isBookmarked ? '🔖' : '📄'}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  const renderProfile = () => {
+    if (!profile) return null;
+    const isDefault = profile.profileImage === 'default.jpg';
+
+    return (
+      <View style={styles.profileContainer}>
+        <View style={styles.profileRow}>
+          <Image
+            source={{
+              uri: isDefault
+                ? `${IMAGE_BASE_URL}/images/default.jpg`
+                : `${IMAGE_BASE_URL}${profile.profileImage}`,
+            }}
+            style={styles.profileImage}
+          />
+          <View style={styles.profileTextBox}>
+            <Text style={styles.username}>{profile.username}</Text>
+            <Text style={styles.point}>포인트: {profile.point}</Text>
+          </View>
+        </View>
+        <Text style={styles.introduction}>{profile.introduction}</Text>
+      </View>
+    );
+  };
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.text}>마이페이지입니다</Text>
-    </View>
+    <SafeAreaView style={styles.safeArea}>
+      <FlatList
+        data={posts}
+        ListHeaderComponent={renderProfile}
+        renderItem={renderPost}
+        keyExtractor={(item) => item.voteId.toString()}
+        onEndReached={() => fetchData(page)}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={loading ? <ActivityIndicator /> : null}
+        contentContainerStyle={styles.container}
+      />
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
+  safeArea: { flex: 1, backgroundColor: '#fff' },
+  container: { padding: 16 },
+
+  // 마이페이지 프로필 스타일
+  profileContainer: {
+    marginBottom: 20,
+  },
+  profileRow: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  text: {
-    fontSize: 20,
-    fontWeight: 'bold',
+  profileImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#ccc',
+    marginRight: 16,
   },
+  profileTextBox: {
+    justifyContent: 'center',
+  },
+  username: { fontSize: 20, fontWeight: 'bold', color: '#333' },
+  point: { fontSize: 14, color: '#666', marginTop: 4 },
+  introduction: { marginTop: 12, fontSize: 14, color: '#555' },
+
+  // 게시글 스타일
+  voteItem: {
+    marginBottom: 20,
+    padding: 16,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 12,
+    elevation: 2,
+  },
+  title: { fontSize: 18, fontWeight: 'bold' },
+  meta: { fontSize: 12, color: '#888' },
+  content: { fontSize: 14, marginVertical: 8 },
+  imageContainer: { marginTop: 8 },
+  image: { width: '100%', height: 200, borderRadius: 8, marginTop: 8 },
+  optionContainer: { marginTop: 12 },
+  optionWrapper: { position: 'relative', marginVertical: 6 },
+  gaugeBar: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 10, zIndex: -1 },
+  optionButton: {
+    backgroundColor: '#ffffff',
+    borderColor: '#888',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  optionButtonText: { fontSize: 16, color: '#333' },
+  percentageText: { fontSize: 14, fontWeight: 'bold', color: '#333' },
+  reactionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  reactionItem: { flexDirection: 'row', alignItems: 'center' },
+  reactionIcon: { fontSize: 20, marginRight: 4 },
+  reactionText: { fontSize: 14, color: '#333' },
 });
 
 export default MyPageScreen;
