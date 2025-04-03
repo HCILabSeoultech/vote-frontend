@@ -30,6 +30,7 @@ export type CreateVoteRequest = {
       commentCount: number;
       isLiked: boolean;
       isBookmarked: boolean;
+      profileImage?: string;
       images: VoteImage[];
       voteOptions: VoteOption[];
 

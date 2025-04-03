@@ -7,4 +7,5 @@ export interface UserData {
     birthdate: string;
     address: string;
     introduction: string;
+    profileImage: string;
   }

@@ -14,7 +14,6 @@ import Animated, { FadeInLeft } from 'react-native-reanimated';
 import { getStoragePosts } from '../api/storage';
 import { toggleLike, toggleBookmark } from '../api/reaction';
 import { selectVoteOption } from '../api/post';
-
 import { VoteResponse } from '../types/Vote';
 
 const STORAGE_TYPES = [
@@ -24,7 +23,6 @@ const STORAGE_TYPES = [
 ] as const;
 
 type StorageType = typeof STORAGE_TYPES[number]['value'];
-
 const IMAGE_BASE_URL = 'http://localhost:8080';
 
 const StorageScreen: React.FC = () => {
@@ -113,11 +111,25 @@ const StorageScreen: React.FC = () => {
     const totalCount = item.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0);
 
     return (
-      <View style={[styles.voteItem, closed && { backgroundColor: '#ddd' }]}>        
-        <Text style={styles.title}>{item.title} {closed && ' (마감)'}</Text>
-        <Text style={styles.meta}>작성자: {item.username} | 카테고리: {item.categoryName}</Text>
-        <Text style={styles.meta}>마감일: {new Date(item.finishTime).toLocaleDateString()}</Text>
+      <View style={[styles.voteItem, closed && { backgroundColor: '#ddd' }]}>
+        <View style={styles.userInfoRow}>
+          {item.profileImage === 'default.jpg' ? (
+            <Image
+              source={{ uri: `${IMAGE_BASE_URL}/images/default.jpg` }}
+              style={styles.profileImage}
+            />
+          ) : (
+            <Image
+              source={{ uri: `${IMAGE_BASE_URL}${item.profileImage}` }}
+              style={styles.profileImage}
+            />
+          )}
+          <Text style={styles.nickname}>{item.username}</Text>
+        </View>
 
+        <Text style={styles.title}>{item.title} {closed && ' (마감)'}</Text>
+        <Text style={styles.meta}>카테고리: {item.categoryName}</Text>
+        <Text style={styles.meta}>마감일: {new Date(item.finishTime).toLocaleDateString()}</Text>
         <Text numberOfLines={2} style={styles.content}>{item.content}</Text>
 
         {item.images.length > 0 && (
@@ -149,7 +161,11 @@ const StorageScreen: React.FC = () => {
                   />
                 )}
                 <TouchableOpacity
-                  style={[styles.optionButton, closed && { backgroundColor: '#eee', borderColor: '#ccc' }, !closed && isSelected && { borderColor: '#007bff', borderWidth: 2 }]}
+                  style={[
+                    styles.optionButton,
+                    closed && { backgroundColor: '#eee', borderColor: '#ccc' },
+                    !closed && isSelected && { borderColor: '#007bff', borderWidth: 2 },
+                  ]}
                   onPress={() => handleVote(item.voteId, opt.id)}
                   disabled={closed || isSelected}
                 >
@@ -230,6 +246,24 @@ const styles = StyleSheet.create({
   voteItem: {
     marginBottom: 20, padding: 16,
     backgroundColor: '#f9f9f9', borderRadius: 12, elevation: 2,
+  },
+  userInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  profileImage: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    marginRight: 8,
+    backgroundColor: '#ccc',
+  },
+  nickname: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
   },
   title: { fontSize: 18, fontWeight: 'bold' },
   meta: { fontSize: 12, color: '#888', marginTop: 2 },

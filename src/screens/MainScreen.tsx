@@ -37,7 +37,6 @@ const SavedScreen: React.FC = () => {
       setVotes((prev) => [...prev, ...res.content]);
       setPage(res.number + 1);
       setIsLast(res.last);
-
     } catch (err) {
       console.error('투표 불러오기 실패:', err);
     } finally {
@@ -109,17 +108,15 @@ const SavedScreen: React.FC = () => {
         Alert.alert('인증 오류', '로그인이 필요합니다.');
         return;
       }
-  
-      const updatedVote = await toggleLike(voteId);
-  
-      //좋아요 상태 업데이트
+
+      await toggleLike(voteId);
+
       setVotes((prevVotes) =>
         prevVotes.map((vote) => {
           if (vote.voteId !== voteId) return vote;
-          const isLiked = vote.isLiked;
           return {
             ...vote,
-            isLiked: !isLiked,
+            isLiked: !vote.isLiked,
           };
         })
       );
@@ -136,40 +133,52 @@ const SavedScreen: React.FC = () => {
         Alert.alert('인증 오류', '로그인이 필요합니다.');
         return;
       }
-  
+
       await toggleBookmark(voteId);
-  
-      //북마크 상태 업데이트
+
       setVotes((prevVotes) =>
         prevVotes.map((vote) => {
           if (vote.voteId !== voteId) return vote;
-          const isBookmarked = vote.isBookmarked;
           return {
             ...vote,
-            isBookmarked: !isBookmarked,
+            isBookmarked: !vote.isBookmarked,
           };
         })
       );
     } catch (err) {
-      console.error('좋아요 실패:', err);
-      Alert.alert('에러', '좋아요 처리 중 오류가 발생했습니다.');
+      console.error('북마크 실패:', err);
+      Alert.alert('에러', '북마크 처리 중 오류가 발생했습니다.');
     }
   };
-  
 
   const renderItem = ({ item }: { item: VoteResponse }) => {
     const closed = isVoteClosed(item.finishTime);
     const selectedOptionId = item.selectedOptionId ?? selectedOptions[item.voteId];
     const hasVoted = !!selectedOptionId;
     const showGauge = closed || hasVoted;
-
-    // 퍼센트 계산을 voteCount 합으로 직접 처리
     const totalCount = item.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0);
 
     return (
       <View style={[styles.voteItem, closed && { backgroundColor: '#ddd' }]}>
-        <Text style={styles.title}>{item.title} {closed && ' (마감)'}</Text>
-        <Text style={styles.meta}>작성자: {item.username} | 카테고리: {item.categoryName}</Text>
+        <View style={styles.userInfoRow}>
+          {item.profileImage === 'default.jpg' ? (
+            <Image
+              source={{ uri: `${IMAGE_BASE_URL}/images/default.jpg` }}
+              style={styles.profileImage}
+            />
+          ) : (
+            <Image
+              source={{ uri: `${IMAGE_BASE_URL}${item.profileImage}` }}
+              style={styles.profileImage}
+            />
+          )}
+          <Text style={styles.nickname}>{item.username}</Text>
+        </View>
+        <Text style={styles.title}>
+          {item.title} {closed && ' (마감)'}
+        </Text>
+
+        <Text style={styles.meta}>카테고리: {item.categoryName}</Text>
         <Text style={styles.meta}>마감일: {new Date(item.finishTime).toLocaleDateString()}</Text>
 
         <Text numberOfLines={2} style={styles.content}>{item.content}</Text>
@@ -214,7 +223,7 @@ const SavedScreen: React.FC = () => {
                       !closed && isSelected && { borderColor: '#007bff', borderWidth: 2 },
                     ]}
                     onPress={() => handleVote(item.voteId, opt.id)}
-                    disabled={closed || isSelected} 
+                    disabled={closed || isSelected}
                   >
                     <Text style={styles.optionButtonText}>{opt.content}</Text>
                     {showGauge && (
@@ -228,8 +237,7 @@ const SavedScreen: React.FC = () => {
         )}
 
         <View style={styles.reactionRow}>
-          <TouchableOpacity style={styles.reactionItem}
-            onPress={() => handleToggleLike(item.voteId)}>
+          <TouchableOpacity style={styles.reactionItem} onPress={() => handleToggleLike(item.voteId)}>
             <Text style={styles.reactionIcon}>{item.isLiked ? '❤️' : '🤍'}</Text>
           </TouchableOpacity>
 
@@ -238,8 +246,7 @@ const SavedScreen: React.FC = () => {
             <Text style={styles.reactionText}>{item.commentCount}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.reactionItem}
-            onPress={() => handleToggleBookmark(item.voteId)}>
+          <TouchableOpacity style={styles.reactionItem} onPress={() => handleToggleBookmark(item.voteId)}>
             <Text style={styles.reactionIcon}>{item.isBookmarked ? '🔖' : '📄'}</Text>
           </TouchableOpacity>
 
@@ -277,7 +284,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   title: { fontSize: 18, fontWeight: 'bold' },
-  meta: { fontSize: 12, color: '#888', marginTop: 2 },
+  meta: { fontSize: 12, color: '#888' },
   content: { fontSize: 14, marginVertical: 8 },
   imageContainer: { marginTop: 8 },
   image: { width: '100%', height: 200, borderRadius: 8, marginTop: 8 },
@@ -328,6 +335,24 @@ const styles = StyleSheet.create({
   reactionText: {
     fontSize: 14,
     color: '#333',
+  },
+  userInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  profileImage: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    marginRight: 8,
+    backgroundColor: '#ccc',
+  },
+  nickname: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
   },
 });
 
