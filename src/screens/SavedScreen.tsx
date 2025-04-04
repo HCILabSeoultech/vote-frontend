@@ -13,7 +13,7 @@ import {
 import Animated, { FadeInLeft } from 'react-native-reanimated';
 import { getStoragePosts } from '../api/storage';
 import { toggleLike, toggleBookmark } from '../api/reaction';
-import { selectVoteOption } from '../api/post';
+import { getVoteById, selectVoteOption } from '../api/post';
 import { VoteResponse } from '../types/Vote';
 
 const STORAGE_TYPES = [
@@ -57,14 +57,21 @@ const StorageScreen: React.FC = () => {
 
   const isVoteClosed = (finishTime: string) => new Date(finishTime).getTime() < new Date().getTime();
 
+  const refreshVote = async (voteId: number) => {
+    try {
+      const updated = await getVoteById(voteId);
+      setVotes((prev) =>
+        prev.map((v) => (v.voteId === voteId ? updated : v))
+      );
+    } catch (err) {
+      console.error('투표 새로고침 실패:', err);
+    }
+  };
+
   const handleToggleLike = async (voteId: number) => {
     try {
       await toggleLike(voteId);
-      setVotes(prev => prev.map(v => v.voteId === voteId ? {
-        ...v,
-        isLiked: !v.isLiked,
-        likeCount: v.isLiked ? v.likeCount - 1 : v.likeCount + 1
-      } : v));
+      await refreshVote(voteId);
     } catch (err) {
       Alert.alert('에러', '좋아요 처리 중 오류가 발생했습니다.');
     }
@@ -73,10 +80,7 @@ const StorageScreen: React.FC = () => {
   const handleToggleBookmark = async (voteId: number) => {
     try {
       await toggleBookmark(voteId);
-      setVotes(prev => prev.map(v => v.voteId === voteId ? {
-        ...v,
-        isBookmarked: !v.isBookmarked
-      } : v));
+      await refreshVote(voteId);
     } catch (err) {
       Alert.alert('에러', '북마크 처리 중 오류가 발생했습니다.');
     }
@@ -85,18 +89,10 @@ const StorageScreen: React.FC = () => {
   const handleVote = async (voteId: number, optionId: number) => {
     try {
       await selectVoteOption(voteId, optionId);
-      setVotes(prev => prev.map(v => {
-        if (v.voteId !== voteId) return v;
-        const updatedOptions = v.voteOptions.map(opt => {
-          if (opt.id === optionId) return { ...opt, voteCount: opt.voteCount + 1 };
-          if (opt.id === v.selectedOptionId) return { ...opt, voteCount: opt.voteCount - 1 };
-          return opt;
-        });
-        return {
-          ...v,
-          voteOptions: updatedOptions,
-          selectedOptionId: optionId,
-        };
+      await refreshVote(voteId);
+      setSelectedOptions((prev) => ({
+        ...prev,
+        [voteId]: optionId,
       }));
     } catch (err) {
       Alert.alert('에러', '투표 중 오류가 발생했습니다.');
@@ -113,17 +109,14 @@ const StorageScreen: React.FC = () => {
     return (
       <View style={[styles.voteItem, closed && { backgroundColor: '#ddd' }]}>
         <View style={styles.userInfoRow}>
-          {item.profileImage === 'default.jpg' ? (
-            <Image
-              source={{ uri: `${IMAGE_BASE_URL}/images/default.jpg` }}
-              style={styles.profileImage}
-            />
-          ) : (
-            <Image
-              source={{ uri: `${IMAGE_BASE_URL}${item.profileImage}` }}
-              style={styles.profileImage}
-            />
-          )}
+          <Image
+            source={{
+              uri: item.profileImage === 'default.jpg'
+                ? `${IMAGE_BASE_URL}/images/default.jpg`
+                : `${IMAGE_BASE_URL}${item.profileImage}`,
+            }}
+            style={styles.profileImage}
+          />
           <Text style={styles.nickname}>{item.username}</Text>
         </View>
 
@@ -180,6 +173,7 @@ const StorageScreen: React.FC = () => {
         <View style={styles.reactionRow}>
           <TouchableOpacity style={styles.reactionItem} onPress={() => handleToggleLike(item.voteId)}>
             <Text style={styles.reactionIcon}>{item.isLiked ? '❤️' : '🤍'}</Text>
+            <Text style={styles.reactionText}>{item.likeCount/2}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.reactionItem}>
@@ -248,23 +242,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9f9f9', borderRadius: 12, elevation: 2,
   },
   userInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-    marginBottom: 4,
+    flexDirection: 'row', alignItems: 'center',
+    marginTop: 4, marginBottom: 4,
   },
   profileImage: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    marginRight: 8,
-    backgroundColor: '#ccc',
+    width: 30, height: 30, borderRadius: 15,
+    marginRight: 8, backgroundColor: '#ccc',
   },
-  nickname: {
-    fontSize: 14,
-    color: '#333',
-    fontWeight: '500',
-  },
+  nickname: { fontSize: 14, color: '#333', fontWeight: '500' },
   title: { fontSize: 18, fontWeight: 'bold' },
   meta: { fontSize: 12, color: '#888', marginTop: 2 },
   content: { fontSize: 14, marginVertical: 8 },
@@ -272,7 +257,10 @@ const styles = StyleSheet.create({
   image: { width: '100%', height: 200, borderRadius: 8, marginTop: 8 },
   optionContainer: { marginTop: 12 },
   optionWrapper: { position: 'relative', marginVertical: 6 },
-  gaugeBar: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 10, zIndex: -1 },
+  gaugeBar: {
+    position: 'absolute', left: 0, top: 0, bottom: 0,
+    borderRadius: 10, zIndex: -1,
+  },
   optionButton: {
     backgroundColor: '#ffffff', borderColor: '#888', borderWidth: 1, borderRadius: 10,
     paddingVertical: 14, paddingHorizontal: 16,
@@ -280,7 +268,9 @@ const styles = StyleSheet.create({
   },
   optionButtonText: { fontSize: 16, color: '#333' },
   percentageText: { fontSize: 14, fontWeight: 'bold', color: '#333' },
-  reactionRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginTop: 16 },
+  reactionRow: {
+    flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginTop: 16,
+  },
   reactionItem: { flexDirection: 'row', alignItems: 'center' },
   reactionIcon: { fontSize: 20, marginRight: 4 },
   reactionText: { fontSize: 14, color: '#333' },

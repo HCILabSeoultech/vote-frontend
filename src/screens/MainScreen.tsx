@@ -12,9 +12,8 @@ import {
 } from 'react-native';
 import Animated, { FadeInLeft } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getMainPageVotes, selectVoteOption } from '../api/post';
+import { getMainPageVotes, getVoteById, selectVoteOption } from '../api/post';
 import { toggleLike, toggleBookmark } from '../api/reaction';
-
 import { VoteResponse } from '../types/Vote';
 import { useIsFocused } from '@react-navigation/native';
 
@@ -28,10 +27,18 @@ const SavedScreen: React.FC = () => {
   const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({});
   const isFocused = useIsFocused();
 
+  useEffect(() => {
+    if (isFocused) {
+      setVotes([]);
+      setPage(0);
+      setIsLast(false);
+      fetchVotes(0);
+    }
+  }, [isFocused]);
+
   const fetchVotes = async (nextPage: number) => {
     if (loading || isLast) return;
     setLoading(true);
-
     try {
       const res = await getMainPageVotes(nextPage);
       setVotes((prev) => [...prev, ...res.content]);
@@ -44,17 +51,19 @@ const SavedScreen: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    if (isFocused) {
-      setVotes([]);
-      setPage(0);
-      setIsLast(false);
-      fetchVotes(0);
-    }
-  }, [isFocused]);
-
   const isVoteClosed = (finishTime: string) => {
     return new Date(finishTime).getTime() < new Date().getTime();
+  };
+
+  const refreshVote = async (voteId: number) => {
+    try {
+      const updated = await getVoteById(voteId);
+      setVotes((prev) =>
+        prev.map((vote) => (vote.voteId === voteId ? updated : vote))
+      );
+    } catch (err) {
+      console.error('투표 새로고침 실패:', err);
+    }
   };
 
   const handleVote = async (voteId: number, optionId: number) => {
@@ -66,31 +75,7 @@ const SavedScreen: React.FC = () => {
       }
 
       await selectVoteOption(voteId, optionId);
-
-      setVotes((prevVotes) =>
-        prevVotes.map((vote) => {
-          if (vote.voteId !== voteId) return vote;
-
-          const isFirstVote = vote.selectedOptionId === undefined;
-
-          const updatedOptions = vote.voteOptions.map((opt) => {
-            if (opt.id === optionId) {
-              return { ...opt, voteCount: opt.voteCount + 1 };
-            }
-            if (!isFirstVote && vote.selectedOptionId === opt.id) {
-              return { ...opt, voteCount: opt.voteCount - 1 };
-            }
-            return opt;
-          });
-
-          return {
-            ...vote,
-            voteOptions: updatedOptions,
-            selectedOptionId: optionId,
-          };
-        })
-      );
-
+      await refreshVote(voteId);
       setSelectedOptions((prev) => ({
         ...prev,
         [voteId]: optionId,
@@ -110,16 +95,7 @@ const SavedScreen: React.FC = () => {
       }
 
       await toggleLike(voteId);
-
-      setVotes((prevVotes) =>
-        prevVotes.map((vote) => {
-          if (vote.voteId !== voteId) return vote;
-          return {
-            ...vote,
-            isLiked: !vote.isLiked,
-          };
-        })
-      );
+      await refreshVote(voteId);
     } catch (err) {
       console.error('좋아요 실패:', err);
       Alert.alert('에러', '좋아요 처리 중 오류가 발생했습니다.');
@@ -135,16 +111,7 @@ const SavedScreen: React.FC = () => {
       }
 
       await toggleBookmark(voteId);
-
-      setVotes((prevVotes) =>
-        prevVotes.map((vote) => {
-          if (vote.voteId !== voteId) return vote;
-          return {
-            ...vote,
-            isBookmarked: !vote.isBookmarked,
-          };
-        })
-      );
+      await refreshVote(voteId);
     } catch (err) {
       console.error('북마크 실패:', err);
       Alert.alert('에러', '북마크 처리 중 오류가 발생했습니다.');
@@ -161,21 +128,20 @@ const SavedScreen: React.FC = () => {
     return (
       <View style={[styles.voteItem, closed && { backgroundColor: '#ddd' }]}>
         <View style={styles.userInfoRow}>
-          {item.profileImage === 'default.jpg' ? (
-            <Image
-              source={{ uri: `${IMAGE_BASE_URL}/images/default.jpg` }}
-              style={styles.profileImage}
-            />
-          ) : (
-            <Image
-              source={{ uri: `${IMAGE_BASE_URL}${item.profileImage}` }}
-              style={styles.profileImage}
-            />
-          )}
+          <Image
+            source={{
+              uri: item.profileImage === 'default.jpg'
+                ? `${IMAGE_BASE_URL}/images/default.jpg`
+                : `${IMAGE_BASE_URL}${item.profileImage}`,
+            }}
+            style={styles.profileImage}
+          />
           <Text style={styles.nickname}>{item.username}</Text>
         </View>
+
         <Text style={styles.title}>
-          {item.title} {closed && ' (마감)'}
+          {item.title}
+          {closed && <Text> (마감)</Text>}
         </Text>
 
         <Text style={styles.meta}>카테고리: {item.categoryName}</Text>
@@ -226,9 +192,7 @@ const SavedScreen: React.FC = () => {
                     disabled={closed || isSelected}
                   >
                     <Text style={styles.optionButtonText}>{opt.content}</Text>
-                    {showGauge && (
-                      <Text style={styles.percentageText}>{percentage}%</Text>
-                    )}
+                    {showGauge && <Text style={styles.percentageText}>{percentage}%</Text>}
                   </TouchableOpacity>
                 </View>
               );
@@ -239,6 +203,7 @@ const SavedScreen: React.FC = () => {
         <View style={styles.reactionRow}>
           <TouchableOpacity style={styles.reactionItem} onPress={() => handleToggleLike(item.voteId)}>
             <Text style={styles.reactionIcon}>{item.isLiked ? '❤️' : '🤍'}</Text>
+            <Text style={styles.reactionText}>{item.likeCount/2}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.reactionItem}>
@@ -289,20 +254,12 @@ const styles = StyleSheet.create({
   imageContainer: { marginTop: 8 },
   image: { width: '100%', height: 200, borderRadius: 8, marginTop: 8 },
   optionContainer: { marginTop: 12 },
-  optionWrapper: {
-    position: 'relative',
-    marginVertical: 6,
-  },
+  optionWrapper: { position: 'relative', marginVertical: 6 },
   gaugeBar: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    borderRadius: 10,
-    zIndex: -1,
+    position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 10, zIndex: -1,
   },
   optionButton: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#fff',
     borderColor: '#888',
     borderWidth: 1,
     borderRadius: 10,
@@ -313,47 +270,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   optionButtonText: { fontSize: 16, color: '#333' },
-  percentageText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
-  },
+  percentageText: { fontSize: 14, fontWeight: 'bold', color: '#333' },
   reactionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    marginTop: 16,
+    flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginTop: 16,
   },
-  reactionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  reactionIcon: {
-    fontSize: 20,
-    marginRight: 4,
-  },
-  reactionText: {
-    fontSize: 14,
-    color: '#333',
-  },
+  reactionItem: { flexDirection: 'row', alignItems: 'center' },
+  reactionIcon: { fontSize: 20, marginRight: 4 },
+  reactionText: { fontSize: 14, color: '#333' },
   userInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-    marginBottom: 4,
+    flexDirection: 'row', alignItems: 'center', marginTop: 4, marginBottom: 4,
   },
   profileImage: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    marginRight: 8,
-    backgroundColor: '#ccc',
+    width: 30, height: 30, borderRadius: 15, marginRight: 8, backgroundColor: '#ccc',
   },
-  nickname: {
-    fontSize: 14,
-    color: '#333',
-    fontWeight: '500',
-  },
+  nickname: { fontSize: 14, color: '#333', fontWeight: '500' },
 });
 
 export default SavedScreen;

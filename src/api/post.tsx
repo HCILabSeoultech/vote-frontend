@@ -1,6 +1,6 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { CreateVoteRequest, VotePageResponse} from '../types/Vote';
+import { CreateVoteRequest, VotePageResponse, VoteResponse} from '../types/Vote';
 
 const API_URL = 'http://localhost:8080/vote'; 
 
@@ -56,4 +56,18 @@ export const selectVoteOption = async (voteId: number, optionId: number) => {
       },
     }
   );
+};
+
+// 단일 투표 조회
+export const getVoteById = async (voteId: number): Promise<VoteResponse> => {
+  const token = await AsyncStorage.getItem('token');
+  if (!token) throw new Error('JWT 토큰이 없습니다.');
+
+  const response = await axios.get(`${API_URL}/${voteId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return response.data;
 };

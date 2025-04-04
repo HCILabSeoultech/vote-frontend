@@ -13,7 +13,7 @@ import {
 import Animated, { FadeInLeft } from 'react-native-reanimated';
 import { getMyPage } from '../api/user';
 import { toggleLike, toggleBookmark } from '../api/reaction';
-import { selectVoteOption } from '../api/post';
+import { selectVoteOption, getVoteById } from '../api/post';
 import { VoteResponse } from '../types/Vote';
 
 const IMAGE_BASE_URL = 'http://localhost:8080';
@@ -31,7 +31,9 @@ const MyPageScreen: React.FC = () => {
     try {
       const res = await getMyPage(nextPage);
       if (nextPage === 0) setProfile(res);
-      setPosts(prev => nextPage === 0 ? res.posts.content : [...prev, ...res.posts.content]);
+      setPosts(prev =>
+        nextPage === 0 ? res.posts.content : [...prev, ...res.posts.content]
+      );
       setPage(res.posts.number + 1);
       setIsLast(res.posts.last);
     } catch (err) {
@@ -48,20 +50,21 @@ const MyPageScreen: React.FC = () => {
   const isVoteClosed = (finishTime: string) =>
     new Date(finishTime).getTime() < new Date().getTime();
 
+  const refreshVote = async (voteId: number) => {
+    try {
+      const updated = await getVoteById(voteId);
+      setPosts(prev =>
+        prev.map(p => (p.voteId === voteId ? updated : p))
+      );
+    } catch (err) {
+      console.error('투표 새로고침 실패:', err);
+    }
+  };
+
   const handleToggleLike = async (voteId: number) => {
     try {
       await toggleLike(voteId);
-      setPosts(prev =>
-        prev.map(p =>
-          p.voteId === voteId
-            ? {
-                ...p,
-                isLiked: !p.isLiked,
-                likeCount: p.isLiked ? p.likeCount - 1 : p.likeCount + 1,
-              }
-            : p
-        )
-      );
+      await refreshVote(voteId);
     } catch (err) {
       Alert.alert('에러', '좋아요 처리 중 오류가 발생했습니다.');
     }
@@ -70,16 +73,7 @@ const MyPageScreen: React.FC = () => {
   const handleToggleBookmark = async (voteId: number) => {
     try {
       await toggleBookmark(voteId);
-      setPosts(prev =>
-        prev.map(p =>
-          p.voteId === voteId
-            ? {
-                ...p,
-                isBookmarked: !p.isBookmarked,
-              }
-            : p
-        )
-      );
+      await refreshVote(voteId);
     } catch (err) {
       Alert.alert('에러', '북마크 처리 중 오류가 발생했습니다.');
     }
@@ -88,21 +82,7 @@ const MyPageScreen: React.FC = () => {
   const handleVote = async (voteId: number, optionId: number) => {
     try {
       await selectVoteOption(voteId, optionId);
-      setPosts(prev =>
-        prev.map(v => {
-          if (v.voteId !== voteId) return v;
-          const updatedOptions = v.voteOptions.map(opt => {
-            if (opt.id === optionId) return { ...opt, voteCount: opt.voteCount + 1 };
-            if (opt.id === v.selectedOptionId) return { ...opt, voteCount: opt.voteCount - 1 };
-            return opt;
-          });
-          return {
-            ...v,
-            voteOptions: updatedOptions,
-            selectedOptionId: optionId,
-          };
-        })
-      );
+      await refreshVote(voteId);
     } catch (err) {
       Alert.alert('에러', '투표 중 오류가 발생했습니다.');
     }
@@ -170,7 +150,7 @@ const MyPageScreen: React.FC = () => {
         <View style={styles.reactionRow}>
           <TouchableOpacity style={styles.reactionItem} onPress={() => handleToggleLike(item.voteId)}>
             <Text style={styles.reactionIcon}>{item.isLiked ? '❤️' : '🤍'}</Text>
-            <Text style={styles.reactionText}>{item.likeCount}</Text>
+            <Text style={styles.reactionText}>{item.likeCount/2}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.reactionItem}>
@@ -180,6 +160,10 @@ const MyPageScreen: React.FC = () => {
 
           <TouchableOpacity style={styles.reactionItem} onPress={() => handleToggleBookmark(item.voteId)}>
             <Text style={styles.reactionIcon}>{item.isBookmarked ? '🔖' : '📄'}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.reactionItem}>
+            <Text style={styles.reactionIcon}>📊</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -230,30 +214,15 @@ const MyPageScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#fff' },
   container: { padding: 16 },
-
-  // 마이페이지 프로필 스타일
-  profileContainer: {
-    marginBottom: 20,
-  },
-  profileRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  profileContainer: { marginBottom: 20 },
+  profileRow: { flexDirection: 'row', alignItems: 'center' },
   profileImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#ccc',
-    marginRight: 16,
+    width: 80, height: 80, borderRadius: 40, backgroundColor: '#ccc', marginRight: 16,
   },
-  profileTextBox: {
-    justifyContent: 'center',
-  },
+  profileTextBox: { justifyContent: 'center' },
   username: { fontSize: 20, fontWeight: 'bold', color: '#333' },
   point: { fontSize: 14, color: '#666', marginTop: 4 },
   introduction: { marginTop: 12, fontSize: 14, color: '#555' },
-
-  // 게시글 스타일
   voteItem: {
     marginBottom: 20,
     padding: 16,
@@ -268,7 +237,9 @@ const styles = StyleSheet.create({
   image: { width: '100%', height: 200, borderRadius: 8, marginTop: 8 },
   optionContainer: { marginTop: 12 },
   optionWrapper: { position: 'relative', marginVertical: 6 },
-  gaugeBar: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 10, zIndex: -1 },
+  gaugeBar: {
+    position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 10, zIndex: -1,
+  },
   optionButton: {
     backgroundColor: '#ffffff',
     borderColor: '#888',
@@ -283,10 +254,7 @@ const styles = StyleSheet.create({
   optionButtonText: { fontSize: 16, color: '#333' },
   percentageText: { fontSize: 14, fontWeight: 'bold', color: '#333' },
   reactionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    marginTop: 16,
+    flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginTop: 16,
   },
   reactionItem: { flexDirection: 'row', alignItems: 'center' },
   reactionIcon: { fontSize: 20, marginRight: 4 },
