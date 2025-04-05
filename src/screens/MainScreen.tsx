@@ -15,17 +15,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getMainPageVotes, getVoteById, selectVoteOption } from '../api/post';
 import { toggleLike, toggleBookmark } from '../api/reaction';
 import { VoteResponse } from '../types/Vote';
-import { useIsFocused } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../navigation/AppNavigator';
 
 const IMAGE_BASE_URL = 'http://localhost:8080';
 
-const SavedScreen: React.FC = () => {
+const MainScreen: React.FC = () => {
   const [votes, setVotes] = useState<VoteResponse[]>([]);
   const [page, setPage] = useState(0);
   const [isLast, setIsLast] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({});
   const isFocused = useIsFocused();
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'CommentScreen'>>();
 
   useEffect(() => {
     if (isFocused) {
@@ -51,10 +54,6 @@ const SavedScreen: React.FC = () => {
     }
   };
 
-  const isVoteClosed = (finishTime: string) => {
-    return new Date(finishTime).getTime() < new Date().getTime();
-  };
-
   const refreshVote = async (voteId: number) => {
     try {
       const updated = await getVoteById(voteId);
@@ -64,6 +63,10 @@ const SavedScreen: React.FC = () => {
     } catch (err) {
       console.error('투표 새로고침 실패:', err);
     }
+  };
+
+  const isVoteClosed = (finishTime: string) => {
+    return new Date(finishTime).getTime() < new Date().getTime();
   };
 
   const handleVote = async (voteId: number, optionId: number) => {
@@ -206,7 +209,10 @@ const SavedScreen: React.FC = () => {
             <Text style={styles.reactionText}>{item.likeCount/2}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.reactionItem}>
+          <TouchableOpacity
+            style={styles.reactionItem}
+            onPress={() => navigation.navigate('CommentScreen', { voteId: item.voteId })}
+          >
             <Text style={styles.reactionIcon}>💬</Text>
             <Text style={styles.reactionText}>{item.commentCount}</Text>
           </TouchableOpacity>
@@ -286,4 +292,4 @@ const styles = StyleSheet.create({
   nickname: { fontSize: 14, color: '#333', fontWeight: '500' },
 });
 
-export default SavedScreen;
+export default MainScreen;

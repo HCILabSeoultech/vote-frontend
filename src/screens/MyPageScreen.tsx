@@ -11,10 +11,14 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import Animated, { FadeInLeft } from 'react-native-reanimated';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { getMyPage } from '../api/user';
 import { toggleLike, toggleBookmark } from '../api/reaction';
 import { selectVoteOption, getVoteById } from '../api/post';
 import { VoteResponse } from '../types/Vote';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../navigation/AppNavigator';
 
 const IMAGE_BASE_URL = 'http://localhost:8080';
 
@@ -24,6 +28,19 @@ const MyPageScreen: React.FC = () => {
   const [page, setPage] = useState(0);
   const [isLast, setIsLast] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({});
+
+  const isFocused = useIsFocused();
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'CommentScreen'>>();
+
+  useEffect(() => {
+    if (isFocused) {
+      setPosts([]);
+      setPage(0);
+      setIsLast(false);
+      fetchData(0);
+    }
+  }, [isFocused]);
 
   const fetchData = async (nextPage: number) => {
     if (loading || isLast) return;
@@ -43,26 +60,45 @@ const MyPageScreen: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    fetchData(0);
-  }, []);
-
   const isVoteClosed = (finishTime: string) =>
     new Date(finishTime).getTime() < new Date().getTime();
 
   const refreshVote = async (voteId: number) => {
     try {
       const updated = await getVoteById(voteId);
-      setPosts(prev =>
-        prev.map(p => (p.voteId === voteId ? updated : p))
-      );
+      setPosts(prev => prev.map(p => (p.voteId === voteId ? updated : p)));
     } catch (err) {
       console.error('투표 새로고침 실패:', err);
     }
   };
 
+  const handleVote = async (voteId: number, optionId: number) => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert('인증 오류', '로그인이 필요합니다.');
+        return;
+      }
+
+      await selectVoteOption(voteId, optionId);
+      await refreshVote(voteId);
+      setSelectedOptions(prev => ({
+        ...prev,
+        [voteId]: optionId,
+      }));
+    } catch (err) {
+      Alert.alert('에러', '투표 중 오류가 발생했습니다.');
+    }
+  };
+
   const handleToggleLike = async (voteId: number) => {
     try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert('인증 오류', '로그인이 필요합니다.');
+        return;
+      }
+
       await toggleLike(voteId);
       await refreshVote(voteId);
     } catch (err) {
@@ -72,6 +108,12 @@ const MyPageScreen: React.FC = () => {
 
   const handleToggleBookmark = async (voteId: number) => {
     try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert('인증 오류', '로그인이 필요합니다.');
+        return;
+      }
+
       await toggleBookmark(voteId);
       await refreshVote(voteId);
     } catch (err) {
@@ -79,25 +121,16 @@ const MyPageScreen: React.FC = () => {
     }
   };
 
-  const handleVote = async (voteId: number, optionId: number) => {
-    try {
-      await selectVoteOption(voteId, optionId);
-      await refreshVote(voteId);
-    } catch (err) {
-      Alert.alert('에러', '투표 중 오류가 발생했습니다.');
-    }
-  };
-
   const renderPost = ({ item }: { item: VoteResponse }) => {
     const closed = isVoteClosed(item.finishTime);
-    const totalCount = item.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0);
-    const selectedOptionId = item.selectedOptionId;
+    const selectedOptionId = item.selectedOptionId ?? selectedOptions[item.voteId];
     const hasVoted = !!selectedOptionId;
     const showGauge = closed || hasVoted;
+    const totalCount = item.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0);
 
     return (
       <View style={[styles.voteItem, closed && { backgroundColor: '#ddd' }]}>
-        <Text style={styles.title}>{item.title} {closed && ' (마감)'}</Text>
+        <Text style={styles.title}>{item.title}{closed && ' (마감)'}</Text>
         <Text style={styles.meta}>카테고리: {item.categoryName}</Text>
         <Text style={styles.meta}>마감일: {new Date(item.finishTime).toLocaleDateString()}</Text>
         <Text numberOfLines={2} style={styles.content}>{item.content}</Text>
@@ -124,10 +157,13 @@ const MyPageScreen: React.FC = () => {
                 {showGauge && (
                   <Animated.View
                     entering={FadeInLeft}
-                    style={[styles.gaugeBar, {
-                      width: `${percentage}%`,
-                      backgroundColor: isSelected ? '#007bff' : '#d0e6ff',
-                    }]}
+                    style={[
+                      styles.gaugeBar,
+                      {
+                        width: `${percentage}%`,
+                        backgroundColor: isSelected ? '#007bff' : '#d0e6ff',
+                      },
+                    ]}
                   />
                 )}
                 <TouchableOpacity
@@ -153,7 +189,10 @@ const MyPageScreen: React.FC = () => {
             <Text style={styles.reactionText}>{item.likeCount/2}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.reactionItem}>
+          <TouchableOpacity
+            style={styles.reactionItem}
+            onPress={() => navigation.navigate('CommentScreen', { voteId: item.voteId })}
+          >
             <Text style={styles.reactionIcon}>💬</Text>
             <Text style={styles.reactionText}>{item.commentCount}</Text>
           </TouchableOpacity>
@@ -241,7 +280,7 @@ const styles = StyleSheet.create({
     position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 10, zIndex: -1,
   },
   optionButton: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#fff',
     borderColor: '#888',
     borderWidth: 1,
     borderRadius: 10,
