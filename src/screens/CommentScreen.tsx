@@ -51,19 +51,29 @@ const CommentScreen = () => {
     }
   };
 
-  const renderComment = ({ item }: { item: Comment }) => (
-    <View style={styles.commentItem}>
-      <View style={styles.commentContent}>
-        <View style={styles.commentHeader}>
-          <Text style={styles.username}>{item.username || '익명'}</Text>
-          <Text style={styles.timestamp}>
-            {new Date(item.createdAt).toLocaleString()}
-          </Text>
+  const renderComment = ({ item }: { item: Comment }) => {
+    const isDefault = item.profileImage === 'default.jpg';
+    const imageUrl = isDefault
+      ? `${IMAGE_BASE_URL}/images/default.jpg`
+      : `${IMAGE_BASE_URL}${item.profileImage}`;
+
+    console.log(imageUrl);
+
+    return (
+      <View style={styles.commentItem}>
+        <Image source={{ uri: imageUrl }} style={styles.avatar} />
+        <View style={styles.commentContent}>
+          <View style={styles.commentHeader}>
+            <Text style={styles.username}>{item.username || '익명'}</Text>
+            <Text style={styles.timestamp}>
+              {new Date(item.createdAt).toLocaleString()}
+            </Text>
+          </View>
+          <Text style={styles.commentText}>{item.content}</Text>
         </View>
-        <Text style={styles.commentText}>{item.content}</Text>
       </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -104,7 +114,7 @@ const styles = StyleSheet.create({
   commentList: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 100, // 키보드 가리지 않게 여유
+    paddingBottom: 100,
   },
   commentItem: {
     flexDirection: 'row',

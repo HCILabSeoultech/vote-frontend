@@ -181,12 +181,15 @@ const MyPageScreen: React.FC = () => {
               </View>
             );
           })}
+          {showGauge && totalCount > 0 && (
+            <Text style={styles.responseCountText}>({totalCount}명 응답)</Text>
+          )}
         </View>
 
         <View style={styles.reactionRow}>
           <TouchableOpacity style={styles.reactionItem} onPress={() => handleToggleLike(item.voteId)}>
             <Text style={styles.reactionIcon}>{item.isLiked ? '❤️' : '🤍'}</Text>
-            <Text style={styles.reactionText}>{item.likeCount/2}</Text>
+            <Text style={styles.reactionText}>{item.likeCount}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -298,6 +301,13 @@ const styles = StyleSheet.create({
   reactionItem: { flexDirection: 'row', alignItems: 'center' },
   reactionIcon: { fontSize: 20, marginRight: 4 },
   reactionText: { fontSize: 14, color: '#333' },
+
+  responseCountText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'right',
+  }
 });
 
 export default MyPageScreen;

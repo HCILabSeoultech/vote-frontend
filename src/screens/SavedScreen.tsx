@@ -15,6 +15,9 @@ import { getStoragePosts } from '../api/storage';
 import { toggleLike, toggleBookmark } from '../api/reaction';
 import { getVoteById, selectVoteOption } from '../api/post';
 import { VoteResponse } from '../types/Vote';
+import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../navigation/AppNavigator';
 
 const STORAGE_TYPES = [
   { label: '투표한 글', value: 'voted' },
@@ -23,6 +26,8 @@ const STORAGE_TYPES = [
 ] as const;
 
 type StorageType = typeof STORAGE_TYPES[number]['value'];
+type NavigationProp = StackNavigationProp<RootStackParamList, 'CommentScreen'>;
+
 const IMAGE_BASE_URL = 'http://localhost:8080';
 
 const StorageScreen: React.FC = () => {
@@ -32,6 +37,7 @@ const StorageScreen: React.FC = () => {
   const [isLast, setIsLast] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({});
+  const navigation = useNavigation<NavigationProp>();
 
   const loadPosts = async (nextPage = 0) => {
     if (loading || isLast) return;
@@ -168,15 +174,21 @@ const StorageScreen: React.FC = () => {
               </View>
             );
           })}
+          {showGauge && totalCount > 0 && (
+            <Text style={styles.responseCountText}>({totalCount}명 응답)</Text>
+          )}
         </View>
 
         <View style={styles.reactionRow}>
           <TouchableOpacity style={styles.reactionItem} onPress={() => handleToggleLike(item.voteId)}>
             <Text style={styles.reactionIcon}>{item.isLiked ? '❤️' : '🤍'}</Text>
-            <Text style={styles.reactionText}>{item.likeCount/2}</Text>
+            <Text style={styles.reactionText}>{item.likeCount}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.reactionItem}>
+          <TouchableOpacity
+            style={styles.reactionItem}
+            onPress={() => navigation.navigate('CommentScreen', { voteId: item.voteId })}
+          >
             <Text style={styles.reactionIcon}>💬</Text>
             <Text style={styles.reactionText}>{item.commentCount}</Text>
           </TouchableOpacity>
@@ -274,6 +286,13 @@ const styles = StyleSheet.create({
   reactionItem: { flexDirection: 'row', alignItems: 'center' },
   reactionIcon: { fontSize: 20, marginRight: 4 },
   reactionText: { fontSize: 14, color: '#333' },
+
+  responseCountText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'right',
+  },
 });
 
 export default StorageScreen;

@@ -35,7 +35,7 @@ export type CreateVoteRequest = {
       voteOptions: VoteOption[];
 
       selectedOptionId?: number;
-        totalVotes: number;
+      totalVotes: number;
     };
   
     export type VotePageResponse = {
