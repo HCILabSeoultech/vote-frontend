@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { fetchComments, postComment } from '../api/comment';
+import { toggleCommentLike } from '../api/commentLike';
 import { Comment } from '../types/Comment';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -51,13 +52,32 @@ const CommentScreen = () => {
     }
   };
 
+  const handleToggleLike = async (commentId: number) => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      const result = await toggleCommentLike(commentId, token || '');
+
+      setComments((prev) =>
+        prev.map((comment) =>
+          comment.id === commentId
+            ? {
+                ...comment,
+                isLiked: result.isLiked,
+                likeCount: result.likeCount,
+              }
+            : comment
+        )
+      );
+    } catch (err) {
+      console.error('좋아요 토글 실패:', err);
+    }
+  };
+
   const renderComment = ({ item }: { item: Comment }) => {
     const isDefault = item.profileImage === 'default.jpg';
     const imageUrl = isDefault
       ? `${IMAGE_BASE_URL}/images/default.jpg`
       : `${IMAGE_BASE_URL}${item.profileImage}`;
-
-    console.log(imageUrl);
 
     return (
       <View style={styles.commentItem}>
@@ -69,7 +89,18 @@ const CommentScreen = () => {
               {new Date(item.createdAt).toLocaleString()}
             </Text>
           </View>
+
           <Text style={styles.commentText}>{item.content}</Text>
+
+          {/* ♥ 하트는 항상 표시하고, 숫자는 좋아요 수 보여줌 */}
+          <View style={styles.likeRow}>
+            <TouchableOpacity onPress={() => handleToggleLike(item.id)}>
+              <Text style={[styles.heart, item.isLiked && styles.liked]}>
+                ♥
+              </Text>
+            </TouchableOpacity>
+            <Text style={styles.likeCount}>{item.likeCount}</Text>
+          </View>
         </View>
       </View>
     );
@@ -171,6 +202,23 @@ const styles = StyleSheet.create({
   postButton: {
     justifyContent: 'center',
     marginLeft: 10,
+  },
+  likeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  heart: {
+    fontSize: 16,
+    color: '#aaa',
+    marginRight: 6,
+  },
+  liked: {
+    color: 'red',
+  },
+  likeCount: {
+    fontSize: 13,
+    color: '#555',
   },
 });
 

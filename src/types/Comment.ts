@@ -5,5 +5,6 @@ export type Comment = {
     createdAt: string;
     profileImage: string;
     likeCount: number;
+    isLiked: boolean;
     parentId: number | null;
   }

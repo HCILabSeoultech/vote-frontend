@@ -2,6 +2,7 @@ import axios from 'axios';
 
 const API_URL = 'http://localhost:8080/comment';
 
+//댓글조회
 export const fetchComments = async (voteId: number, token?: string) => {
   const headers = token
     ? { Authorization: `Bearer ${token}` }
