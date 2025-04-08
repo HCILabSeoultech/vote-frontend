@@ -71,3 +71,17 @@ export const getVoteById = async (voteId: number): Promise<VoteResponse> => {
 
   return response.data;
 };
+
+//좋아요 개수 Top10
+export const getTopLikedVotes = async (): Promise<VoteResponse[]> => {
+  const token = await AsyncStorage.getItem('token');
+  if (!token) throw new Error('JWT 토큰이 없습니다.');
+
+  const response = await axios.get(`${API_URL}/top-liked`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return response.data;
+};
