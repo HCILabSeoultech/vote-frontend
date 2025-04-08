@@ -12,14 +12,19 @@ import {
 } from 'react-native';
 import Animated, { FadeInLeft } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getMainPageVotes, getVoteById, selectVoteOption } from '../api/post';
+import { getMainPageVotes, getVoteById, selectVoteOption, deleteVote } from '../api/post';
 import { toggleLike, toggleBookmark } from '../api/reaction';
 import { VoteResponse } from '../types/Vote';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import { jwtDecode } from 'jwt-decode'
 
 const IMAGE_BASE_URL = 'http://localhost:8080';
+
+interface JwtPayload {
+  sub: string;
+}
 
 const MainScreen: React.FC = () => {
   const [votes, setVotes] = useState<VoteResponse[]>([]);
@@ -27,8 +32,25 @@ const MainScreen: React.FC = () => {
   const [isLast, setIsLast] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({});
+  const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const isFocused = useIsFocused();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'CommentScreen'>>();
+
+  useEffect(() => {
+    const fetchUserFromToken = async () => {
+      const token = await AsyncStorage.getItem('token');
+      if (token) {
+        try {
+          const decoded: JwtPayload = jwtDecode(token);
+          setCurrentUsername(decoded.sub); 
+        } catch (e) {
+          console.error('JWT decode 실패:', e);
+        }
+      }
+    };
+  
+    fetchUserFromToken();
+  }, []);
 
   useEffect(() => {
     if (isFocused) {
@@ -89,6 +111,23 @@ const MainScreen: React.FC = () => {
     }
   };
 
+  const handleDeleteVote = async (voteId: number) => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert('인증 오류', '로그인이 필요합니다.');
+        return;
+      }
+  
+      await deleteVote(voteId);
+      setVotes((prev) => prev.filter((vote) => vote.voteId !== voteId));
+      Alert.alert('삭제 완료', '투표가 삭제되었습니다.');
+    } catch (err) {
+      console.error('투표 삭제 실패:', err);
+      Alert.alert('에러', '삭제 중 오류가 발생했습니다.');
+    }
+  };
+
   const handleToggleLike = async (voteId: number) => {
     try {
       const token = await AsyncStorage.getItem('token');
@@ -128,18 +167,52 @@ const MainScreen: React.FC = () => {
     const showGauge = closed || hasVoted;
     const totalCount = item.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0);
 
+    const isMyPost = currentUsername !== null && item.username === currentUsername;
+
     return (
       <View style={[styles.voteItem, closed && { backgroundColor: '#ddd' }]}>
         <View style={styles.userInfoRow}>
-          <Image
-            source={{
-              uri: item.profileImage === 'default.jpg'
-                ? `${IMAGE_BASE_URL}/images/default.jpg`
-                : `${IMAGE_BASE_URL}${item.profileImage}`,
-            }}
-            style={styles.profileImage}
-          />
-          <Text style={styles.nickname}>{item.username}</Text>
+          {/* 왼쪽: 프로필 이미지 + 닉네임 */}
+          <View style={styles.userInfoLeft}>
+            <Image
+              source={{
+                uri: item.profileImage === 'default.jpg'
+                  ? `${IMAGE_BASE_URL}/images/default.jpg`
+                  : `${IMAGE_BASE_URL}${item.profileImage}`,
+              }}
+              style={styles.profileImage}
+            />
+            <Text style={styles.nickname}>{item.username}</Text>
+          </View>
+
+          {/* 오른쪽: 수정 / 삭제 버튼 (내 글일 때만) */}
+          {isMyPost && (
+            <View style={styles.userInfoActions}>
+              <TouchableOpacity
+                onPress={() =>
+                  navigation.navigate('EditVoteScreen', { voteId: item.voteId })
+                }
+                style={{ marginRight: 12 }}
+              >
+                <Text style={styles.editText}>수정</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                onPress={() =>
+                  Alert.alert('삭제 확인', '정말 삭제하시겠습니까?', [
+                    { text: '취소', style: 'cancel' },
+                    {
+                      text: '삭제',
+                      style: 'destructive',
+                      onPress: () => handleDeleteVote(item.voteId),
+                    },
+                  ])
+                }
+              >
+              <Text style={styles.deleteText}>삭제</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         <Text style={styles.title}>
@@ -206,8 +279,6 @@ const MainScreen: React.FC = () => {
           </View>
         )}
 
-        
-
         <View style={styles.reactionRow}>
           <TouchableOpacity style={styles.reactionItem} onPress={() => handleToggleLike(item.voteId)}>
             <Text style={styles.reactionIcon}>{item.isLiked ? '❤️' : '🤍'}</Text>
@@ -253,6 +324,7 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#fff' },
   container: { padding: 16 },
   voteItem: {
+    position: 'relative',
     marginBottom: 20,
     padding: 16,
     backgroundColor: '#f9f9f9',
@@ -267,7 +339,12 @@ const styles = StyleSheet.create({
   optionContainer: { marginTop: 12 },
   optionWrapper: { position: 'relative', marginVertical: 6 },
   gaugeBar: {
-    position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 10, zIndex: -1,
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 10,
+    zIndex: -1,
   },
   optionButton: {
     backgroundColor: '#fff',
@@ -283,7 +360,10 @@ const styles = StyleSheet.create({
   optionButtonText: { fontSize: 16, color: '#333' },
   percentageText: { fontSize: 14, fontWeight: 'bold', color: '#333' },
   reactionRow: {
-    flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginTop: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    marginTop: 16,
   },
   reactionItem: { flexDirection: 'row', alignItems: 'center' },
   reactionIcon: { fontSize: 20, marginRight: 4 },
@@ -294,13 +374,47 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'right',
   },
+
   userInfoRow: {
-    flexDirection: 'row', alignItems: 'center', marginTop: 4, marginBottom: 4,
+    flexDirection: 'row',
+    justifyContent: 'space-between', 
+    alignItems: 'center',
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  userInfoLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   profileImage: {
-    width: 30, height: 30, borderRadius: 15, marginRight: 8, backgroundColor: '#ccc',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    marginRight: 8,
+    backgroundColor: '#ccc',
   },
-  nickname: { fontSize: 14, color: '#333', fontWeight: '500' },
+  nickname: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+  },
+
+  userInfoActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  editText: {
+    fontSize: 14,
+    color: '#007bff',
+    marginRight: 12,
+    fontWeight: '500',
+  },
+  deleteText: {
+    fontSize: 14,
+    color: 'red',
+    fontWeight: '500',
+  },
 });
+
 
 export default MainScreen;

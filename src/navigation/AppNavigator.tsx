@@ -7,6 +7,8 @@ import CategorySelectionScreen from '../screens/CategorySelectionScreen';
 import { UserData } from '../types/UserData'
 import MainTabs from './MainTabs'
 import CommentScreen from '../screens/CommentScreen'; 
+import EditVoteScreen from '../screens/EditVoteScreen'; 
+
 
 
 export type RootStackParamList = {
@@ -15,6 +17,7 @@ export type RootStackParamList = {
   CategorySelection: { userData: UserData };
   Main: undefined;
   CommentScreen: { voteId: number };
+  EditVoteScreen: { voteId: number };
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -29,6 +32,7 @@ const AppNavigator = () => (
       <Stack.Screen name="CategorySelection" component={CategorySelectionScreen} />
       <Stack.Screen name="Main" component={MainTabs} />
       <Stack.Screen name="CommentScreen" component={CommentScreen} />
+      <Stack.Screen name="EditVoteScreen" component={EditVoteScreen} />
     </Stack.Navigator>
   </NavigationContainer>
 );

@@ -1,21 +1,21 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   StyleSheet,
-  Image,
-  Alert,
   TouchableOpacity,
-  Platform,
+  Alert,
   ScrollView,
+  Image,
+  Platform,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { createVotePost } from '../api/post';
-import { useNavigation } from '@react-navigation/native';
-import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { TabParamList } from '../types/TabParam';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../navigation/AppNavigator';
+import { getVoteById, updateVotePost } from '../api/post';
+import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const SERVER_URL = 'http://localhost:8080';
@@ -29,16 +29,58 @@ const categories = [
   { id: 6, name: '기술' },
 ];
 
-const CreatePostScreen: React.FC = () => {
+type EditVoteScreenRouteProp = RouteProp<RootStackParamList, 'EditVoteScreen'>;
+type EditVoteScreenNavigationProp = StackNavigationProp<RootStackParamList, 'EditVoteScreen'>;
+
+const EditVoteScreen = () => {
+  const route = useRoute<EditVoteScreenRouteProp>();
+  const navigation = useNavigation<EditVoteScreenNavigationProp>();
+  const { voteId } = route.params;
+
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [options, setOptions] = useState(['', '']);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [options, setOptions] = useState<string[]>([]);
   const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [finishTime, setFinishTime] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const navigation = useNavigation<BottomTabNavigationProp<TabParamList>>();
+  useEffect(() => {
+    const fetchVote = async () => {
+      try {
+        const data = await getVoteById(voteId);
+        setTitle(data.title);
+        setContent(data.content);
+        setOptions(data.voteOptions.map((opt: any) => opt.content));
+        setCategoryId(data.categoryId);
+        setImageUrl(data.images.length > 0 ? data.images[0].imageUrl : null);
+        setFinishTime(new Date(data.finishTime));
+      } catch (err) {
+        Alert.alert('불러오기 실패', '게시글 정보를 가져오는 중 오류 발생');
+      }
+    };
+    fetchVote();
+  }, [voteId]);
+
+  const handleOptionChange = (index: number, value: string) => {
+    const newOptions = [...options];
+    newOptions[index] = value;
+    setOptions(newOptions);
+  };
+
+  const handleAddOption = () => {
+    setOptions([...options, '']);
+  };
+
+  const handleRemoveOption = (index: number) => {
+    if (options.length <= 2) {
+      Alert.alert('옵션은 최소 2개 이상 필요합니다.');
+      return;
+    }
+    const newOptions = [...options];
+    newOptions.splice(index, 1);
+    setOptions(newOptions);
+  };
 
   const handleSelectImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -82,100 +124,59 @@ const CreatePostScreen: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    if (!categoryId) {
-      Alert.alert('카테고리를 선택해주세요');
-      return;
-    }
-
-    const filledOptions = options.filter(opt => opt.trim() !== '');
-    if (filledOptions.length < 2) {
-      Alert.alert('옵션을 두 개 이상 입력해주세요');
-      return;
-    }
-
     try {
-      const data = {
-        categoryId,
+      const filledOptions = options.filter((opt) => opt.trim() !== '');
+      const updateData = {
         title,
         content,
+        categoryId,
         finishTime: finishTime.toISOString(),
         options: filledOptions,
         imageUrls: imageUrl ? [imageUrl] : [],
       };
-
-      const result = await createVotePost(data);
-
-      setTitle('');
-      setContent('');
-      setOptions(['', '']);
-      setCategoryId(null);
-      setImageUrl(null);
-      setFinishTime(new Date());
-
-      Alert.alert('작성 완료', `게시물 ID: ${result.postId}`, [
+      await updateVotePost(voteId, updateData);
+      Alert.alert('수정 완료', '게시물이 수정되었습니다.', [
         {
           text: '확인',
-          onPress: () => navigation.navigate('홈'),
+          onPress: () => navigation.goBack(),
         },
       ]);
     } catch {
-      Alert.alert('작성 실패', '게시물 작성 중 오류 발생');
+      Alert.alert('수정 실패', '게시글 수정 중 오류 발생');
     }
-  };
-
-  const handleAddOption = () => {
-    setOptions([...options, '']);
-  };
-
-  const handleOptionChange = (index: number, value: string) => {
-    const newOptions = [...options];
-    newOptions[index] = value;
-    setOptions(newOptions);
-  };
-
-  const handleRemoveOption = (index: number) => {
-    if (options.length <= 2) {
-      Alert.alert('옵션은 최소 2개 이상 필요합니다.');
-      return;
-    }
-    const newOptions = [...options];
-    newOptions.splice(index, 1);
-    setOptions(newOptions);
   };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
       <ScrollView contentContainerStyle={styles.container}>
+
         <Text style={styles.label}>제목</Text>
-        <TextInput placeholder="제목을 입력하세요" value={title} onChangeText={setTitle} style={styles.input} />
+        <TextInput value={title} onChangeText={setTitle} style={styles.input} />
 
         <Text style={styles.label}>내용</Text>
         <TextInput
-          placeholder="내용을 입력하세요"
           value={content}
           onChangeText={setContent}
-          multiline
-          numberOfLines={4}
           style={[styles.input, { height: 100 }]}
+          multiline
         />
 
         <Text style={styles.label}>투표 옵션</Text>
-        {options.map((opt, index) => (
-          <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+        {options.map((opt, idx) => (
+          <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
             <TextInput
-              placeholder={`옵션 ${index + 1}`}
               value={opt}
-              onChangeText={(value) => handleOptionChange(index, value)}
+              onChangeText={(val) => handleOptionChange(idx, val)}
               style={[styles.input, { flex: 1, marginRight: 8 }]}
             />
             {options.length > 2 && (
-              <TouchableOpacity onPress={() => handleRemoveOption(index)}>
+              <TouchableOpacity onPress={() => handleRemoveOption(idx)}>
                 <Text style={{ fontSize: 18, color: 'red' }}>❌</Text>
               </TouchableOpacity>
             )}
           </View>
         ))}
-        <TouchableOpacity style={styles.addOptionButton} onPress={handleAddOption}>
+        <TouchableOpacity onPress={handleAddOption} style={styles.addOptionButton}>
           <Text style={styles.addOptionText}>➕ 옵션 추가</Text>
         </TouchableOpacity>
 
@@ -187,7 +188,9 @@ const CreatePostScreen: React.FC = () => {
               style={[styles.categoryButton, categoryId === cat.id && styles.selected]}
               onPress={() => setCategoryId(cat.id)}
             >
-              <Text style={categoryId === cat.id ? styles.selectedText : styles.unselectedText}>{cat.name}</Text>
+              <Text style={categoryId === cat.id ? styles.selectedText : styles.unselectedText}>
+                {cat.name}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -196,7 +199,6 @@ const CreatePostScreen: React.FC = () => {
         <TouchableOpacity style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
           <Text style={styles.dateButtonText}>📅 마감일 선택</Text>
         </TouchableOpacity>
-
         <Text style={styles.centeredText}>{finishTime.toLocaleString()}</Text>
         {showDatePicker && (
           <DateTimePicker
@@ -210,17 +212,16 @@ const CreatePostScreen: React.FC = () => {
           />
         )}
 
-        <Text style={styles.label}>이미지 첨부</Text>
-        <TouchableOpacity style={styles.uploadButton} onPress={handleSelectImage}>
-          <Text style={styles.uploadButtonText}>🖼 이미지 선택</Text>
+        <Text style={styles.label}>이미지</Text>
+        <TouchableOpacity style={styles.dateButton} onPress={handleSelectImage}>
+          <Text style={styles.dateButtonText}>🖼 이미지 선택</Text>
         </TouchableOpacity>
-
         {imageUrl && (
           <Image source={{ uri: `${SERVER_URL}${imageUrl}` }} style={styles.image} />
         )}
 
         <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-          <Text style={styles.submitText}>투표 생성</Text>
+          <Text style={styles.submitText}>수정 완료</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -279,16 +280,6 @@ const styles = StyleSheet.create({
   dateButtonText: {
     fontSize: 14,
   },
-  uploadButton: {
-    backgroundColor: '#f0f0f0',
-    padding: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginVertical: 1,
-  },
-  uploadButtonText: {
-    fontSize: 14,
-  },
   image: {
     width: '100%',
     height: 200,
@@ -323,4 +314,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default CreatePostScreen;
+export default EditVoteScreen;

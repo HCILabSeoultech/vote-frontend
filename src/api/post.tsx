@@ -24,6 +24,34 @@ export const createVotePost = async (voteData: CreateVoteRequest): Promise<{ sta
   }
 };
 
+//투표 삭제
+export const deleteVote = async (voteId: number) => {
+  const token = await AsyncStorage.getItem('token');
+  const res = await axios.delete(`${API_URL}/${voteId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return res.data;
+};
+
+//투표 수정
+export const updateVotePost = async (voteId: number, data: any) => {
+  const token = await AsyncStorage.getItem('token');
+  const res = await fetch(`${API_URL}/${voteId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(error || '서버 오류');
+  }
+};
+
 //투표 불러오기(메인페이지)
 export const getMainPageVotes = async (page = 0, size = 10): Promise<VotePageResponse> => {
     const token = await AsyncStorage.getItem('token');

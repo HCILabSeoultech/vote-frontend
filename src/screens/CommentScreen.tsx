@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { jwtDecode } from 'jwt-decode';
 import {
   View,
   Text,
@@ -17,6 +18,10 @@ import { toggleCommentLike } from '../api/commentLike';
 import { Comment } from '../types/Comment';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+interface JwtPayload {
+  sub: string;
+}
+
 const IMAGE_BASE_URL = 'http://localhost:8080';
 
 const CommentScreen = () => {
@@ -25,9 +30,24 @@ const CommentScreen = () => {
 
   const [comments, setComments] = useState<Comment[]>([]);
   const [input, setInput] = useState('');
+  const [currentUsername, setCurrentUsername] = useState<string | null>(null);
 
   useEffect(() => {
     loadComments();
+
+    const fetchUsername = async () => {
+      const token = await AsyncStorage.getItem('token');
+      if (token) {
+        try {
+          const decoded: JwtPayload = jwtDecode(token);
+          setCurrentUsername(decoded.sub);
+        } catch (e) {
+          console.error('JWT decode 실패:', e);
+        }
+      }
+    };
+
+    fetchUsername();
   }, []);
 
   const loadComments = async () => {
@@ -92,14 +112,24 @@ const CommentScreen = () => {
 
           <Text style={styles.commentText}>{item.content}</Text>
 
-          {/* ♥ 하트는 항상 표시하고, 숫자는 좋아요 수 보여줌 */}
           <View style={styles.likeRow}>
-            <TouchableOpacity onPress={() => handleToggleLike(item.id)}>
-              <Text style={[styles.heart, item.isLiked && styles.liked]}>
-                ♥
-              </Text>
-            </TouchableOpacity>
-            <Text style={styles.likeCount}>{item.likeCount}</Text>
+            <View style={styles.likeLeft}>
+              <TouchableOpacity onPress={() => handleToggleLike(item.id)}>
+                <Text style={[styles.heart, item.isLiked && styles.liked]}>♥</Text>
+              </TouchableOpacity>
+              <Text style={styles.likeCount}>{item.likeCount}</Text>
+            </View>
+
+            {item.username === currentUsername && (
+              <View style={styles.commentActions}>
+                <TouchableOpacity onPress={() => alert('댓글 수정 예정')}>
+                  <Text style={styles.editText}>수정</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => alert('댓글 삭제 예정')}>
+                  <Text style={styles.deleteText}>삭제</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </View>
       </View>
@@ -128,10 +158,7 @@ const CommentScreen = () => {
             style={styles.input}
             multiline
           />
-          <TouchableOpacity
-            onPress={handlePostComment}
-            style={styles.postButton}
-          >
+          <TouchableOpacity onPress={handlePostComment} style={styles.postButton}>
             <Text style={{ color: input.trim() ? 'blue' : '#ccc' }}>게시</Text>
           </TouchableOpacity>
         </View>
@@ -203,11 +230,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginLeft: 10,
   },
-  likeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-  },
   heart: {
     fontSize: 16,
     color: '#aaa',
@@ -219,6 +241,31 @@ const styles = StyleSheet.create({
   likeCount: {
     fontSize: 13,
     color: '#555',
+  },
+  likeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  likeLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  commentActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  editText: {
+    fontSize: 13,
+    color: '#007bff',
+    fontWeight: '500',
+    marginRight: 10,
+  },
+  deleteText: {
+    fontSize: 13,
+    color: 'red',
+    fontWeight: '500',
   },
 });
 
