@@ -29,7 +29,37 @@ export const postComment = async (
       { headers }
     );
   
-    return response.data;
-  };
+  return response.data;
+};
+
+//댓글 수정
+export const editComment = async (
+  commentId: number,
+  content: string,
+  token: string
+) => {
+  const res = await axios.put(
+    `${API_URL}/${commentId}`,
+    { content },
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+  return res.data;
+};
+
+//댓글 삭제
+export const deleteComment = async (
+  commentId: number,
+  token: string
+) => {
+  await axios.delete(`${API_URL}/${commentId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+};
 
  

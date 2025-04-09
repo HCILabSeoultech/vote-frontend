@@ -1,19 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { jwtDecode } from 'jwt-decode';
+import { Alert } from 'react-native';
+
 import {
   View,
   Text,
   TextInput,
-  FlatList,
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
   Image,
   SafeAreaView,
+  ScrollView,
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
-import { fetchComments, postComment } from '../api/comment';
+import { fetchComments, postComment, editComment, deleteComment } from '../api/comment';
 import { toggleCommentLike } from '../api/commentLike';
 import { Comment } from '../types/Comment';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -30,25 +32,28 @@ const CommentScreen = () => {
 
   const [comments, setComments] = useState<Comment[]>([]);
   const [input, setInput] = useState('');
+  const [replyTo, setReplyTo] = useState<number | null>(null);
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
+
+  const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
+  const [editedContent, setEditedContent] = useState('');
 
   useEffect(() => {
     loadComments();
-
-    const fetchUsername = async () => {
-      const token = await AsyncStorage.getItem('token');
-      if (token) {
-        try {
-          const decoded: JwtPayload = jwtDecode(token);
-          setCurrentUsername(decoded.sub);
-        } catch (e) {
-          console.error('JWT decode 실패:', e);
-        }
-      }
-    };
-
     fetchUsername();
   }, []);
+
+  const fetchUsername = async () => {
+    const token = await AsyncStorage.getItem('token');
+    if (token) {
+      try {
+        const decoded: JwtPayload = jwtDecode(token);
+        setCurrentUsername(decoded.sub);
+      } catch (e) {
+        console.error('JWT decode 실패:', e);
+      }
+    }
+  };
 
   const loadComments = async () => {
     try {
@@ -64,8 +69,9 @@ const CommentScreen = () => {
     if (!input.trim()) return;
     try {
       const token = await AsyncStorage.getItem('token');
-      await postComment(voteId, input.trim(), undefined, token || '');
+      await postComment(voteId, input.trim(), replyTo || undefined, token || '');
       setInput('');
+      setReplyTo(null);
       loadComments();
     } catch (err) {
       console.error('댓글 작성 실패:', err);
@@ -80,11 +86,7 @@ const CommentScreen = () => {
       setComments((prev) =>
         prev.map((comment) =>
           comment.id === commentId
-            ? {
-                ...comment,
-                isLiked: result.isLiked,
-                likeCount: result.likeCount,
-              }
+            ? { ...comment, isLiked: result.isLiked, likeCount: result.likeCount }
             : comment
         )
       );
@@ -93,14 +95,53 @@ const CommentScreen = () => {
     }
   };
 
-  const renderComment = ({ item }: { item: Comment }) => {
+  const handleEditComment = async (commentId: number) => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      await editComment(commentId, editedContent.trim(), token || '');
+      setEditingCommentId(null);
+      setEditedContent('');
+      loadComments();
+    } catch (err) {
+      console.error('댓글 수정 실패:', err);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: number) => {
+    Alert.alert(
+      '댓글 삭제',
+      '댓글을 삭제하시겠습니까?',
+      [
+        {
+          text: '취소',
+          style: 'cancel',
+        },
+        {
+          text: '삭제',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const token = await AsyncStorage.getItem('token');
+              await deleteComment(commentId, token || '');
+              loadComments();
+            } catch (err) {
+              console.error('댓글 삭제 실패:', err);
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  const renderCommentItem = (item: Comment, indent = 0) => {
     const isDefault = item.profileImage === 'default.jpg';
     const imageUrl = isDefault
       ? `${IMAGE_BASE_URL}/images/default.jpg`
       : `${IMAGE_BASE_URL}${item.profileImage}`;
 
     return (
-      <View style={styles.commentItem}>
+      <View key={item.id} style={[styles.commentItem, { marginLeft: indent }]}>
         <Image source={{ uri: imageUrl }} style={styles.avatar} />
         <View style={styles.commentContent}>
           <View style={styles.commentHeader}>
@@ -110,7 +151,21 @@ const CommentScreen = () => {
             </Text>
           </View>
 
-          <Text style={styles.commentText}>{item.content}</Text>
+          {editingCommentId === item.id ? (
+            <TextInput
+              value={editedContent}
+              onChangeText={setEditedContent}
+              style={{
+                backgroundColor: '#fff',
+                borderRadius: 6,
+                padding: 8,
+                fontSize: 14,
+              }}
+              multiline
+            />
+          ) : (
+            <Text style={styles.commentText}>{item.content}</Text>
+          )}
 
           <View style={styles.likeRow}>
             <View style={styles.likeLeft}>
@@ -120,20 +175,63 @@ const CommentScreen = () => {
               <Text style={styles.likeCount}>{item.likeCount}</Text>
             </View>
 
+            {item.parentId === null && (
+              <TouchableOpacity onPress={() => setReplyTo(item.id)}>
+                <Text style={{ fontSize: 13, color: '#007bff' }}>답글 달기</Text>
+              </TouchableOpacity>
+            )}
+
             {item.username === currentUsername && (
               <View style={styles.commentActions}>
-                <TouchableOpacity onPress={() => alert('댓글 수정 예정')}>
-                  <Text style={styles.editText}>수정</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => alert('댓글 삭제 예정')}>
-                  <Text style={styles.deleteText}>삭제</Text>
-                </TouchableOpacity>
+                {editingCommentId === item.id ? (
+                  <>
+                    <TouchableOpacity onPress={() => handleEditComment(item.id)}>
+                      <Text style={styles.editText}>저장</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setEditingCommentId(null);
+                        setEditedContent('');
+                      }}
+                    >
+                      <Text style={styles.deleteText}>취소</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setEditingCommentId(item.id);
+                        setEditedContent(item.content);
+                      }}
+                    >
+                      <Text style={styles.editText}>수정</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => handleDeleteComment(item.id)}>
+                      <Text style={styles.deleteText}>삭제</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
             )}
           </View>
         </View>
       </View>
     );
+  };
+
+  const parentComments = comments.filter((c) => c.parentId === null);
+  const childComments = comments.filter((c) => c.parentId !== null);
+  const getReplies = (parentId: number) =>
+    childComments.filter((c) => c.parentId === parentId);
+
+  const renderAllComments = () => {
+    return parentComments.map((parent) => (
+      <View key={parent.id}>
+        {renderCommentItem(parent)}
+        {getReplies(parent.id).map((child) => renderCommentItem(child, 40))}
+      </View>
+    ));
   };
 
   return (
@@ -143,12 +241,20 @@ const CommentScreen = () => {
         style={{ flex: 1 }}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
       >
-        <FlatList
-          data={comments}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderComment}
-          contentContainerStyle={styles.commentList}
-        />
+        <ScrollView contentContainerStyle={styles.commentList}>
+          {renderAllComments()}
+        </ScrollView>
+
+        {replyTo && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 }}>
+            <Text style={{ fontSize: 13, color: '#555' }}>
+              {comments.find(c => c.id === replyTo)?.username}님에게 답글 중
+            </Text>
+            <TouchableOpacity onPress={() => setReplyTo(null)}>
+              <Text style={{ marginLeft: 8, color: 'red' }}>취소</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View style={styles.inputContainer}>
           <TextInput
@@ -255,6 +361,7 @@ const styles = StyleSheet.create({
   commentActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginLeft: 12,
   },
   editText: {
     fontSize: 13,
