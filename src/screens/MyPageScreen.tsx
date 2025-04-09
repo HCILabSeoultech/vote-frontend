@@ -15,7 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { getMyPage } from '../api/user';
 import { toggleLike, toggleBookmark } from '../api/reaction';
-import { selectVoteOption, getVoteById } from '../api/post';
+import { selectVoteOption, getVoteById, deleteVote } from '../api/post';
 import { VoteResponse } from '../types/Vote';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
@@ -121,6 +121,16 @@ const MyPageScreen: React.FC = () => {
     }
   };
 
+  const handleDeleteVote = async (voteId: number) => {
+    try {
+      await deleteVote(voteId);
+      setPosts(prev => prev.filter(post => post.voteId !== voteId));
+      Alert.alert('삭제 완료', '투표가 삭제되었습니다.');
+    } catch (err) {
+      Alert.alert('에러', '삭제 중 오류가 발생했습니다.');
+    }
+  };
+
   const renderPost = ({ item }: { item: VoteResponse }) => {
     const closed = isVoteClosed(item.finishTime);
     const selectedOptionId = item.selectedOptionId ?? selectedOptions[item.voteId];
@@ -130,6 +140,44 @@ const MyPageScreen: React.FC = () => {
 
     return (
       <View style={[styles.voteItem, closed && { backgroundColor: '#ddd' }]}>
+        <View style={styles.userInfoRow}>
+          <View style={styles.userInfoLeft}>
+            <Image
+              source={{
+                uri: item.profileImage === 'default.jpg'
+                  ? `${IMAGE_BASE_URL}/images/default.jpg`
+                  : `${IMAGE_BASE_URL}${item.profileImage}`,
+              }}
+              style={styles.profileImageSmall}
+            />
+            <Text style={styles.nickname}>{item.username}</Text>
+          </View>
+
+          <View style={styles.userInfoActions}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('EditVoteScreen', { voteId: item.voteId })}
+              style={{ marginRight: 12 }}
+            >
+              <Text style={styles.editText}>수정</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() =>
+                Alert.alert('삭제 확인', '정말 삭제하시겠습니까?', [
+                  { text: '취소', style: 'cancel' },
+                  {
+                    text: '삭제',
+                    style: 'destructive',
+                    onPress: () => handleDeleteVote(item.voteId),
+                  },
+                ])
+              }
+            >
+              <Text style={styles.deleteText}>삭제</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         <Text style={styles.title}>{item.title}{closed && ' (마감)'}</Text>
         <Text style={styles.meta}>카테고리: {item.categoryName}</Text>
         <Text style={styles.meta}>마감일: {new Date(item.finishTime).toLocaleDateString()}</Text>
@@ -301,13 +349,49 @@ const styles = StyleSheet.create({
   reactionItem: { flexDirection: 'row', alignItems: 'center' },
   reactionIcon: { fontSize: 20, marginRight: 4 },
   reactionText: { fontSize: 14, color: '#333' },
-
   responseCountText: {
     marginTop: 6,
     fontSize: 12,
     color: '#666',
     textAlign: 'right',
-  }
+  },
+  userInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  userInfoLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  profileImageSmall: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    marginRight: 8,
+    backgroundColor: '#ccc',
+  },
+  nickname: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+  },
+  userInfoActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  editText: {
+    fontSize: 14,
+    color: '#007bff',
+    marginRight: 12,
+    fontWeight: '500',
+  },
+  deleteText: {
+    fontSize: 14,
+    color: 'red',
+    fontWeight: '500',
+  },
 });
 
 export default MyPageScreen;
