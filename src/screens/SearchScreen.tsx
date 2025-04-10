@@ -16,7 +16,9 @@ import Animated, { FadeInLeft } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getTopLikedVotes, getVoteById, selectVoteOption } from '../api/post';
 import { toggleLike, toggleBookmark } from '../api/reaction';
+import { searchUsers, searchVotes } from '../api/search';
 import { VoteResponse } from '../types/Vote';
+import { UserDocument } from '../types/UserData';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
@@ -25,9 +27,12 @@ const IMAGE_BASE_URL = 'http://localhost:8080';
 
 const SearchScreen: React.FC = () => {
   const [votes, setVotes] = useState<VoteResponse[]>([]);
+  const [userResults, setUserResults] = useState<UserDocument[]>([]);
   const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({});
-  const [loading, setLoading] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState('');
+  const [searchType, setSearchType] = useState<'vote' | 'user'>('vote');
+  const [loading, setLoading] = useState(false);
+
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'CommentScreen'>>();
 
   useEffect(() => {
@@ -49,9 +54,7 @@ const SearchScreen: React.FC = () => {
   const refreshVote = async (voteId: number) => {
     try {
       const updated = await getVoteById(voteId);
-      setVotes((prev) =>
-        prev.map((vote) => (vote.voteId === voteId ? updated : vote))
-      );
+      setVotes((prev) => prev.map((vote) => (vote.voteId === voteId ? updated : vote)));
     } catch (err) {
       console.error('투표 새로고침 실패:', err);
     }
@@ -88,9 +91,56 @@ const SearchScreen: React.FC = () => {
     }
   };
 
+  const handleSearch = async (text: string) => {
+    setSearchKeyword(text);
+    if (text.trim() === '') {
+      setUserResults([]);
+      fetchVotes();
+      return;
+    }
+
+    try {
+      setLoading(true);
+      if (searchType === 'vote') {
+        const res = await searchVotes(text);
+
+        const mapped = (res as any[]).map((item) => ({
+          ...item,
+          voteId: item.voteId ?? item.id,
+        }));
+  
+        const cleaned = mapped.filter((item) => item && item.voteId !== undefined);
+        setVotes(cleaned);
+      } else {
+        const users = await searchUsers(text);
+        setUserResults(users);
+      }
+    } catch (err) {
+      console.error('검색 실패:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const isVoteClosed = (finishTime: string) => new Date(finishTime).getTime() < Date.now();
 
-  const renderItem = ({ item }: { item: VoteResponse }) => {
+  const renderVoteItem = ({ item }: { item: VoteResponse }) => {
+    if (searchKeyword.trim() !== '') {
+      return (
+        <TouchableOpacity
+          style={styles.simpleVoteItem}
+          onPress={() => navigation.navigate('CommentScreen', { voteId: item.voteId })}
+        >
+          <Text style={styles.simpleTitle}>{item.title}</Text>
+          <Text style={styles.simpleMeta}>작성자: {item.username}</Text>
+          <Text style={styles.simpleMeta}>
+            카테고리: {'category' in item ? (item as any).category : item.categoryName}
+          </Text>
+
+        </TouchableOpacity>
+      );
+    }
+
     const closed = isVoteClosed(item.finishTime);
     const selectedOptionId = item.selectedOptionId ?? selectedOptions[item.voteId];
     const hasVoted = !!selectedOptionId;
@@ -111,10 +161,7 @@ const SearchScreen: React.FC = () => {
           <Text style={styles.nickname}>{item.username}</Text>
         </View>
 
-        <Text style={styles.title}>
-          {item.title}
-          {closed && <Text> (마감)</Text>}
-        </Text>
+        <Text style={styles.title}>{item.title}{closed && <Text> (마감)</Text>}</Text>
         <Text style={styles.meta}>카테고리: {item.categoryName}</Text>
         <Text style={styles.meta}>마감일: {new Date(item.finishTime).toLocaleDateString()}</Text>
         <Text numberOfLines={2} style={styles.content}>{item.content}</Text>
@@ -122,56 +169,49 @@ const SearchScreen: React.FC = () => {
         {item.images.length > 0 && (
           <View style={styles.imageContainer}>
             {item.images.map((img) => (
-              <Image
-                key={img.id}
-                source={{ uri: `${IMAGE_BASE_URL}${img.imageUrl}` }}
-                style={styles.image}
-                resizeMode="cover"
-              />
+              <Image key={img.id} source={{ uri: `${IMAGE_BASE_URL}${img.imageUrl}` }} style={styles.image} />
             ))}
           </View>
         )}
 
-        {item.voteOptions.length > 0 && (
-          <View style={styles.optionContainer}>
-            {item.voteOptions.map((opt) => {
-              const isSelected = selectedOptionId === opt.id;
-              const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
+        <View style={styles.optionContainer}>
+          {item.voteOptions.map((opt) => {
+            const isSelected = selectedOptionId === opt.id;
+            const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
 
-              return (
-                <View key={opt.id} style={styles.optionWrapper}>
-                  {showGauge && (
-                    <Animated.View
-                      entering={FadeInLeft}
-                      style={[
-                        styles.gaugeBar,
-                        {
-                          width: `${percentage}%`,
-                          backgroundColor: isSelected ? '#007bff' : '#d0e6ff',
-                        },
-                      ]}
-                    />
-                  )}
-                  <TouchableOpacity
+            return (
+              <View key={opt.id} style={styles.optionWrapper}>
+                {showGauge && (
+                  <Animated.View
+                    entering={FadeInLeft}
                     style={[
-                      styles.optionButton,
-                      closed && { backgroundColor: '#eee', borderColor: '#ccc' },
-                      !closed && isSelected && { borderColor: '#007bff', borderWidth: 2 },
+                      styles.gaugeBar,
+                      {
+                        width: `${percentage}%`,
+                        backgroundColor: isSelected ? '#007bff' : '#d0e6ff',
+                      },
                     ]}
-                    onPress={() => handleVote(item.voteId, opt.id)}
-                    disabled={closed || isSelected}
-                  >
-                    <Text style={styles.optionButtonText}>{opt.content}</Text>
-                    {showGauge && <Text style={styles.percentageText}>{percentage}%</Text>}
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
-            {showGauge && totalCount > 0 && (
-              <Text style={styles.responseCountText}>({totalCount}명 응답)</Text>
-            )}
-          </View>
-        )}
+                  />
+                )}
+                <TouchableOpacity
+                  style={[
+                    styles.optionButton,
+                    closed && { backgroundColor: '#eee', borderColor: '#ccc' },
+                    !closed && isSelected && { borderColor: '#007bff', borderWidth: 2 },
+                  ]}
+                  onPress={() => handleVote(item.voteId, opt.id)}
+                  disabled={closed || isSelected}
+                >
+                  <Text style={styles.optionButtonText}>{opt.content}</Text>
+                  {showGauge && <Text style={styles.percentageText}>{percentage}%</Text>}
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+          {showGauge && totalCount > 0 && (
+            <Text style={styles.responseCountText}>({totalCount}명 응답)</Text>
+          )}
+        </View>
 
         <View style={styles.reactionRow}>
           <TouchableOpacity style={styles.reactionItem} onPress={() => handleToggleLike(item.voteId)}>
@@ -179,10 +219,7 @@ const SearchScreen: React.FC = () => {
             <Text style={styles.reactionText}>{item.likeCount}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.reactionItem}
-            onPress={() => navigation.navigate('CommentScreen', { voteId: item.voteId })}
-          >
+          <TouchableOpacity style={styles.reactionItem} onPress={() => navigation.navigate('CommentScreen', { voteId: item.voteId })}>
             <Text style={styles.reactionIcon}>💬</Text>
             <Text style={styles.reactionText}>{item.commentCount}</Text>
           </TouchableOpacity>
@@ -199,30 +236,60 @@ const SearchScreen: React.FC = () => {
     );
   };
 
-  const filteredVotes = votes.filter((vote) =>
-    vote.title.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-    vote.content.toLowerCase().includes(searchKeyword.toLowerCase())
-  );
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.searchBarContainer}>
-        <Ionicons name="search" size={20} color="#888" style={{ marginRight: 8 }} />
+        <View style={styles.inlineToggleContainer}>
+          <TouchableOpacity
+            style={[styles.inlineToggleButton, searchType === 'vote' && styles.activeInlineToggle]}
+            onPress={() => setSearchType('vote')}
+          >
+            <Text style={[styles.inlineToggleText, searchType === 'vote' && styles.activeToggleText]}>투표</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.inlineToggleButton, searchType === 'user' && styles.activeInlineToggle]}
+            onPress={() => setSearchType('user')}
+          >
+            <Text style={[styles.inlineToggleText, searchType === 'user' && styles.activeToggleText]}>유저</Text>
+          </TouchableOpacity>
+        </View>
+        <Ionicons name="search" size={20} color="#888" style={{ marginHorizontal: 8 }} />
         <TextInput
           placeholder="검색어를 입력하세요"
           style={styles.searchInput}
           value={searchKeyword}
-          onChangeText={setSearchKeyword}
+          onChangeText={handleSearch}
         />
       </View>
 
       {loading ? (
         <ActivityIndicator size="large" />
+      ) : searchType === 'user' ? (
+        <FlatList
+          data={userResults}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={({ item }) => (
+            <View style={styles.userItem}>
+              <Image
+                source={{
+                  uri: item.profileImage === 'default.jpg'
+                    ? `${IMAGE_BASE_URL}/images/default.jpg`
+                    : `${IMAGE_BASE_URL}${item.profileImage}`,
+                }}
+                style={styles.profileImage}
+              />
+              <Text style={styles.nickname}>{item.username}</Text>
+            </View>
+          )}
+          contentContainerStyle={styles.container}
+        />
       ) : (
         <FlatList
-          data={filteredVotes}
-          keyExtractor={(item) => item.voteId.toString()}
-          renderItem={renderItem}
+          data={votes}
+          keyExtractor={(item, index) =>
+            item?.voteId !== undefined ? item.voteId.toString() : `vote-${index}`
+          }
+          renderItem={renderVoteItem}
           contentContainerStyle={styles.container}
         />
       )}
@@ -235,13 +302,35 @@ const styles = StyleSheet.create({
   searchBarContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 10,
     backgroundColor: '#f0f0f0',
     borderRadius: 10,
     marginHorizontal: 16,
     marginTop: 12,
     marginBottom: 8,
+  },
+  inlineToggleContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#ddd',
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  inlineToggleButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    backgroundColor: '#ddd',
+  },
+  activeInlineToggle: {
+    backgroundColor: '#007bff',
+  },
+  inlineToggleText: {
+    fontSize: 12,
+    color: '#333',
+  },
+  activeToggleText: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
   searchInput: {
     flex: 1,
@@ -317,6 +406,33 @@ const styles = StyleSheet.create({
   reactionItem: { flexDirection: 'row', alignItems: 'center' },
   reactionIcon: { fontSize: 20, marginRight: 4 },
   reactionText: { fontSize: 14, color: '#333' },
+  userItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#f2f2f2',
+    marginBottom: 8,
+    borderRadius: 8,
+  },
+
+  simpleVoteItem: {
+    padding: 16,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 10,
+    marginBottom: 12,
+    borderColor: '#ddd',
+    borderWidth: 1,
+  },
+  simpleTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  simpleMeta: {
+    fontSize: 12,
+    color: '#666',
+  },
 });
 
 export default SearchScreen;

@@ -276,6 +276,7 @@ const MyPageScreen: React.FC = () => {
             style={styles.profileImage}
           />
           <View style={styles.profileTextBox}>
+            {/* <Text style={styles.nickname}>{profile.nickname}</Text> */}
             <Text style={styles.username}>{profile.username}</Text>
             <Text style={styles.point}>포인트: {profile.point}</Text>
           </View>
