@@ -142,17 +142,24 @@ const UserPageScreen: React.FC = () => {
 
   const handleFollowToggle = async () => {
     if (!currentUserId) return;
-    try {
-      if (isFollowing) {
-        await unfollowUser(userId);
-        setIsFollowing(false);
-      } else {
-        await followUser(userId);
-        setIsFollowing(true);
-      }
-    } catch (err) {
-      Alert.alert('에러', '팔로우 처리 중 오류가 발생했습니다.');
+  try {
+    if (isFollowing) {
+      await unfollowUser(userId);
+    } else {
+      await followUser(userId);
     }
+
+    // 최신 프로필 정보 다시 요청
+    const res = await getUserPage(userId, 0);
+    setProfile(res);
+    
+    // 팔로우 여부도 다시 설정해야 버튼 상태가 바뀜!
+    const followStatus = await checkFollow(currentUserId, userId);
+    setIsFollowing(followStatus);
+
+  } catch (err) {
+    Alert.alert('에러', '팔로우 처리 중 오류가 발생했습니다.');
+  }
   };
   
 
@@ -165,19 +172,15 @@ const UserPageScreen: React.FC = () => {
 
     return (
       <View style={[styles.voteItem, closed && { backgroundColor: '#ddd' }]}>        
-        <View style={styles.userInfoRow}>
-          <View style={styles.userInfoTextBox}>
-            <Image
-              source={{
-                uri: item.profileImage === 'default.jpg'
-                  ? `${IMAGE_BASE_URL}/images/default.jpg`
-                  : `${IMAGE_BASE_URL}${item.profileImage}`,
-              }}
-              style={styles.profileImage}
-            />
-            <Text style={styles.nickname}>{item.username}</Text>
-          </View>
-        </View>
+        <Image
+          source={{
+            uri: item.profileImage === 'default.jpg'
+              ? `${IMAGE_BASE_URL}/images/default.jpg`
+              : `${IMAGE_BASE_URL}${item.profileImage}`,
+          }}
+          style={styles.profileImage}
+        />
+        <Text style={styles.nickname}>{item.username}</Text>
 
         <Text style={styles.title}>{item.title}{closed && ' (마감)'}</Text>
         <Text style={styles.meta}>카테고리: {item.categoryName}</Text>
@@ -261,10 +264,11 @@ const UserPageScreen: React.FC = () => {
   const renderHeader = () => {
     if (!profile) return null;
     const isDefault = profile.profileImage === 'default.jpg';
-
+  
     return (
       <View style={styles.profileContainer}>
-        <View style={styles.userInfoRow}>
+        <View style={styles.profileRow}>
+          {/* 왼쪽 프로필 이미지 */}
           <Image
             source={{
               uri: isDefault
@@ -273,27 +277,51 @@ const UserPageScreen: React.FC = () => {
             }}
             style={styles.mainProfileImage}
           />
-          <View style={styles.userInfoTextBox}>
-            <Text style={styles.username}>{profile.username}</Text>
-            <Text style={styles.point}>포인트: {profile.point}</Text>
+  
+          {/* 오른쪽 텍스트 + 팔로우 버튼 */}
+          <View style={styles.profileRightBox}>
+            {/* 닉네임 + 팔로우 버튼 */}
+            <View style={styles.topRow}>
+              <Text style={styles.username}>{profile.username}</Text>
+              {currentUserId !== userId && (
+                <TouchableOpacity
+                  onPress={handleFollowToggle}
+                  style={[styles.followButton, isFollowing && styles.followingButton]}
+                >
+                  <Text style={[styles.followButtonText, isFollowing && styles.followingButtonText]}>
+                    {isFollowing ? '팔로우 취소' : '팔로우'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+  
+            {/* 포인트 + 통계 (한 줄) */}
+            <View style={styles.pointAndFollowRow}>
+              <Text style={styles.point}>포인트: {profile.point}</Text>
+              <View style={styles.followRow}>
+                <View style={styles.followItem}>
+                  <Text style={styles.followNumber}>{profile.postCount}</Text>
+                  <Text style={styles.followLabel}>게시물</Text>
+                </View>
+                <View style={styles.followItem}>
+                  <Text style={styles.followNumber}>{profile.followerCount}</Text>
+                  <Text style={styles.followLabel}>팔로워</Text>
+                </View>
+                <View style={styles.followItem}>
+                  <Text style={styles.followNumber}>{profile.followingCount}</Text>
+                  <Text style={styles.followLabel}>팔로잉</Text>
+                </View>
+              </View>
+            </View>
+  
+            {/* 자기소개 */}
+            <Text style={styles.introduction}>{profile.introduction}</Text>
           </View>
-          {currentUserId !== userId && (
-            <TouchableOpacity
-            onPress={() => {
-              handleFollowToggle();
-            }}
-              style={[styles.followButton, isFollowing && styles.followingButton]}
-            >
-              <Text style={[styles.followButtonText, isFollowing && styles.followingButtonText]}>
-                {isFollowing ? '팔로우 취소' : '팔로우'}
-              </Text>
-            </TouchableOpacity>
-          )}
         </View>
-        <Text style={styles.introduction}>{profile.introduction}</Text>
       </View>
     );
   };
+  
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -312,57 +340,94 @@ const UserPageScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#fff' },
-  container: { padding: 16 },
-  profileContainer: { marginBottom: 20 },
-  userInfoRow: {
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  container: {
+    padding: 16,
+  },
+
+  // 프로필 헤더
+  profileContainer: {
+    marginBottom: 20,
+    backgroundColor: '#fff',
+  },
+  profileRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
   mainProfileImage: {
     width: 80,
     height: 80,
     borderRadius: 40,
     backgroundColor: '#ccc',
-    marginRight: 1,
+    marginRight: 16,
   },
-  userInfoTextBox: {
+  profileRightBox: {
     flex: 1,
-    marginLeft: 3,
+  },
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   username: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
   },
-  point: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
-  },
-  introduction: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#555',
-  },
   followButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 14,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
     backgroundColor: '#007bff',
-    borderRadius: 8,
-    alignSelf: 'flex-start',
+    borderRadius: 12,
   },
   followingButton: {
     backgroundColor: '#ddd',
   },
   followButtonText: {
-    color: '#fff',
+    fontSize: 12,
     fontWeight: 'bold',
+    color: '#fff',
   },
   followingButtonText: {
     color: '#333',
   },
+
+  pointAndFollowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  point: {
+    fontSize: 14,
+    color: '#666',
+  },
+  followRow: {
+    flexDirection: 'row',
+    marginLeft: 40,
+  },
+  followItem: {
+    alignItems: 'center',
+    marginHorizontal: 8,
+  },
+  followNumber: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  followLabel: {
+    fontSize: 12,
+    color: '#666',
+  },
+  introduction: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#555',
+  },
+
+  // 투표 카드
   voteItem: {
     marginBottom: 20,
     padding: 16,
@@ -386,10 +451,26 @@ const styles = StyleSheet.create({
     color: '#000',
     marginTop: 8,
   },
-  imageContainer: { marginTop: 8 },
-  image: { width: '100%', height: 200, borderRadius: 8, marginTop: 8 },
-  optionContainer: { marginTop: 12 },
-  optionWrapper: { position: 'relative', marginVertical: 6 },
+
+  // 이미지
+  imageContainer: {
+    marginTop: 8,
+  },
+  image: {
+    width: '100%',
+    height: 200,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+
+  // 옵션
+  optionContainer: {
+    marginTop: 12,
+  },
+  optionWrapper: {
+    position: 'relative',
+    marginVertical: 6,
+  },
   gaugeBar: {
     position: 'absolute',
     left: 0,
@@ -409,27 +490,47 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  optionButtonText: { fontSize: 16, color: '#333' },
-  percentageText: { fontSize: 14, fontWeight: 'bold', color: '#333' },
-  responseCountText: {
-    marginTop: 6,
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'right',
+  optionButtonText: {
+    fontSize: 16,
+    color: '#333',
   },
+  percentageText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+
+  // 반응 영역
   reactionRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
     marginTop: 16,
   },
-  reactionItem: { flexDirection: 'row', alignItems: 'center' },
-  reactionIcon: { fontSize: 20, marginRight: 4 },
-  reactionText: { fontSize: 14, color: '#333' },
+  reactionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  reactionIcon: {
+    fontSize: 20,
+    marginRight: 4,
+  },
+  reactionText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  responseCountText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'right',
+  },
+
+  // 댓글 유저 프로필
   profileImage: {
     width: 30,
     height: 30,
-    borderRadius: 20,
+    borderRadius: 15,
     backgroundColor: '#ccc',
     marginRight: 8,
   },
@@ -439,5 +540,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
+
 
 export default UserPageScreen;

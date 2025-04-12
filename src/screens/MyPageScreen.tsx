@@ -279,15 +279,33 @@ const MyPageScreen: React.FC = () => {
             style={styles.profileImage}
           />
           <View style={styles.profileTextBox}>
-            {/* <Text style={styles.nickname}>{profile.nickname}</Text> */}
-            <Text style={styles.username}>{profile.username}</Text>
+          <Text style={styles.username}>{profile.username}</Text>
+
+          {/* 포인트 + followRow 묶기 */}
+          <View style={styles.pointAndFollowRow}>
             <Text style={styles.point}>포인트: {profile.point}</Text>
+            <View style={styles.followRow}>
+              <View style={styles.followItem}>
+                <Text style={styles.followNumber}>{profile.postCount}</Text>
+                <Text style={styles.followLabel}>게시물</Text>
+              </View>
+              <View style={styles.followItem}>
+                <Text style={styles.followNumber}>{profile.followerCount}</Text>
+                <Text style={styles.followLabel}>팔로워</Text>
+              </View>
+              <View style={styles.followItem}>
+                <Text style={styles.followNumber}>{profile.followingCount}</Text>
+                <Text style={styles.followLabel}>팔로잉</Text>
+              </View>
+            </View>
+          </View>
+
+            <Text style={styles.introduction}>{profile.introduction}</Text>
           </View>
         </View>
-        <Text style={styles.introduction}>{profile.introduction}</Text>
       </View>
     );
-  };
+  };  
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -309,14 +327,11 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#fff' },
   container: { padding: 16 },
   profileContainer: { marginBottom: 20 },
-  profileRow: { flexDirection: 'row', alignItems: 'center' },
+  profileRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start'},
   profileImage: {
     width: 80, height: 80, borderRadius: 40, backgroundColor: '#ccc', marginRight: 16,
   },
   profileTextBox: { justifyContent: 'center' },
-  username: { fontSize: 20, fontWeight: 'bold', color: '#333' },
-  point: { fontSize: 14, color: '#666', marginTop: 4 },
-  introduction: { marginTop: 12, fontSize: 14, color: '#555' },
   voteItem: {
     marginBottom: 20,
     padding: 16,
@@ -395,6 +410,43 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'red',
     fontWeight: '500',
+  },
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  profileRightBox: { flex: 1 },
+  username: { fontSize: 20, fontWeight: 'bold', color: '#333' },
+  point: { fontSize: 14, color: '#666', marginTop: 4 },
+  introduction: { marginTop: 8, fontSize: 14, color: '#555' },
+  pointAndFollowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 16, 
+  },
+
+  followRow: {
+    flexDirection: 'row',
+    marginLeft: 35, 
+  },
+
+  followItem: {
+    alignItems: 'center',
+    marginHorizontal: 6,
+  },
+
+  followNumber: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+
+  followLabel: {
+    fontSize: 13,
+    color: '#666',
   },
 });
 
