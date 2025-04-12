@@ -33,34 +33,34 @@ const CreatePostScreen: React.FC = () => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [options, setOptions] = useState(['', '']);
-  const [mediaUrl, setMediaUrl] = useState<string | null>(null);
-  const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);  const [categoryId, setCategoryId] = useState<number | null>(null);
   const [finishTime, setFinishTime] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const navigation = useNavigation<BottomTabNavigationProp<TabParamList>>();
 
-  const handleSelectMedia = async () => {
+  const handleSelectImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('권한 필요', '미디어 업로드를 위해 갤러리 접근 권한이 필요합니다.');
+      Alert.alert('권한 필요', '사진을 업로드하려면 갤러리 접근 권한이 필요합니다.');
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       quality: 1,
     });
 
     if (!result.canceled && result.assets.length > 0) {
-      const asset = result.assets[0];
+      const image = result.assets[0];
+      const uri = image.uri;
 
       const formData = new FormData();
       formData.append('file', {
-        uri: asset.uri,
-        name: asset.type === 'video' ? 'video.mp4' : 'image.jpg',
-        type: asset.type === 'video' ? 'video/mp4' : 'image/jpeg',
+        uri,
+        name: 'image.jpg',
+        type: 'image/jpeg',
       } as any);
 
       try {
@@ -72,19 +72,25 @@ const CreatePostScreen: React.FC = () => {
           body: formData,
         });
 
-        const uploadedUrl = await uploadRes.text();
-        setMediaUrl(uploadedUrl);
+        const imageUrlRes = await uploadRes.text();
+        setImageUrl(imageUrlRes);
       } catch (err) {
-        Alert.alert('업로드 실패', '파일 업로드 중 오류 발생');
+        Alert.alert('이미지 업로드 실패');
       }
     }
   };
 
   const handleSubmit = async () => {
-    if (!categoryId) return Alert.alert('카테고리를 선택해주세요');
+    if (!categoryId) {
+      Alert.alert('카테고리를 선택해주세요');
+      return;
+    }
 
     const filledOptions = options.filter(opt => opt.trim() !== '');
-    if (filledOptions.length < 2) return Alert.alert('옵션은 두 개 이상 입력해주세요');
+    if (filledOptions.length < 2) {
+      Alert.alert('옵션을 두 개 이상 입력해주세요');
+      return;
+    }
 
     try {
       const data = {
@@ -93,7 +99,7 @@ const CreatePostScreen: React.FC = () => {
         content,
         finishTime: finishTime.toISOString(),
         options: filledOptions,
-        imageUrls: mediaUrl ? [mediaUrl] : [],
+        imageUrls: imageUrl ? [imageUrl] : [],
       };
 
       const result = await createVotePost(data);
@@ -102,7 +108,7 @@ const CreatePostScreen: React.FC = () => {
       setContent('');
       setOptions(['', '']);
       setCategoryId(null);
-      setMediaUrl(null);
+      setImageUrl(null);
       setFinishTime(new Date());
 
       Alert.alert('작성 완료', `게시물 ID: ${result.postId}`, [
@@ -114,6 +120,26 @@ const CreatePostScreen: React.FC = () => {
     } catch {
       Alert.alert('작성 실패', '게시물 작성 중 오류 발생');
     }
+  };
+
+  const handleAddOption = () => {
+    setOptions([...options, '']);
+  };
+
+  const handleOptionChange = (index: number, value: string) => {
+    const newOptions = [...options];
+    newOptions[index] = value;
+    setOptions(newOptions);
+  };
+
+  const handleRemoveOption = (index: number) => {
+    if (options.length <= 2) {
+      Alert.alert('옵션은 최소 2개 이상 필요합니다.');
+      return;
+    }
+    const newOptions = [...options];
+    newOptions.splice(index, 1);
+    setOptions(newOptions);
   };
 
   return (
@@ -179,12 +205,13 @@ const CreatePostScreen: React.FC = () => {
           />
         )}
 
-        <Text style={styles.label}>미디어 첨부</Text>
-        <TouchableOpacity style={styles.uploadButton} onPress={handleSelectMedia}>
-          <Text style={styles.uploadButtonText}>🖼/🎥 이미지 또는 영상 선택</Text>
+        <Text style={styles.label}>이미지 첨부</Text>
+        <TouchableOpacity style={styles.uploadButton} onPress={handleSelectImage}>
+          <Text style={styles.uploadButtonText}>🖼 이미지 선택</Text>
         </TouchableOpacity>
-        {mediaUrl && (
-          <Image source={{ uri: `${SERVER_URL}${mediaUrl}` }} style={styles.image} />
+
+        {imageUrl && (
+          <Image source={{ uri: `${SERVER_URL}${imageUrl}` }} style={styles.image} />
         )}
 
         <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
