@@ -18,6 +18,8 @@ import { VoteResponse } from '../types/Vote';
 import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { checkFollow, followUser, unfollowUser } from '../api/follow';
 
 import { SERVER_URL } from '../constant/config';
 
@@ -30,6 +32,8 @@ const UserPageScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({});
   const [profile, setProfile] = useState<any>(null);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
 
   const isFocused = useIsFocused();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'CommentScreen'>>();
@@ -44,6 +48,40 @@ const UserPageScreen: React.FC = () => {
       fetchUserData(0);
     }
   }, [isFocused]);
+
+  useEffect(() => {
+    const fetchUserId = async () => {
+      const token = await AsyncStorage.getItem('token');
+    if (!token) {
+      return;
+    }
+
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const userId = payload.userId;
+
+      if (!userId) {
+        return;
+      }
+
+      setCurrentUserId(userId); 
+    } catch (e) {
+      console.error('JWT 파싱 실패:', e);
+    }
+  };
+
+  fetchUserId();
+  }, []);
+  
+  useEffect(() => {
+    const fetchFollowStatus = async () => {
+      if (currentUserId && currentUserId !== userId) {
+        const isFollow = await checkFollow(currentUserId, userId);
+        setIsFollowing(isFollow);
+      }
+    };
+    fetchFollowStatus();
+  }, [currentUserId, userId]);
 
   const fetchUserData = async (nextPage: number) => {
     if (loading || isLast) return;
@@ -102,6 +140,22 @@ const UserPageScreen: React.FC = () => {
     }
   };
 
+  const handleFollowToggle = async () => {
+    if (!currentUserId) return;
+    try {
+      if (isFollowing) {
+        await unfollowUser(userId);
+        setIsFollowing(false);
+      } else {
+        await followUser(userId);
+        setIsFollowing(true);
+      }
+    } catch (err) {
+      Alert.alert('에러', '팔로우 처리 중 오류가 발생했습니다.');
+    }
+  };
+  
+
   const renderItem = ({ item }: { item: VoteResponse }) => {
     const closed = isVoteClosed(item.finishTime);
     const selectedOptionId = item.selectedOptionId ?? selectedOptions[item.voteId];
@@ -112,7 +166,7 @@ const UserPageScreen: React.FC = () => {
     return (
       <View style={[styles.voteItem, closed && { backgroundColor: '#ddd' }]}>        
         <View style={styles.userInfoRow}>
-          <View style={styles.userInfoLeft}>
+          <View style={styles.userInfoTextBox}>
             <Image
               source={{
                 uri: item.profileImage === 'default.jpg'
@@ -195,6 +249,10 @@ const UserPageScreen: React.FC = () => {
           <TouchableOpacity style={styles.reactionItem} onPress={() => handleToggleBookmark(item.voteId)}>
             <Text style={styles.reactionIcon}>{item.isBookmarked ? '🔖' : '📄'}</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity style={styles.reactionItem}>
+            <Text style={styles.reactionIcon}>📊</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -209,16 +267,30 @@ const UserPageScreen: React.FC = () => {
         <View style={styles.userInfoRow}>
           <Image
             source={{
-              uri: isDefault ? `${IMAGE_BASE_URL}/images/default.jpg` : `${IMAGE_BASE_URL}${profile.profileImage}`,
+              uri: isDefault
+                ? `${IMAGE_BASE_URL}/images/default.jpg`
+                : `${IMAGE_BASE_URL}${profile.profileImage}`,
             }}
-            style={styles.profileImage}
+            style={styles.mainProfileImage}
           />
-          <View style={{ marginLeft: 12 }}>
-            <Text style={styles.nickname}>{profile.username}</Text>
-            <Text style={styles.meta}>포인트: {profile.point}</Text>
+          <View style={styles.userInfoTextBox}>
+            <Text style={styles.username}>{profile.username}</Text>
+            <Text style={styles.point}>포인트: {profile.point}</Text>
           </View>
+          {currentUserId !== userId && (
+            <TouchableOpacity
+            onPress={() => {
+              handleFollowToggle();
+            }}
+              style={[styles.followButton, isFollowing && styles.followingButton]}
+            >
+              <Text style={[styles.followButtonText, isFollowing && styles.followingButtonText]}>
+                {isFollowing ? '팔로우 취소' : '팔로우'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
-        <Text style={styles.content}>{profile.introduction}</Text>
+        <Text style={styles.introduction}>{profile.introduction}</Text>
       </View>
     );
   };
@@ -243,6 +315,54 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#fff' },
   container: { padding: 16 },
   profileContainer: { marginBottom: 20 },
+  userInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  mainProfileImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#ccc',
+    marginRight: 1,
+  },
+  userInfoTextBox: {
+    flex: 1,
+    marginLeft: 3,
+  },
+  username: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  point: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
+  },
+  introduction: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#555',
+  },
+  followButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    backgroundColor: '#007bff',
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  followingButton: {
+    backgroundColor: '#ddd',
+  },
+  followButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  followingButtonText: {
+    color: '#333',
+  },
   voteItem: {
     marginBottom: 20,
     padding: 16,
@@ -250,9 +370,22 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     elevation: 2,
   },
-  title: { fontSize: 18, fontWeight: 'bold' },
-  meta: { fontSize: 12, color: '#888' },
-  content: { fontSize: 14, marginVertical: 8 },
+  title: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
+    marginTop: 4,
+  },
+  meta: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 2,
+  },
+  content: {
+    fontSize: 14,
+    color: '#000',
+    marginTop: 8,
+  },
   imageContainer: { marginTop: 8 },
   image: { width: '100%', height: 200, borderRadius: 8, marginTop: 8 },
   optionContainer: { marginTop: 12 },
@@ -278,6 +411,12 @@ const styles = StyleSheet.create({
   },
   optionButtonText: { fontSize: 16, color: '#333' },
   percentageText: { fontSize: 14, fontWeight: 'bold', color: '#333' },
+  responseCountText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'right',
+  },
   reactionRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -287,32 +426,17 @@ const styles = StyleSheet.create({
   reactionItem: { flexDirection: 'row', alignItems: 'center' },
   reactionIcon: { fontSize: 20, marginRight: 4 },
   reactionText: { fontSize: 14, color: '#333' },
-  responseCountText: {
-    marginTop: 6,
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'right',
-  },
-  userInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  userInfoLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
   profileImage: {
-    width: 40,
-    height: 40,
+    width: 30,
+    height: 30,
     borderRadius: 20,
     backgroundColor: '#ccc',
+    marginRight: 8,
   },
   nickname: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#333',
-    fontWeight: '600',
-    marginLeft: 10,
+    fontWeight: '500',
   },
 });
 
