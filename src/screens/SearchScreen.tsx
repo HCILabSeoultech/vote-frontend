@@ -23,7 +23,9 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 
-const IMAGE_BASE_URL = 'http://localhost:8080';
+import { SERVER_URL } from '../constant/config';
+
+const IMAGE_BASE_URL = `${SERVER_URL}`
 
 const SearchScreen: React.FC = () => {
   const [votes, setVotes] = useState<VoteResponse[]>([]);
@@ -261,7 +263,7 @@ const SearchScreen: React.FC = () => {
           onChangeText={handleSearch}
         />
       </View>
-
+  
       {loading ? (
         <ActivityIndicator size="large" />
       ) : searchType === 'user' ? (
@@ -269,7 +271,10 @@ const SearchScreen: React.FC = () => {
           data={userResults}
           keyExtractor={(item) => item.id.toString()}
           renderItem={({ item }) => (
-            <View style={styles.userItem}>
+            <TouchableOpacity
+              style={styles.userItem}
+              onPress={() => navigation.navigate('UserPageScreen', { userId: item.id })}
+            >
               <Image
                 source={{
                   uri: item.profileImage === 'default.jpg'
@@ -279,7 +284,7 @@ const SearchScreen: React.FC = () => {
                 style={styles.profileImage}
               />
               <Text style={styles.nickname}>{item.username}</Text>
-            </View>
+            </TouchableOpacity>
           )}
           contentContainerStyle={styles.container}
         />

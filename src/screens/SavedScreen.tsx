@@ -28,7 +28,9 @@ const STORAGE_TYPES = [
 type StorageType = typeof STORAGE_TYPES[number]['value'];
 type NavigationProp = StackNavigationProp<RootStackParamList, 'CommentScreen'>;
 
-const IMAGE_BASE_URL = 'http://localhost:8080';
+import { SERVER_URL } from '../constant/config';
+
+const IMAGE_BASE_URL = `${SERVER_URL}`
 
 const StorageScreen: React.FC = () => {
   const [storageType, setStorageType] = useState<StorageType>('voted');

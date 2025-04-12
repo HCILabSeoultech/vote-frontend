@@ -3,7 +3,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { VoteResponse } from '../types/Vote';
 import { UserDocument } from '../types/UserData'; 
 
-const API_URL = 'http://localhost:8080/search';
+import { SERVER_URL } from '../constant/config';
+
+
+const API_URL = `${SERVER_URL}/search`;
 
 // 게시글 검색
 export const searchVotes = async (keyword: string): Promise<VoteResponse[]> => {

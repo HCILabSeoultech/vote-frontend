@@ -1,6 +1,8 @@
 import axios from 'axios';
+import { SERVER_URL } from '../constant/config';
 
-const API_URL = 'http://localhost:8080/comment';
+
+const API_URL = `${SERVER_URL}/comment`;
 
 //댓글조회
 export const fetchComments = async (voteId: number, token?: string) => {

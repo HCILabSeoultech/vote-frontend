@@ -1,7 +1,10 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = 'http://localhost:8080/reaction';
+import { SERVER_URL } from '../constant/config';
+
+
+const API_URL = `${SERVER_URL}/reaction`;
 
 export const toggleLike = async (voteId: number) => {
   const token = await AsyncStorage.getItem('token');

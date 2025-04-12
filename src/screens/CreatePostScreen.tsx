@@ -18,7 +18,7 @@ import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { TabParamList } from '../types/TabParam';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const SERVER_URL = 'http://localhost:8080';
+import { SERVER_URL } from '../constant/config';
 
 const categories = [
   { id: 1, name: '운동' },

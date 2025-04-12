@@ -18,7 +18,7 @@ import { getVoteById, updateVotePost } from '../api/post';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const SERVER_URL = 'http://localhost:8080';
+import { SERVER_URL } from '../constant/config';
 
 const categories = [
   { id: 1, name: '운동' },

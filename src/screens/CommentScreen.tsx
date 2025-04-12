@@ -19,12 +19,13 @@ import { fetchComments, postComment, editComment, deleteComment } from '../api/c
 import { toggleCommentLike } from '../api/commentLike';
 import { Comment } from '../types/Comment';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SERVER_URL } from '../constant/config';
+
+const IMAGE_BASE_URL = `${SERVER_URL}`
 
 interface JwtPayload {
   sub: string;
 }
-
-const IMAGE_BASE_URL = 'http://localhost:8080';
 
 const CommentScreen = () => {
   const route = useRoute();

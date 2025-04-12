@@ -3,6 +3,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import LoginScreen from '../screens/LoginScreen';
 import SignupScreen from '../screens/SignupScreen';
+import UserPageScreen from '../screens/UserPageScreen';
+
 import CategorySelectionScreen from '../screens/CategorySelectionScreen';
 import { UserData } from '../types/UserData'
 import MainTabs from './MainTabs'
@@ -18,6 +20,7 @@ export type RootStackParamList = {
   Main: undefined;
   CommentScreen: { voteId: number };
   EditVoteScreen: { voteId: number };
+  UserPageScreen: { userId: number };
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -33,6 +36,7 @@ const AppNavigator = () => (
       <Stack.Screen name="Main" component={MainTabs} />
       <Stack.Screen name="CommentScreen" component={CommentScreen} />
       <Stack.Screen name="EditVoteScreen" component={EditVoteScreen} />
+      <Stack.Screen name="UserPageScreen" component={UserPageScreen} />
     </Stack.Navigator>
   </NavigationContainer>
 );

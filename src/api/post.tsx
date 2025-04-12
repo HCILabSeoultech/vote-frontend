@@ -2,7 +2,12 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CreateVoteRequest, VotePageResponse, VoteResponse} from '../types/Vote';
 
-const API_URL = 'http://localhost:8080/vote'; 
+import { SERVER_URL } from '../constant/config';
+
+
+const API_URL = `${SERVER_URL}/vote`; 
+// const API_URL = 'http://10.50.107.197:8080/vote';
+
 
 //투표 생성
 export const createVotePost = async (voteData: CreateVoteRequest): Promise<{ status: string; postId: string }> => {

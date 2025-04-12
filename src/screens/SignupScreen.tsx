@@ -18,7 +18,7 @@ type Props = {
   navigation: StackNavigationProp<RootStackParamList, 'Signup'>;
 };
 
-const SERVER_URL = 'http://localhost:8080';
+import { SERVER_URL } from '../constant/config';
 
 const SignupScreen: React.FC<Props> = ({ navigation }) => {
   const [userData, setUserData] = useState<UserData>({

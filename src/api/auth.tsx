@@ -3,7 +3,8 @@ import { LoginRequest, LoginResponse, SignupRequest } from '../types/Auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
-const API_URL = 'http://localhost:8080/auth';
+const API_URL = 'http://127.0.0.1:8080/auth';
+// const API_URL = 'http://10.50.107.197:8080/auth';
 
 // 로그인 함수
 export const login = async (credentials: LoginRequest): Promise<LoginResponse> => {
@@ -30,4 +31,5 @@ export const signup = async (userData: SignupRequest): Promise<any> => {
     throw error;
   }
 };
+
 

@@ -1,4 +1,8 @@
-const API_URL = 'http://localhost:8080/comment-like';
+import { SERVER_URL } from '../constant/config';
+
+
+const API_URL = `${SERVER_URL}/comment-like`;
+
 
 //댓글 좋아요
 export const toggleCommentLike = async (commentId: number, token: string) => {

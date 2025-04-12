@@ -20,7 +20,9 @@ import { VoteResponse } from '../types/Vote';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 
-const IMAGE_BASE_URL = 'http://localhost:8080';
+import { SERVER_URL } from '../constant/config';
+
+const IMAGE_BASE_URL = `${SERVER_URL}`
 
 const MyPageScreen: React.FC = () => {
   const [profile, setProfile] = useState<any>(null);
