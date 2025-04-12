@@ -115,23 +115,6 @@ const MainScreen: React.FC = () => {
     }
   };
 
-  const handleDeleteVote = async (voteId: number) => {
-    try {
-      const token = await AsyncStorage.getItem('token');
-      if (!token) {
-        Alert.alert('인증 오류', '로그인이 필요합니다.');
-        return;
-      }
-  
-      await deleteVote(voteId);
-      setVotes((prev) => prev.filter((vote) => vote.voteId !== voteId));
-      Alert.alert('삭제 완료', '투표가 삭제되었습니다.');
-    } catch (err) {
-      console.error('투표 삭제 실패:', err);
-      Alert.alert('에러', '삭제 중 오류가 발생했습니다.');
-    }
-  };
-
   const handleToggleLike = async (voteId: number) => {
     try {
       const token = await AsyncStorage.getItem('token');
@@ -188,35 +171,6 @@ const MainScreen: React.FC = () => {
             />
             <Text style={styles.nickname}>{item.username}</Text>
           </View>
-
-          {/* 오른쪽: 수정 / 삭제 버튼 (내 글일 때만) */}
-          {isMyPost && (
-            <View style={styles.userInfoActions}>
-              <TouchableOpacity
-                onPress={() =>
-                  navigation.navigate('EditVoteScreen', { voteId: item.voteId })
-                }
-                style={{ marginRight: 12 }}
-              >
-                <Text style={styles.editText}>수정</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                onPress={() =>
-                  Alert.alert('삭제 확인', '정말 삭제하시겠습니까?', [
-                    { text: '취소', style: 'cancel' },
-                    {
-                      text: '삭제',
-                      style: 'destructive',
-                      onPress: () => handleDeleteVote(item.voteId),
-                    },
-                  ])
-                }
-              >
-              <Text style={styles.deleteText}>삭제</Text>
-              </TouchableOpacity>
-            </View>
-          )}
         </View>
 
         <Text style={styles.title}>
@@ -406,17 +360,6 @@ const styles = StyleSheet.create({
   userInfoActions: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  editText: {
-    fontSize: 14,
-    color: '#007bff',
-    marginRight: 12,
-    fontWeight: '500',
-  },
-  deleteText: {
-    fontSize: 14,
-    color: 'red',
-    fontWeight: '500',
   },
 });
 

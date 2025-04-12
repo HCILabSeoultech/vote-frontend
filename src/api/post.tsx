@@ -40,11 +40,11 @@ export const deleteVote = async (voteId: number) => {
   return res.data;
 };
 
-//투표 수정
-export const updateVotePost = async (voteId: number, data: any) => {
+//투표 재업로드
+export const reuploadVotePost = async (voteId: number, data: any) => {
   const token = await AsyncStorage.getItem('token');
-  const res = await fetch(`${API_URL}/${voteId}`, {
-    method: 'PUT',
+  const res = await fetch(`${API_URL}/${voteId}/reupload`, {
+    method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
@@ -55,6 +55,8 @@ export const updateVotePost = async (voteId: number, data: any) => {
     const error = await res.text();
     throw new Error(error || '서버 오류');
   }
+
+  return res.json();
 };
 
 //투표 불러오기(메인페이지)

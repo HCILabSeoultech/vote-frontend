@@ -156,13 +156,14 @@ const MyPageScreen: React.FC = () => {
           </View>
 
           <View style={styles.userInfoActions}>
+          {closed && (
             <TouchableOpacity
-              onPress={() => navigation.navigate('EditVoteScreen', { voteId: item.voteId })}
+              onPress={() => navigation.navigate('ReuploadVoteScreen', { voteId: item.voteId })}
               style={{ marginRight: 12 }}
             >
-              <Text style={styles.editText}>수정</Text>
+              <Text style={styles.editText}>재업로드</Text>
             </TouchableOpacity>
-
+          )}
             <TouchableOpacity
               onPress={() =>
                 Alert.alert('삭제 확인', '정말 삭제하시겠습니까?', [

@@ -33,35 +33,34 @@ const CreatePostScreen: React.FC = () => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [options, setOptions] = useState(['', '']);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [mediaUrl, setMediaUrl] = useState<string | null>(null);
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [finishTime, setFinishTime] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const navigation = useNavigation<BottomTabNavigationProp<TabParamList>>();
 
-  const handleSelectImage = async () => {
+  const handleSelectMedia = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('권한 필요', '사진을 업로드하려면 갤러리 접근 권한이 필요합니다.');
+      Alert.alert('권한 필요', '미디어 업로드를 위해 갤러리 접근 권한이 필요합니다.');
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
       allowsEditing: true,
       quality: 1,
     });
 
     if (!result.canceled && result.assets.length > 0) {
-      const image = result.assets[0];
-      const uri = image.uri;
+      const asset = result.assets[0];
 
       const formData = new FormData();
       formData.append('file', {
-        uri,
-        name: 'image.jpg',
-        type: 'image/jpeg',
+        uri: asset.uri,
+        name: asset.type === 'video' ? 'video.mp4' : 'image.jpg',
+        type: asset.type === 'video' ? 'video/mp4' : 'image/jpeg',
       } as any);
 
       try {
@@ -73,25 +72,19 @@ const CreatePostScreen: React.FC = () => {
           body: formData,
         });
 
-        const imageUrlRes = await uploadRes.text();
-        setImageUrl(imageUrlRes);
+        const uploadedUrl = await uploadRes.text();
+        setMediaUrl(uploadedUrl);
       } catch (err) {
-        Alert.alert('이미지 업로드 실패');
+        Alert.alert('업로드 실패', '파일 업로드 중 오류 발생');
       }
     }
   };
 
   const handleSubmit = async () => {
-    if (!categoryId) {
-      Alert.alert('카테고리를 선택해주세요');
-      return;
-    }
+    if (!categoryId) return Alert.alert('카테고리를 선택해주세요');
 
     const filledOptions = options.filter(opt => opt.trim() !== '');
-    if (filledOptions.length < 2) {
-      Alert.alert('옵션을 두 개 이상 입력해주세요');
-      return;
-    }
+    if (filledOptions.length < 2) return Alert.alert('옵션은 두 개 이상 입력해주세요');
 
     try {
       const data = {
@@ -100,7 +93,7 @@ const CreatePostScreen: React.FC = () => {
         content,
         finishTime: finishTime.toISOString(),
         options: filledOptions,
-        imageUrls: imageUrl ? [imageUrl] : [],
+        imageUrls: mediaUrl ? [mediaUrl] : [],
       };
 
       const result = await createVotePost(data);
@@ -109,7 +102,7 @@ const CreatePostScreen: React.FC = () => {
       setContent('');
       setOptions(['', '']);
       setCategoryId(null);
-      setImageUrl(null);
+      setMediaUrl(null);
       setFinishTime(new Date());
 
       Alert.alert('작성 완료', `게시물 ID: ${result.postId}`, [
@@ -123,65 +116,42 @@ const CreatePostScreen: React.FC = () => {
     }
   };
 
-  const handleAddOption = () => {
-    setOptions([...options, '']);
-  };
-
-  const handleOptionChange = (index: number, value: string) => {
-    const newOptions = [...options];
-    newOptions[index] = value;
-    setOptions(newOptions);
-  };
-
-  const handleRemoveOption = (index: number) => {
-    if (options.length <= 2) {
-      Alert.alert('옵션은 최소 2개 이상 필요합니다.');
-      return;
-    }
-    const newOptions = [...options];
-    newOptions.splice(index, 1);
-    setOptions(newOptions);
-  };
-
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.label}>제목</Text>
-        <TextInput placeholder="제목을 입력하세요" value={title} onChangeText={setTitle} style={styles.input} />
+        <TextInput value={title} onChangeText={setTitle} style={styles.input} placeholder="제목을 입력하세요" />
 
         <Text style={styles.label}>내용</Text>
-        <TextInput
-          placeholder="내용을 입력하세요"
-          value={content}
-          onChangeText={setContent}
-          multiline
-          numberOfLines={4}
-          style={[styles.input, { height: 100 }]}
-        />
+        <TextInput value={content} onChangeText={setContent} multiline style={[styles.input, { height: 100 }]} placeholder="내용을 입력하세요" />
 
         <Text style={styles.label}>투표 옵션</Text>
-        {options.map((opt, index) => (
-          <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+        {options.map((opt, i) => (
+          <View key={i} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
             <TextInput
-              placeholder={`옵션 ${index + 1}`}
               value={opt}
-              onChangeText={(value) => handleOptionChange(index, value)}
+              onChangeText={val => {
+                const newOpts = [...options];
+                newOpts[i] = val;
+                setOptions(newOpts);
+              }}
               style={[styles.input, { flex: 1, marginRight: 8 }]}
+              placeholder={`옵션 ${i + 1}`}
             />
             {options.length > 2 && (
-              <TouchableOpacity onPress={() => handleRemoveOption(index)}>
+              <TouchableOpacity onPress={() => setOptions(prev => prev.filter((_, idx) => idx !== i))}>
                 <Text style={{ fontSize: 18, color: 'red' }}>❌</Text>
               </TouchableOpacity>
             )}
           </View>
         ))}
-        <TouchableOpacity style={styles.addOptionButton} onPress={handleAddOption}>
+        <TouchableOpacity style={styles.addOptionButton} onPress={() => setOptions([...options, ''])}>
           <Text style={styles.addOptionText}>➕ 옵션 추가</Text>
         </TouchableOpacity>
 
         <Text style={styles.label}>카테고리 선택</Text>
         <View style={styles.categoryWrapper}>
-          {categories.map((cat) => (
+          {categories.map(cat => (
             <TouchableOpacity
               key={cat.id}
               style={[styles.categoryButton, categoryId === cat.id && styles.selected]}
@@ -196,7 +166,6 @@ const CreatePostScreen: React.FC = () => {
         <TouchableOpacity style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
           <Text style={styles.dateButtonText}>📅 마감일 선택</Text>
         </TouchableOpacity>
-
         <Text style={styles.centeredText}>{finishTime.toLocaleString()}</Text>
         {showDatePicker && (
           <DateTimePicker
@@ -210,13 +179,12 @@ const CreatePostScreen: React.FC = () => {
           />
         )}
 
-        <Text style={styles.label}>이미지 첨부</Text>
-        <TouchableOpacity style={styles.uploadButton} onPress={handleSelectImage}>
-          <Text style={styles.uploadButtonText}>🖼 이미지 선택</Text>
+        <Text style={styles.label}>미디어 첨부</Text>
+        <TouchableOpacity style={styles.uploadButton} onPress={handleSelectMedia}>
+          <Text style={styles.uploadButtonText}>🖼/🎥 이미지 또는 영상 선택</Text>
         </TouchableOpacity>
-
-        {imageUrl && (
-          <Image source={{ uri: `${SERVER_URL}${imageUrl}` }} style={styles.image} />
+        {mediaUrl && (
+          <Image source={{ uri: `${SERVER_URL}${mediaUrl}` }} style={styles.image} />
         )}
 
         <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
