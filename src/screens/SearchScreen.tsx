@@ -11,8 +11,9 @@ import {
   Image,
   Alert,
   TextInput,
+  Dimensions,
 } from 'react-native';
-import Animated, { FadeInLeft } from 'react-native-reanimated';
+import Animated, { FadeInLeft, FadeIn } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getTopLikedVotes, getVoteById, selectVoteOption } from '../api/post';
 import { toggleLike, toggleBookmark } from '../api/reaction';
@@ -25,7 +26,8 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 
 import { SERVER_URL } from '../constant/config';
 
-const IMAGE_BASE_URL = `${SERVER_URL}`
+const IMAGE_BASE_URL = `${SERVER_URL}`;
+const { width } = Dimensions.get('window');
 
 const SearchScreen: React.FC = () => {
   const [votes, setVotes] = useState<VoteResponse[]>([]);
@@ -34,6 +36,7 @@ const SearchScreen: React.FC = () => {
   const [searchKeyword, setSearchKeyword] = useState('');
   const [searchType, setSearchType] = useState<'vote' | 'user'>('vote');
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'CommentScreen'>>();
 
@@ -43,6 +46,7 @@ const SearchScreen: React.FC = () => {
 
   const fetchVotes = async () => {
     setLoading(true);
+    setInitialLoading(true);
     try {
       const res = await getTopLikedVotes();
       setVotes(res);
@@ -50,6 +54,7 @@ const SearchScreen: React.FC = () => {
       console.error('인기 투표 불러오기 실패:', err);
     } finally {
       setLoading(false);
+      setInitialLoading(false);
     }
   };
 
@@ -126,20 +131,47 @@ const SearchScreen: React.FC = () => {
 
   const isVoteClosed = (finishTime: string) => new Date(finishTime).getTime() < Date.now();
 
-  const renderVoteItem = ({ item }: { item: VoteResponse }) => {
+  // Format date to be more readable
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = date.getTime() - now.getTime(); // 미래면 양수, 과거면 음수
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    // 마감일이 미래고, 7일 이내면 "~일 후 마감" 표시
+    if (diffDays > 0 && diffDays <= 7) {
+      return `${diffDays}일 후 마감`;
+    } else {
+      return date.toLocaleDateString();
+    }
+  };
+
+  const renderVoteItem = ({ item, index }: { item: VoteResponse, index: number }) => {
     if (searchKeyword.trim() !== '') {
       return (
-        <TouchableOpacity
-          style={styles.simpleVoteItem}
-          onPress={() => navigation.navigate('CommentScreen', { voteId: item.voteId })}
+        <Animated.View
+          entering={FadeIn.duration(300).delay(index * 50)}
         >
-          <Text style={styles.simpleTitle}>{item.title}</Text>
-          <Text style={styles.simpleMeta}>작성자: {item.username}</Text>
-          <Text style={styles.simpleMeta}>
-            카테고리: {'category' in item ? (item as any).category : item.categoryName}
-          </Text>
-
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.simpleVoteItem}
+            onPress={() => navigation.navigate('SingleVoteScreen', { voteId: item.voteId })}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.simpleTitle}>{item.title}</Text>
+            <View style={styles.simpleMetaContainer}>
+              <View style={styles.simpleUserInfo}>
+                <Text style={styles.simpleMetaLabel}>작성자:</Text>
+                <Text style={styles.simpleMetaValue}>{item.username}</Text>
+              </View>
+              <View style={styles.simpleCategory}>
+                <Text style={styles.simpleMetaLabel}>카테고리:</Text>
+                <Text style={styles.simpleMetaValue}>
+                  {'category' in item ? (item as any).category : item.categoryName}
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
       );
     }
 
@@ -150,143 +182,275 @@ const SearchScreen: React.FC = () => {
     const totalCount = item.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0);
 
     return (
-      <View style={[styles.voteItem, closed && { backgroundColor: '#ddd' }]}>
+      <Animated.View 
+        entering={FadeIn.duration(400).delay(index * 50)}
+        style={[
+          styles.voteItem, 
+          closed ? styles.closedVoteItem : styles.activeVoteItem
+        ]}
+      >
         <View style={styles.userInfoRow}>
-          <Image
-            source={{
-              uri: item.profileImage === 'default.jpg'
-                ? `${IMAGE_BASE_URL}/images/default.jpg`
-                : `${IMAGE_BASE_URL}${item.profileImage}`,
-            }}
-            style={styles.profileImage}
-          />
-          <Text style={styles.nickname}>{item.username}</Text>
+          <View style={styles.userInfoLeft}>
+            <Image
+              source={{
+                uri: item.profileImage === 'default.jpg'
+                  ? `${IMAGE_BASE_URL}/images/default.jpg`
+                  : `${IMAGE_BASE_URL}${item.profileImage}`,
+              }}
+              style={styles.profileImage}
+            />
+            <Text style={styles.nickname}>{item.username}</Text>
+          </View>
+          
+          {closed && (
+            <View style={styles.closedBadge}>
+              <Text style={styles.closedBadgeText}>마감됨</Text>
+            </View>
+          )}
         </View>
 
-        <Text style={styles.title}>{item.title}{closed && <Text> (마감)</Text>}</Text>
-        <Text style={styles.meta}>카테고리: {item.categoryName}</Text>
-        <Text style={styles.meta}>마감일: {new Date(item.finishTime).toLocaleDateString()}</Text>
-        <Text numberOfLines={2} style={styles.content}>{item.content}</Text>
+        <Text style={styles.title}>{item.title}</Text>
+
+        <View style={styles.metaContainer}>
+          <View style={styles.categoryBadge}>
+            <Text style={styles.categoryText}>{item.categoryName}</Text>
+          </View>
+          <Text style={styles.dateText}>{formatDate(item.finishTime)}</Text>
+        </View>
+
+        {item.content && (
+          <Text numberOfLines={2} style={styles.content}>{item.content}</Text>
+        )}
 
         {item.images.length > 0 && (
           <View style={styles.imageContainer}>
             {item.images.map((img) => (
-              <Image key={img.id} source={{ uri: `${IMAGE_BASE_URL}${img.imageUrl}` }} style={styles.image} />
+              <Image
+                key={img.id}
+                source={{ uri: `${IMAGE_BASE_URL}${img.imageUrl}` }}
+                style={styles.image}
+                resizeMode="cover"
+              />
             ))}
           </View>
         )}
 
-        <View style={styles.optionContainer}>
-          {item.voteOptions.map((opt) => {
-            const isSelected = selectedOptionId === opt.id;
-            const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
+        {item.voteOptions.length > 0 && (
+          <View style={styles.optionContainer}>
+            {item.voteOptions.map((opt) => {
+              const isSelected = selectedOptionId === opt.id;
+              const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
 
-            return (
-              <View key={opt.id} style={styles.optionWrapper}>
-                {showGauge && (
-                  <Animated.View
-                    entering={FadeInLeft}
+              return (
+                <View key={opt.id} style={styles.optionWrapper}>
+                  {showGauge && (
+                    <Animated.View
+                      entering={FadeInLeft.duration(600)}
+                      style={[
+                        styles.gaugeBar,
+                        {
+                          width: `${percentage}%`,
+                          backgroundColor: isSelected ? '#5E72E4' : '#E2E8F0',
+                        },
+                      ]}
+                    />
+                  )}
+                  <TouchableOpacity
                     style={[
-                      styles.gaugeBar,
-                      {
-                        width: `${percentage}%`,
-                        backgroundColor: isSelected ? '#007bff' : '#d0e6ff',
-                      },
+                      styles.optionButton,
+                      closed && styles.closedOptionButton,
+                      !closed && isSelected && styles.selectedOptionButton,
                     ]}
-                  />
-                )}
-                <TouchableOpacity
-                  style={[
-                    styles.optionButton,
-                    closed && { backgroundColor: '#eee', borderColor: '#ccc' },
-                    !closed && isSelected && { borderColor: '#007bff', borderWidth: 2 },
-                  ]}
-                  onPress={() => handleVote(item.voteId, opt.id)}
-                  disabled={closed || isSelected}
-                >
-                  <Text style={styles.optionButtonText}>{opt.content}</Text>
-                  {showGauge && <Text style={styles.percentageText}>{percentage}%</Text>}
-                </TouchableOpacity>
-              </View>
-            );
-          })}
-          {showGauge && totalCount > 0 && (
-            <Text style={styles.responseCountText}>({totalCount}명 응답)</Text>
-          )}
-        </View>
+                    onPress={() => handleVote(item.voteId, opt.id)}
+                    disabled={closed || isSelected}
+                    activeOpacity={0.7}
+                  >
+                    <Text 
+                      style={[
+                        styles.optionButtonText,
+                        isSelected && styles.selectedOptionText
+                      ]}
+                    >
+                      {opt.content}
+                    </Text>
+                    {showGauge && (
+                      <Text style={[
+                        styles.percentageText,
+                        isSelected && styles.selectedPercentageText
+                      ]}>
+                        {percentage}%
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+            {showGauge && totalCount > 0 && (
+              <Text style={styles.responseCountText}>{totalCount}명 참여</Text>
+            )}
+          </View>
+        )}
+
+        <View style={styles.divider} />
 
         <View style={styles.reactionRow}>
-          <TouchableOpacity style={styles.reactionItem} onPress={() => handleToggleLike(item.voteId)}>
+          <TouchableOpacity 
+            style={styles.reactionItem} 
+            onPress={() => handleToggleLike(item.voteId)}
+            activeOpacity={0.7}
+          >
             <Text style={styles.reactionIcon}>{item.isLiked ? '❤️' : '🤍'}</Text>
             <Text style={styles.reactionText}>{item.likeCount}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.reactionItem} onPress={() => navigation.navigate('CommentScreen', { voteId: item.voteId })}>
+          <TouchableOpacity
+            style={styles.reactionItem}
+            onPress={() => navigation.navigate('CommentScreen', { voteId: item.voteId })}
+            activeOpacity={0.7}
+          >
             <Text style={styles.reactionIcon}>💬</Text>
             <Text style={styles.reactionText}>{item.commentCount}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.reactionItem} onPress={() => handleToggleBookmark(item.voteId)}>
+          <TouchableOpacity 
+            style={styles.reactionItem} 
+            onPress={() => handleToggleBookmark(item.voteId)}
+            activeOpacity={0.7}
+          >
             <Text style={styles.reactionIcon}>{item.isBookmarked ? '🔖' : '📄'}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.reactionItem}>
+          <TouchableOpacity style={styles.reactionItem} activeOpacity={0.7}>
             <Text style={styles.reactionIcon}>📊</Text>
           </TouchableOpacity>
         </View>
+      </Animated.View>
+    );
+  };
+
+  const renderEmptyResults = () => {
+    if (loading) return null;
+    
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>
+          {searchType === 'vote' 
+            ? '검색 결과가 없습니다.' 
+            : '일치하는 사용자가 없습니다.'}
+        </Text>
+        <Text style={styles.emptySubText}>다른 검색어를 입력해보세요.</Text>
       </View>
     );
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.searchBarContainer}>
-        <View style={styles.inlineToggleContainer}>
-          <TouchableOpacity
-            style={[styles.inlineToggleButton, searchType === 'vote' && styles.activeInlineToggle]}
-            onPress={() => setSearchType('vote')}
-          >
-            <Text style={[styles.inlineToggleText, searchType === 'vote' && styles.activeToggleText]}>투표</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.inlineToggleButton, searchType === 'user' && styles.activeInlineToggle]}
-            onPress={() => setSearchType('user')}
-          >
-            <Text style={[styles.inlineToggleText, searchType === 'user' && styles.activeToggleText]}>유저</Text>
-          </TouchableOpacity>
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBarContainer}>
+          <View style={styles.inlineToggleContainer}>
+            <TouchableOpacity
+              style={[
+                styles.inlineToggleButton, 
+                searchType === 'vote' && styles.activeInlineToggle
+              ]}
+              onPress={() => setSearchType('vote')}
+              activeOpacity={0.7}
+            >
+              <Text style={[
+                styles.inlineToggleText, 
+                searchType === 'vote' && styles.activeToggleText
+              ]}>
+                투표
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.inlineToggleButton, 
+                searchType === 'user' && styles.activeInlineToggle
+              ]}
+              onPress={() => setSearchType('user')}
+              activeOpacity={0.7}
+            >
+              <Text style={[
+                styles.inlineToggleText, 
+                searchType === 'user' && styles.activeToggleText
+              ]}>
+                유저
+              </Text>
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.inputContainer}>
+            <Ionicons name="search" size={20} color="#718096" style={styles.searchIcon} />
+            <TextInput
+              placeholder={searchType === 'vote' ? "투표 검색..." : "사용자 검색..."}
+              style={styles.searchInput}
+              value={searchKeyword}
+              onChangeText={handleSearch}
+              placeholderTextColor="#A0AEC0"
+              returnKeyType="search"
+            />
+            {searchKeyword.length > 0 && (
+              <TouchableOpacity 
+                onPress={() => handleSearch('')}
+                style={styles.clearButton}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close-circle" size={18} color="#CBD5E0" />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
-        <Ionicons name="search" size={20} color="#888" style={{ marginHorizontal: 8 }} />
-        <TextInput
-          placeholder="검색어를 입력하세요"
-          style={styles.searchInput}
-          value={searchKeyword}
-          onChangeText={handleSearch}
-        />
+        
+        {searchKeyword.trim() === '' && (
+          <Text style={styles.popularTitle}>
+            인기 투표
+          </Text>
+        )}
       </View>
   
-      {loading ? (
-        <ActivityIndicator size="large" />
+      {loading && initialLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#5E72E4" />
+          <Text style={styles.loadingText}>
+            {searchKeyword.trim() === '' 
+              ? '인기 투표 불러오는 중...' 
+              : '검색 중...'}
+          </Text>
+        </View>
       ) : searchType === 'user' ? (
         <FlatList
           data={userResults}
           keyExtractor={(item) => item.id.toString()}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.userItem}
-              onPress={() => navigation.navigate('UserPageScreen', { userId: item.id })}
+          renderItem={({ item, index }) => (
+            <Animated.View
+              entering={FadeIn.duration(300).delay(index * 50)}
             >
-              <Image
-                source={{
-                  uri: item.profileImage === 'default.jpg'
-                    ? `${IMAGE_BASE_URL}/images/default.jpg`
-                    : `${IMAGE_BASE_URL}${item.profileImage}`,
-                }}
-                style={styles.profileImage}
-              />
-              <Text style={styles.nickname}>{item.username}</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.userItem}
+                onPress={() => navigation.navigate('UserPageScreen', { userId: item.id })}
+                activeOpacity={0.7}
+              >
+                <Image
+                  source={{
+                    uri: item.profileImage === 'default.jpg'
+                      ? `${IMAGE_BASE_URL}/images/default.jpg`
+                      : `${IMAGE_BASE_URL}${item.profileImage}`,
+                  }}
+                  style={styles.userProfileImage}
+                />
+                <View style={styles.userInfo}>
+                  <Text style={styles.userName}>{item.username}</Text>
+                </View>
+              </TouchableOpacity>
+            </Animated.View>
           )}
-          contentContainerStyle={styles.container}
+          contentContainerStyle={[
+            styles.container,
+            userResults.length === 0 && styles.emptyListContainer
+          ]}
+          ListEmptyComponent={renderEmptyResults}
+          showsVerticalScrollIndicator={false}
         />
       ) : (
         <FlatList
@@ -295,7 +459,12 @@ const SearchScreen: React.FC = () => {
             item?.voteId !== undefined ? item.voteId.toString() : `vote-${index}`
           }
           renderItem={renderVoteItem}
-          contentContainerStyle={styles.container}
+          contentContainerStyle={[
+            styles.container,
+            votes.length === 0 && styles.emptyListContainer
+          ]}
+          ListEmptyComponent={renderEmptyResults}
+          showsVerticalScrollIndicator={false}
         />
       )}
     </SafeAreaView>
@@ -303,140 +472,361 @@ const SearchScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#fff' },
+  safeArea: { 
+    flex: 1, 
+    backgroundColor: '#F7FAFC' 
+  },
+  searchContainer: {
+    backgroundColor: '#FFFFFF',
+    paddingTop: 12,
+    paddingBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+    zIndex: 10,
+  },
   searchBarContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 10,
     marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 8,
   },
   inlineToggleContainer: {
     flexDirection: 'row',
-    backgroundColor: '#ddd',
-    borderRadius: 20,
-    overflow: 'hidden',
+    backgroundColor: '#EDF2F7',
+    borderRadius: 24,
+    padding: 4,
+    marginBottom: 12,
+    alignSelf: 'center',
   },
   inlineToggleButton: {
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    backgroundColor: '#ddd',
+    paddingVertical: 8,
+    paddingHorizontal: 24,
+    borderRadius: 20,
   },
   activeInlineToggle: {
-    backgroundColor: '#007bff',
+    backgroundColor: '#5E72E4',
   },
   inlineToggleText: {
-    fontSize: 12,
-    color: '#333',
+    fontSize: 14,
+    color: '#4A5568',
+    fontWeight: '600',
   },
   activeToggleText: {
-    color: '#fff',
-    fontWeight: 'bold',
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EDF2F7',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+  },
+  searchIcon: {
+    marginRight: 8,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#333',
+    color: '#2D3748',
+    paddingVertical: 12,
+    height: 46,
   },
-  container: { padding: 16 },
-  voteItem: {
-    marginBottom: 20,
+  clearButton: {
+    padding: 6,
+  },
+  popularTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#2D3748',
+    marginTop: 12,
+    marginHorizontal: 16,
+  },
+  container: { 
     padding: 16,
-    backgroundColor: '#f9f9f9',
-    borderRadius: 12,
+    paddingBottom: 24,
+  },
+  emptyListContainer: {
+    flexGrow: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    color: '#718096',
+    fontSize: 14,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 100,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#4A5568',
+    marginBottom: 8,
+  },
+  emptySubText: {
+    fontSize: 14,
+    color: '#718096',
+  },
+  voteItem: {
+    position: 'relative',
+    marginBottom: 16,
+    padding: 16,
+    borderRadius: 16,
     elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  activeVoteItem: {
+    backgroundColor: '#FFFFFF',
+  },
+  closedVoteItem: {
+    backgroundColor: '#F9FAFB',
   },
   userInfoRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 4,
-    marginBottom: 4,
+    marginBottom: 12,
+  },
+  userInfoLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   profileImage: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    marginRight: 8,
-    backgroundColor: '#ccc',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: 10,
+    backgroundColor: '#E2E8F0',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   nickname: {
-    fontSize: 14,
-    color: '#333',
+    fontSize: 15,
+    color: '#1A202C',
+    fontWeight: '600',
+  },
+  closedBadge: {
+    backgroundColor: '#CBD5E0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  closedBadgeText: {
+    color: '#4A5568',
+    fontSize: 12,
     fontWeight: '500',
   },
-  title: { fontSize: 18, fontWeight: 'bold' },
-  meta: { fontSize: 12, color: '#888' },
-  content: { fontSize: 14, marginVertical: 8 },
-  imageContainer: { marginTop: 8 },
-  image: { width: '100%', height: 200, borderRadius: 8, marginTop: 8 },
-  optionContainer: { marginTop: 12 },
-  optionWrapper: { position: 'relative', marginVertical: 6 },
+  title: { 
+    fontSize: 18, 
+    fontWeight: 'bold',
+    color: '#2D3748',
+    marginBottom: 8,
+    lineHeight: 24,
+  },
+  metaContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    flexWrap: 'wrap',
+  },
+  categoryBadge: {
+    backgroundColor: '#EBF4FF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginRight: 8,
+  },
+  categoryText: {
+    color: '#3182CE',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  dateText: {
+    fontSize: 12,
+    color: '#718096',
+    fontWeight: '500',
+  },
+  content: { 
+    fontSize: 15, 
+    marginBottom: 12,
+    color: '#4A5568',
+    lineHeight: 22,
+  },
+  imageContainer: { 
+    marginBottom: 12,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  image: { 
+    width: '100%', 
+    height: width * 0.6, 
+    borderRadius: 12,
+  },
+  optionContainer: { 
+    marginBottom: 16,
+  },
+  optionWrapper: { 
+    position: 'relative', 
+    marginVertical: 6,
+  },
   gaugeBar: {
     position: 'absolute',
     left: 0,
     top: 0,
     bottom: 0,
-    borderRadius: 10,
+    borderRadius: 12,
     zIndex: -1,
   },
   optionButton: {
-    backgroundColor: '#fff',
-    borderColor: '#888',
-    borderWidth: 1,
-    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
+    borderWidth: 1.5,
+    borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 16,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
+    minHeight: 54,
   },
-  optionButtonText: { fontSize: 16, color: '#333' },
-  percentageText: { fontSize: 14, fontWeight: 'bold', color: '#333' },
+  closedOptionButton: {
+    backgroundColor: '#F7FAFC',
+    borderColor: '#E2E8F0',
+  },
+  selectedOptionButton: {
+    borderColor: '#5E72E4',
+    borderWidth: 1.5,
+  },
+  optionButtonText: { 
+    fontSize: 15, 
+    color: '#2D3748',
+    fontWeight: '500',
+    flex: 1,
+  },
+  selectedOptionText: {
+    color: '#5E72E4',
+    fontWeight: '600',
+  },
+  percentageText: { 
+    fontSize: 15, 
+    fontWeight: '600', 
+    color: '#4A5568',
+    marginLeft: 8,
+  },
+  selectedPercentageText: {
+    color: '#5E72E4',
+  },
   responseCountText: {
-    marginTop: 6,
-    fontSize: 12,
-    color: '#666',
+    marginTop: 8,
+    fontSize: 13,
+    color: '#718096',
     textAlign: 'right',
+    fontWeight: '500',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginBottom: 12,
   },
   reactionRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    marginTop: 16,
   },
-  reactionItem: { flexDirection: 'row', alignItems: 'center' },
-  reactionIcon: { fontSize: 20, marginRight: 4 },
-  reactionText: { fontSize: 14, color: '#333' },
+  reactionItem: { 
+    flexDirection: 'row', 
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  reactionIcon: { 
+    fontSize: 20, 
+    marginRight: 6,
+  },
+  reactionText: { 
+    fontSize: 14, 
+    color: '#4A5568',
+    fontWeight: '500',
+  },
   userItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    backgroundColor: '#f2f2f2',
-    marginBottom: 8,
-    borderRadius: 8,
+    padding: 16,
+    backgroundColor: '#FFFFFF',
+    marginBottom: 12,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
-
+  userProfileImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#E2E8F0',
+    borderWidth: 2,
+    borderColor: '#EDF2F7',
+  },
+  userInfo: {
+    marginLeft: 16,
+    flex: 1,
+  },
+  userName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2D3748',
+  },
   simpleVoteItem: {
     padding: 16,
-    backgroundColor: '#f9f9f9',
-    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     marginBottom: 12,
-    borderColor: '#ddd',
-    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   simpleTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: '700',
+    color: '#2D3748',
+    marginBottom: 8,
+  },
+  simpleMetaContainer: {
+    marginTop: 4,
+  },
+  simpleUserInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 4,
   },
-  simpleMeta: {
-    fontSize: 12,
-    color: '#666',
+  simpleCategory: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  simpleMetaLabel: {
+    fontSize: 13,
+    color: '#718096',
+    marginRight: 4,
+  },
+  simpleMetaValue: {
+    fontSize: 13,
+    color: '#4A5568',
+    fontWeight: '500',
   },
 });
 

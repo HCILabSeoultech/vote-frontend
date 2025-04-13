@@ -10,6 +10,7 @@ import { UserData } from '../types/UserData'
 import MainTabs from './MainTabs'
 import CommentScreen from '../screens/CommentScreen'; 
 import ReuploadVoteScreen from '../screens/ReuploadVoteScreen'; 
+import SingleVoteScreen from '../screens/SingleVoteScreen'; 
 
 
 
@@ -20,6 +21,7 @@ export type RootStackParamList = {
   Main: undefined;
   CommentScreen: { voteId: number };
   ReuploadVoteScreen: { voteId: number };
+  SingleVoteScreen: { voteId: number };
   UserPageScreen: { userId: number };
 };
 
@@ -37,6 +39,7 @@ const AppNavigator = () => (
       <Stack.Screen name="CommentScreen" component={CommentScreen} />
       <Stack.Screen name="ReuploadVoteScreen" component={ReuploadVoteScreen} />
       <Stack.Screen name="UserPageScreen" component={UserPageScreen} />
+      <Stack.Screen name="SingleVoteScreen" component={SingleVoteScreen} />
     </Stack.Navigator>
   </NavigationContainer>
 );
