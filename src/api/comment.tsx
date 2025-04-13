@@ -1,7 +1,6 @@
 import axios from 'axios';
 import { SERVER_URL } from '../constant/config';
 
-
 const API_URL = `${SERVER_URL}/comment`;
 
 //댓글조회

@@ -3,7 +3,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { SERVER_URL } from '../constant/config';
 
-
 const API_URL = `${SERVER_URL}/reaction`;
 
 export const toggleLike = async (voteId: number) => {

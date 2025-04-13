@@ -5,7 +5,6 @@ import { UserDocument } from '../types/UserData';
 
 import { SERVER_URL } from '../constant/config';
 
-
 const API_URL = `${SERVER_URL}/search`;
 
 // 게시글 검색

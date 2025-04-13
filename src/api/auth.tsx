@@ -1,9 +1,9 @@
 import axios from 'axios';
 import { LoginRequest, LoginResponse, SignupRequest } from '../types/Auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SERVER_URL } from '../constant/config';
 
-
-const API_URL = 'http://127.0.0.1:8080/auth';
+const API_URL = `${SERVER_URL}/auth`;
 // const API_URL = 'http://10.50.107.197:8080/auth';
 
 // 로그인 함수

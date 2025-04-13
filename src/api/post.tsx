@@ -4,7 +4,6 @@ import { CreateVoteRequest, VotePageResponse, VoteResponse} from '../types/Vote'
 
 import { SERVER_URL } from '../constant/config';
 
-
 const API_URL = `${SERVER_URL}/vote`; 
 // const API_URL = 'http://10.50.107.197:8080/vote';
 
