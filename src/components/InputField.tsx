@@ -1,18 +1,17 @@
 import React from 'react';
-import { TextInput, View, StyleSheet } from 'react-native';
+import { TextInput, View, StyleSheet, TextInputProps } from 'react-native';
 
-type InputFieldProps = {
+type InputFieldProps = TextInputProps & {
   value: string;
   onChangeText: (text: string) => void;
-  placeholder?: string;
-  secureTextEntry?: boolean;
 };
 
 const InputField: React.FC<InputFieldProps> = ({
   value,
   onChangeText,
   placeholder,
-  secureTextEntry = false,
+  secureTextEntry,
+  ...rest
 }) => {
   return (
     <View style={styles.container}>
@@ -22,6 +21,7 @@ const InputField: React.FC<InputFieldProps> = ({
         onChangeText={onChangeText}
         placeholder={placeholder}
         secureTextEntry={secureTextEntry}
+        {...rest} // autoCapitalize, autoComplete 등 여기로 전달됨
       />
     </View>
   );

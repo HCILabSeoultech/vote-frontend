@@ -32,4 +32,31 @@ export const signup = async (userData: SignupRequest): Promise<any> => {
   }
 };
 
+// 아이디 중복 확인 
+export const checkUsernameDuplicate = async (username: string): Promise<boolean> => {
+  try {
+    const response = await axios.get(`${API_URL}/check-username`, {
+      params: { username },
+    });
+    return response.data.available; // { available: true } or { available: false }
+  } catch (error: any) {
+    console.error('Username Check Error:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+// 전화번호 중복 확인 
+export const checkPhoneDuplicate = async (phone: string): Promise<boolean> => {
+  try {
+    const response = await axios.get(`${API_URL}/check-phone`, {
+      params: { phone },
+    });
+    return response.data.available; // { available: true } or { available: false }
+  } catch (error: any) {
+    console.error('Phone Check Error:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+
 

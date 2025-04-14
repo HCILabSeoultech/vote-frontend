@@ -32,7 +32,7 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
         <InputField placeholder="비밀번호" value={password} onChangeText={setPassword} secureTextEntry />
         <Button title="로그인" onPress={handleLogin} />
       </View>
-      <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
+      <TouchableOpacity onPress={() => navigation.navigate('SignupStep1Screen')}>
         <Text style={styles.link}>회원가입</Text>
       </TouchableOpacity>
     </View>
