@@ -119,3 +119,18 @@ export const getTopLikedVotes = async (): Promise<VoteResponse[]> => {
 
   return response.data;
 };
+
+//카테고리별 인기글
+export const getVotesByCategory = async (categoryId: number, page: number = 0, size: number = 10): Promise<{ content: VoteResponse[]; last: boolean; number: number }> => {
+  const token = await AsyncStorage.getItem('token');
+  const response = await axios.get(`${API_URL}/category/${categoryId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    params: {
+      page,
+      size,
+    },
+  });
+  return response.data;
+};

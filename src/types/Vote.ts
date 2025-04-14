@@ -20,6 +20,7 @@ export type CreateVoteRequest = {
   
   export type VoteResponse = {
       voteId: number;
+      userId: number;
       categoryId: number;
       title: string;
       content: string;

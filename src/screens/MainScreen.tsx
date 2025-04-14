@@ -189,7 +189,12 @@ const MainScreen: React.FC = () => {
               }}
               style={styles.profileImage}
             />
-            <Text style={styles.nickname}>{item.username}</Text>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('UserPageScreen', { userId: item.userId })}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.nickname}>{item.username}</Text>
+            </TouchableOpacity>
           </View>
           
           {closed && (

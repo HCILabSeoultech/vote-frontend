@@ -30,7 +30,6 @@ type StorageType = typeof STORAGE_TYPES[number]['value'];
 type NavigationProp = StackNavigationProp<RootStackParamList, 'CommentScreen'>;
 
 import { SERVER_URL } from '../constant/config';
-
 const IMAGE_BASE_URL = `${SERVER_URL}`;
 const { width } = Dimensions.get('window');
 
@@ -40,23 +39,20 @@ const StorageScreen: React.FC = () => {
   const [page, setPage] = useState(0);
   const [isLast, setIsLast] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
   const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({});
   const navigation = useNavigation<NavigationProp>();
   const [tabRefreshTrigger, setTabRefreshTrigger] = useState(0);
 
   const handleTabChange = (value: StorageType) => {
     setStorageType(value);
-    setTabRefreshTrigger(prev => prev + 1); // 무조건 useEffect 트리거
+    setTabRefreshTrigger(prev => prev + 1);
   };
 
   const loadPosts = async (nextPage = 0) => {
     if (loading || isLast) return;
-    console.log('데이터 로딩 시작');
     setLoading(true);
     try {
       const res = await getStoragePosts(storageType, nextPage);
-      console.log('받은 데이터:', res);
       setVotes(prev => nextPage === 0 ? res.content : [...prev, ...res.content]);
       setPage(res.number + 1);
       setIsLast(res.last);
@@ -64,22 +60,13 @@ const StorageScreen: React.FC = () => {
       console.error(`${storageType} 불러오기 실패:`, err);
     } finally {
       setLoading(false);
-
-      setTimeout(() => {
-        if (nextPage === 0) {
-          setInitialLoading(false);
-          console.log('초기 로딩 종료 (setTimeout)');
-        }
-      }, 0);
     }
   };
 
   useEffect(() => {
-    console.log('탭 바뀜:', storageType);
     setVotes([]);
     setPage(0);
     setIsLast(false);
-    setInitialLoading(true);
     loadPosts(0);
   }, [storageType, tabRefreshTrigger]);
 
@@ -88,9 +75,7 @@ const StorageScreen: React.FC = () => {
   const refreshVote = async (voteId: number) => {
     try {
       const updated = await getVoteById(voteId);
-      setVotes((prev) =>
-        prev.map((v) => (v.voteId === voteId ? updated : v))
-      );
+      setVotes((prev) => prev.map((v) => (v.voteId === voteId ? updated : v)));
     } catch (err) {
       console.error('투표 새로고침 실패:', err);
     }
@@ -127,22 +112,16 @@ const StorageScreen: React.FC = () => {
     }
   };
 
-  // Format date to be more readable
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
-    const diffTime = date.getTime() - now.getTime(); // 미래면 양수, 과거면 음수
+    const diffTime = date.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    // 마감일이 미래고, 7일 이내면 "~일 후 마감" 표시
-    if (diffDays > 0 && diffDays <= 7) {
-      return `${diffDays}일 후 마감`;
-    } else {
-      return date.toLocaleDateString();
-    }
+    if (diffDays > 0 && diffDays <= 7) return `${diffDays}일 후 마감`;
+    return date.toLocaleDateString();
   };
 
-  const renderItem = ({ item, index }: { item: VoteResponse, index: number }) => {
+  const renderItem = ({ item, index }: { item: VoteResponse; index: number }) => {
     const closed = isVoteClosed(item.finishTime);
     const selectedOptionId = item.selectedOptionId ?? selectedOptions[item.voteId];
     const hasVoted = !!selectedOptionId;
@@ -150,11 +129,11 @@ const StorageScreen: React.FC = () => {
     const totalCount = item.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0);
 
     return (
-      <Animated.View 
+      <Animated.View
         entering={FadeIn.duration(400).delay(index * 50)}
         style={[
-          styles.voteItem, 
-          closed ? styles.closedVoteItem : styles.activeVoteItem
+          styles.voteItem,
+          closed ? styles.closedVoteItem : styles.activeVoteItem,
         ]}
       >
         <View style={styles.userInfoRow}>
@@ -167,9 +146,13 @@ const StorageScreen: React.FC = () => {
               }}
               style={styles.profileImage}
             />
-            <Text style={styles.nickname}>{item.username}</Text>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('UserPageScreen', { userId: item.userId })}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.nickname}>{item.username}</Text>
+            </TouchableOpacity>
           </View>
-          
           {closed && (
             <View style={styles.closedBadge}>
               <Text style={styles.closedBadgeText}>마감됨</Text>
@@ -208,7 +191,6 @@ const StorageScreen: React.FC = () => {
             {item.voteOptions.map((opt) => {
               const isSelected = selectedOptionId === opt.id;
               const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
-
               return (
                 <View key={opt.id} style={styles.optionWrapper}>
                   {showGauge && (
@@ -233,19 +215,21 @@ const StorageScreen: React.FC = () => {
                     disabled={closed || isSelected}
                     activeOpacity={0.7}
                   >
-                    <Text 
+                    <Text
                       style={[
                         styles.optionButtonText,
-                        isSelected && styles.selectedOptionText
+                        isSelected && styles.selectedOptionText,
                       ]}
                     >
                       {opt.content}
                     </Text>
                     {showGauge && (
-                      <Text style={[
-                        styles.percentageText,
-                        isSelected && styles.selectedPercentageText
-                      ]}>
+                      <Text
+                        style={[
+                          styles.percentageText,
+                          isSelected && styles.selectedPercentageText,
+                        ]}
+                      >
                         {percentage}%
                       </Text>
                     )}
@@ -262,8 +246,8 @@ const StorageScreen: React.FC = () => {
         <View style={styles.divider} />
 
         <View style={styles.reactionRow}>
-          <TouchableOpacity 
-            style={styles.reactionItem} 
+          <TouchableOpacity
+            style={styles.reactionItem}
             onPress={() => handleToggleLike(item.voteId)}
             activeOpacity={0.7}
           >
@@ -280,8 +264,8 @@ const StorageScreen: React.FC = () => {
             <Text style={styles.reactionText}>{item.commentCount}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={styles.reactionItem} 
+          <TouchableOpacity
+            style={styles.reactionItem}
             onPress={() => handleToggleBookmark(item.voteId)}
             activeOpacity={0.7}
           >
@@ -302,18 +286,12 @@ const StorageScreen: React.FC = () => {
         {STORAGE_TYPES.map(({ label, value }) => (
           <TouchableOpacity
             key={value}
-            style={[
-              styles.tabButton, 
-              storageType === value && styles.activeTab
-            ]}
+            style={[styles.tabButton, storageType === value && styles.activeTab]}
             onPress={() => handleTabChange(value)}
             activeOpacity={0.7}
           >
-            <Text 
-              style={[
-                styles.tabText, 
-                storageType === value && styles.activeTabText
-              ]}
+            <Text
+              style={[styles.tabText, storageType === value && styles.activeTabText]}
             >
               {label}
             </Text>
@@ -324,8 +302,6 @@ const StorageScreen: React.FC = () => {
   );
 
   const renderEmptyList = () => {
-    if (initialLoading) return null;
-    
     let message = '';
     switch (storageType) {
       case 'voted':
@@ -338,7 +314,7 @@ const StorageScreen: React.FC = () => {
         message = '아직 북마크한 글이 없습니다.';
         break;
     }
-    
+
     return (
       <View style={styles.emptyContainer}>
         <Text style={styles.emptyText}>{message}</Text>
@@ -349,34 +325,33 @@ const StorageScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       {renderTabs()}
-      {initialLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#5E72E4" />
-          <Text style={styles.loadingText}>불러오는 중...</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={votes}
-          keyExtractor={(item) => item.voteId.toString()}
-          renderItem={renderItem}
-          onEndReached={() => loadPosts(page)}
-          onEndReachedThreshold={0.5}
-          ListFooterComponent={
-            loading && !initialLoading ? (
+      <FlatList
+        data={votes}
+        keyExtractor={(item) => item.voteId.toString()}
+        renderItem={renderItem}
+        onEndReached={() => loadPosts(page)}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          loading
+          ? () => (
               <View style={styles.footerLoading}>
                 <ActivityIndicator size="small" color="#5E72E4" />
-                <Text style={styles.loadingText}>더 불러오는 중...</Text>
+                <Text style={styles.loadingText}>불러오는 중...</Text>
               </View>
-            ) : null
-          }
-          ListEmptyComponent={renderEmptyList}
-          contentContainerStyle={styles.container}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+            )
+          : null
+        }
+        ListEmptyComponent={!loading ? renderEmptyList : null}
+        contentContainerStyle={[
+          styles.container,
+          votes.length === 0 && !loading && styles.emptyListContainer,
+        ]}
+        showsVerticalScrollIndicator={false}
+      />
     </SafeAreaView>
   );
 };
+
 
 const styles = StyleSheet.create({
   safeArea: { 
@@ -637,6 +612,10 @@ const styles = StyleSheet.create({
     fontSize: 14, 
     color: '#4A5568',
     fontWeight: '500',
+  },
+  emptyListContainer: { 
+    flex: 1, 
+    backgroundColor: '#F7FAFC' 
   },
 });
 

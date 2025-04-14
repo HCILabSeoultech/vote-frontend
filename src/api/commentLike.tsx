@@ -1,6 +1,5 @@
 import { SERVER_URL } from '../constant/config';
 
-
 const API_URL = `${SERVER_URL}/comment-like`;
 
 

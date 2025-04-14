@@ -22,6 +22,9 @@ import { Comment } from '../types/Comment';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SERVER_URL } from '../constant/config';
 import Animated, { FadeIn } from 'react-native-reanimated';
+import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../navigation/AppNavigator';
 
 const IMAGE_BASE_URL = `${SERVER_URL}`;
 
@@ -32,6 +35,7 @@ interface JwtPayload {
 const CommentScreen = () => {
   const route = useRoute();
   const { voteId } = route.params as { voteId: number };
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
 
   const [comments, setComments] = useState<Comment[]>([]);
   const [input, setInput] = useState('');
@@ -185,7 +189,12 @@ const CommentScreen = () => {
         <View style={styles.commentContent}>
           <View style={styles.commentHeader}>
             <View style={styles.userInfo}>
-              <Text style={styles.username}>{item.username || '익명'}</Text>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('UserPageScreen', { userId: item.userId })}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.username}>{item.username}</Text>
+            </TouchableOpacity>
               {isMyComment && (
                 <View style={styles.authorBadge}>
                   <Text style={styles.authorBadgeText}>작성자</Text>
