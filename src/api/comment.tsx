@@ -4,13 +4,20 @@ import { SERVER_URL } from '../constant/config';
 const API_URL = `${SERVER_URL}/comment`;
 
 //댓글조회
-export const fetchComments = async (voteId: number, token?: string) => {
+export const fetchComments = async (voteId: number, page = 0, token?: string) => {
   const headers = token
     ? { Authorization: `Bearer ${token}` }
     : undefined;
 
-  const response = await axios.get(`${API_URL}/${voteId}`, { headers });
-  return response.data;
+  try {
+    const response = await axios.get(`${API_URL}/${voteId}?page=${page}&size=10`, {
+      headers,
+    })
+    return response.data
+  } catch (error) {
+    console.error("댓글 조회 실패:", error)
+    throw error
+  }
 };
 
 //댓글달기
