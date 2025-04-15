@@ -1,6 +1,4 @@
-"use client"
-
-import { useEffect, useState } from "react"
+import React, { useEffect, useState, useRef } from "react"
 import { jwtDecode } from "jwt-decode"
 import { Alert } from "react-native"
 
@@ -29,7 +27,6 @@ import type { StackNavigationProp } from "@react-navigation/stack"
 import type { RootStackParamList } from "../navigation/AppNavigator"
 
 const IMAGE_BASE_URL = `${SERVER_URL}`
-const REPLIES_PER_PAGE = 10 // 한 번에 보여줄 답글 수
 
 interface JwtPayload {
   sub: string
@@ -62,12 +59,19 @@ const CommentScreen = () => {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [expandedComments, setExpandedComments] = useState<Record<number, boolean>>({})
-  
-  // 각 부모 댓글별로 현재 표시 중인 답글 수를 관리
-  const [visibleRepliesCount, setVisibleRepliesCount] = useState<Record<number, number>>({})
+  const [newComment, setNewComment] = useState<Comment | null>(null)
 
   const [editingCommentId, setEditingCommentId] = useState<number | null>(null)
   const [editedContent, setEditedContent] = useState("")
+
+  const [expandedReplies, setExpandedReplies] = useState<Record<number, number>>({})
+  const [replyPages, setReplyPages] = useState<Record<number, number>>({})
+
+  const scrollViewRef = useRef<ScrollView>(null)
+  const replyInputRefs = useRef<Record<number, View>>({})
+
+  const [replyInputStates, setReplyInputStates] = useState<Record<number, boolean>>({})
+  const [replyInputs, setReplyInputs] = useState<Record<number, string>>({})
 
   useEffect(() => {
     loadComments(true)
@@ -89,62 +93,50 @@ const CommentScreen = () => {
   const loadComments = async (reset = false) => {
     if (reset) {
       setLoading(true)
-      setPage(0)
     } else {
       setLoadingMore(true)
     }
-
-    try {
-      const token = await AsyncStorage.getItem("token")
-      if (!token) {
-        throw new Error("인증 토큰이 없습니다.")
-      }
-
-      const currentPage = reset ? 0 : page
-      const response = await fetchComments(voteId, currentPage, token)
-
-      // Handle the Page object returned by the API
-      const commentPage = response as CommentPage
-      const newComments = commentPage.content
-
-      setHasMoreComments(!commentPage.last)
-
-      if (!commentPage.last) {
-        setPage(currentPage + 1)
-      }
-
-      if (reset) {
-        setComments(newComments)
-        setExpandedComments({})
-        setVisibleRepliesCount({})
-      } else {
-        setComments((prev) => [...prev, ...newComments])
-      }
-    } catch (err) {
-      console.error("댓글 불러오기 실패:", err)
-      Alert.alert("오류", "댓글을 불러오는 중 문제가 발생했습니다. 다시 시도해주세요.")
-    } finally {
-      setLoading(false)
-      setLoadingMore(false)
+    
+    const token = await AsyncStorage.getItem("token")
+    if (!token) return
+    const currentPage = reset ? 0 : page
+    const response = await fetchComments(voteId, currentPage, token)
+    const newComments = (response as any).content
+    
+    if (reset) {
+      setComments(newComments)
+      setPage(1)
+    } else {
+      setComments(prev => [...prev, ...newComments])
+      setPage(currentPage + 1)
     }
+    
+    setHasMoreComments(!(response as any).last)
+    setLoading(false)
+    setLoadingMore(false)
   }
 
   const handlePostComment = async () => {
-    if (!input.trim()) return
     try {
       const token = await AsyncStorage.getItem("token")
-      if (!token) {
-        Alert.alert("오류", "로그인이 필요합니다.")
-        return
-      }
+      if (!token || !input.trim()) return
 
-      await postComment(voteId, input.trim(), replyTo || undefined, token)
+      const response = await postComment(voteId, input.trim(), replyTo ?? undefined, token)
       setInput("")
       setReplyTo(null)
-      loadComments(true) // Reset and reload comments
-    } catch (err) {
-      console.error("댓글 작성 실패:", err)
-      Alert.alert("오류", "댓글 작성 중 문제가 발생했습니다. 다시 시도해주세요.")
+      
+      // 새로 작성된 댓글을 상태에 저장
+      if (response && response.id) {
+        setNewComment(response)
+        // 5초 후에 새 댓글 상태를 초기화
+        setTimeout(() => {
+          setNewComment(null)
+          loadComments(true)
+        }, 5000)
+      }
+    } catch (error) {
+      console.error("댓글 작성 실패:", error)
+      Alert.alert("오류", "댓글 작성 중 문제가 발생했습니다.")
     }
   }
 
@@ -158,11 +150,22 @@ const CommentScreen = () => {
 
       const result = await toggleCommentLike(commentId, token)
 
-      setComments((prev) =>
-        prev.map((comment) =>
-          comment.id === commentId ? { ...comment, isLiked: result.isLiked, likeCount: result.likeCount } : comment,
-        ),
-      )
+      setComments(prev => prev.map(comment => {
+        if (comment.id === commentId) {
+          return { ...comment, isLiked: result.isLiked, likeCount: result.likeCount }
+        }
+        if (comment.replies) {
+          return {
+            ...comment,
+            replies: comment.replies.map(reply => 
+              reply.id === commentId 
+                ? { ...reply, isLiked: result.isLiked, likeCount: result.likeCount }
+                : reply
+            )
+          }
+        }
+        return comment
+      }))
     } catch (err) {
       console.error("좋아요 토글 실패:", err)
       Alert.alert("오류", "좋아요 처리 중 문제가 발생했습니다.")
@@ -221,33 +224,9 @@ const CommentScreen = () => {
   }
 
   const toggleRepliesVisibility = (commentId: number) => {
-    setExpandedComments((prev) => {
-      const isCurrentlyExpanded = prev[commentId] || false
-      
-      // 답글을 펼칠 때 초기 표시 개수 설정
-      if (!isCurrentlyExpanded) {
-        setVisibleRepliesCount((prevCounts) => ({
-          ...prevCounts,
-          [commentId]: REPLIES_PER_PAGE
-        }))
-      }
-      
-      return {
-        ...prev,
-        [commentId]: !isCurrentlyExpanded,
-      }
-    })
-  }
-
-  // 특정 부모 댓글에 대한 더 많은 답글 로드
-  const loadMoreReplies = (parentId: number) => {
-    const replies = getReplies(parentId)
-    const currentVisible = visibleRepliesCount[parentId] || REPLIES_PER_PAGE
-    const newVisibleCount = Math.min(currentVisible + REPLIES_PER_PAGE, replies.length)
-    
-    setVisibleRepliesCount((prev) => ({
+    setExpandedComments((prev) => ({
       ...prev,
-      [parentId]: newVisibleCount
+      [commentId]: !prev[commentId],
     }))
   }
 
@@ -274,147 +253,295 @@ const CommentScreen = () => {
     }
   }
 
+  const findBestReply = (replies: Comment[] = []) => {
+    if (replies.length === 0) return null
+    const popularReplies = replies.filter(reply => reply.likeCount >= 10)
+    if (popularReplies.length === 0) return null
+    return [...popularReplies].sort((a, b) => b.likeCount - a.likeCount)[0]
+  }
+
+  const scrollToReplyInput = (commentId: number) => {
+    if (replyInputRefs.current[commentId]) {
+      replyInputRefs.current[commentId].measureLayout(
+        scrollViewRef.current as any,
+        (x: number, y: number) => {
+          scrollViewRef.current?.scrollTo({ y, animated: true })
+        },
+        () => console.log('measurement failed')
+      )
+    }
+  }
+
+  const handleReplyClick = (commentId: number) => {
+    setReplyInputStates(prev => ({ ...prev, [commentId]: true }))
+    setExpandedComments(prev => ({ ...prev, [commentId]: true }))
+    setTimeout(() => scrollToReplyInput(commentId), 100)
+  }
+
+  const handleCancelReply = (commentId: number) => {
+    setReplyInputStates(prev => ({ ...prev, [commentId]: false }))
+  }
+
+  const handleReplyInputChange = (commentId: number, text: string) => {
+    setReplyInputs(prev => ({ ...prev, [commentId]: text }))
+  }
+
+  const handlePostReply = async (commentId: number) => {
+    try {
+      const token = await AsyncStorage.getItem("token")
+      const content = replyInputs[commentId]
+      if (!token || !content?.trim()) return
+
+      await postComment(voteId, content.trim(), commentId, token)
+      setReplyInputs(prev => ({ ...prev, [commentId]: "" }))
+      setReplyInputStates(prev => ({ ...prev, [commentId]: false }))
+      
+      // 답글 목록 업데이트
+      const updatedComments = await fetchComments(voteId, 0, token)
+      const updatedComment = updatedComments.content.find((c: Comment) => c.id === commentId)
+      if (updatedComment) {
+        setComments(prev => prev.map(comment => 
+          comment.id === commentId ? updatedComment : comment
+        ))
+      }
+    } catch (error) {
+      console.error("답글 작성 실패:", error)
+      Alert.alert("오류", "답글 작성 중 문제가 발생했습니다.")
+    }
+  }
+
+  const loadReplies = (commentId: number, page: number) => {
+    const comment = comments.find(c => c.id === commentId)
+    if (!comment || !comment.replies) return []
+    return comment.replies
+  }
+
+  const loadMoreReplies = async (commentId: number) => {
+    try {
+      const token = await AsyncStorage.getItem("token")
+      if (!token) return
+
+      const currentPage = replyPages[commentId] || 0
+      const response = await fetchComments(voteId, currentPage, token)
+      const updatedComment = response.content.find((c: Comment) => c.id === commentId)
+      
+      if (updatedComment) {
+        setComments(prev => prev.map(comment => 
+          comment.id === commentId ? updatedComment : comment
+        ))
+        setReplyPages(prev => ({ ...prev, [commentId]: currentPage + 1 }))
+      }
+    } catch (error) {
+      console.error("답글 더보기 실패:", error)
+    }
+  }
+
   const renderCommentItem = (item: Comment, indent = 0, index = 0, isBestComment = false) => {
     const isDefault = item.profileImage === "default.jpg"
     const imageUrl = isDefault ? `${IMAGE_BASE_URL}/images/default.jpg` : `${IMAGE_BASE_URL}${item.profileImage}`
 
     const isMyComment = item.username === currentUsername
-    const replies = childComments.filter((c) => c.parentId === item.id)
+    const replies = item.replies || []
     const hasReplies = replies.length > 0
 
+    const currentPage = replyPages[item.id] || 0
+    const visibleReplies = loadReplies(item.id, currentPage)
+    const bestReply = findBestReply(replies)
+    const hasMoreReplies = false // 모든 답글이 보이므로 더보기 버튼 제거
+
+    // 답글 정렬 (인기 답글이 먼저 오도록)
+    const sortedReplies = [...visibleReplies].sort((a, b) => {
+      if (bestReply && a.id === bestReply.id) return -1
+      if (bestReply && b.id === bestReply.id) return 1
+      return 0
+    })
+
     return (
-      <Animated.View
-        key={item.id}
-        entering={FadeIn.duration(300).delay(index * 50)}
-        style={[styles.commentItem, { marginLeft: indent }, isBestComment && styles.bestCommentItem]}
-      >
-        {isBestComment && (
-          <View style={styles.bestCommentBadge}>
-            <Text style={styles.bestCommentText}>인기 댓글</Text>
-          </View>
-        )}
-        <Image source={{ uri: imageUrl }} style={styles.avatar} />
-        <View style={[styles.commentContent, isBestComment && styles.bestCommentContent]}>
-          <View style={styles.commentHeader}>
-            <View style={styles.userInfo}>
-              <TouchableOpacity
-                onPress={() => navigation.navigate("UserPageScreen", { userId: item.userId })}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.username}>{item.username}</Text>
-              </TouchableOpacity>
-              {isMyComment && (
-                <View style={styles.authorBadge}>
-                  <Text style={styles.authorBadgeText}>작성자</Text>
-                </View>
-              )}
+      <View key={item.id}>
+        <Animated.View
+          entering={FadeIn.duration(300).delay(index * 50)}
+          style={[styles.commentItem, { marginLeft: indent }, isBestComment && styles.bestCommentItem]}
+        >
+          {isBestComment && (
+            <View style={styles.bestCommentBadge}>
+              <Text style={styles.bestCommentText}>인기 댓글</Text>
             </View>
-            <Text style={styles.timestamp}>{formatTimestamp(item.createdAt)}</Text>
-          </View>
-
-          {editingCommentId === item.id ? (
-            <TextInput
-              value={editedContent}
-              onChangeText={setEditedContent}
-              style={styles.editInput}
-              multiline
-              autoFocus
-              placeholder="댓글을 입력하세요..."
-            />
-          ) : (
-            <Text style={styles.commentText}>{item.content}</Text>
           )}
-
-          <View style={styles.actionRow}>
-            <View style={styles.likeContainer}>
-              <TouchableOpacity onPress={() => handleToggleLike(item.id)} activeOpacity={0.7} style={styles.likeButton}>
-                <Text style={[styles.heart, item.isLiked && styles.liked]}>♥</Text>
-                <Text style={styles.likeCount}>{item.likeCount}</Text>
-              </TouchableOpacity>
+          <Image source={{ uri: imageUrl }} style={styles.avatar} />
+          <View style={[styles.commentContent, isBestComment && styles.bestCommentContent]}>
+            <View style={styles.commentHeader}>
+              <View style={styles.userInfo}>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate("UserPageScreen", { userId: item.userId })}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.username}>{item.username}</Text>
+                </TouchableOpacity>
+                {isMyComment && (
+                  <View style={styles.authorBadge}>
+                    <Text style={styles.authorBadgeText}>작성자</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.timestamp}>{formatTimestamp(item.createdAt)}</Text>
             </View>
 
-            <View style={styles.actionButtons}>
-              {item.parentId === null && (
-                <>
-                  <TouchableOpacity onPress={() => setReplyTo(item.id)} style={styles.actionButton} activeOpacity={0.7}>
-                    <Text style={styles.replyText}>답글</Text>
-                  </TouchableOpacity>
+            {editingCommentId === item.id ? (
+              <TextInput
+                value={editedContent}
+                onChangeText={setEditedContent}
+                style={styles.editInput}
+                multiline
+                autoFocus
+                placeholder="댓글을 입력하세요..."
+              />
+            ) : (
+              <Text style={styles.commentText}>{item.content}</Text>
+            )}
 
-                  {hasReplies && (
-                    <TouchableOpacity
-                      onPress={() => toggleRepliesVisibility(item.id)}
-                      style={styles.actionButton}
+            <View style={styles.actionRow}>
+              <View style={styles.likeContainer}>
+                <TouchableOpacity onPress={() => handleToggleLike(item.id)} activeOpacity={0.7} style={styles.likeButton}>
+                  <Text style={[styles.heart, item.isLiked && styles.liked]}>♥</Text>
+                  <Text style={styles.likeCount}>{item.likeCount}</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.actionButtons}>
+                {item.parentId === null && (
+                  <>
+                    <TouchableOpacity 
+                      onPress={() => handleReplyClick(item.id)} 
+                      style={styles.actionButton} 
                       activeOpacity={0.7}
                     >
-                      <Text style={styles.viewRepliesText}>
-                        {expandedComments[item.id] ? "답글 숨기기" : `답글 ${replies.length}개 보기`}
-                      </Text>
+                      <Text style={styles.replyText}>답글</Text>
                     </TouchableOpacity>
-                  )}
-                </>
-              )}
 
-              {isMyComment && (
-                <View style={styles.commentActions}>
-                  {editingCommentId === item.id ? (
-                    <>
+                    {hasReplies && (
                       <TouchableOpacity
-                        onPress={() => handleEditComment(item.id)}
+                        onPress={() => toggleRepliesVisibility(item.id)}
                         style={styles.actionButton}
                         activeOpacity={0.7}
                       >
-                        <Text style={styles.saveText}>저장</Text>
+                        <Text style={styles.viewRepliesText}>
+                          {expandedComments[item.id] ? "답글 숨기기" : `답글 ${replies.length}개 보기`}
+                        </Text>
                       </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => {
-                          setEditingCommentId(null)
-                          setEditedContent("")
-                        }}
-                        style={styles.actionButton}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.cancelText}>취소</Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : (
-                    <>
-                      <TouchableOpacity
-                        onPress={() => {
-                          setEditingCommentId(item.id)
-                          setEditedContent(item.content)
-                        }}
-                        style={styles.actionButton}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.editText}>수정</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => handleDeleteComment(item.id)}
-                        style={styles.actionButton}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.deleteText}>삭제</Text>
-                      </TouchableOpacity>
-                    </>
-                  )}
-                </View>
-              )}
+                    )}
+                  </>
+                )}
+
+                {isMyComment && (
+                  <View style={styles.commentActions}>
+                    {editingCommentId === item.id ? (
+                      <>
+                        <TouchableOpacity
+                          onPress={() => handleEditComment(item.id)}
+                          style={styles.actionButton}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.saveText}>저장</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setEditingCommentId(null)
+                            setEditedContent("")
+                          }}
+                          style={styles.actionButton}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.cancelText}>취소</Text>
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setEditingCommentId(item.id)
+                            setEditedContent(item.content)
+                          }}
+                          style={styles.actionButton}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.editText}>수정</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => handleDeleteComment(item.id)}
+                          style={styles.actionButton}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.deleteText}>삭제</Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </View>
+                )}
+              </View>
             </View>
           </View>
-        </View>
-      </Animated.View>
+        </Animated.View>
+        
+        {(expandedComments[item.id] || replyInputStates[item.id]) && (
+          <View style={styles.repliesContainer}>
+            {sortedReplies.map((reply, replyIndex) => {
+              const isBestReply = bestReply ? reply.id === bestReply.id : false
+              return renderCommentItem(reply, 20, replyIndex, isBestReply)
+            })}
+            {replyInputStates[item.id] && (
+              <View 
+                ref={ref => {
+                  if (ref) {
+                    replyInputRefs.current[item.id] = ref
+                  }
+                }}
+                style={styles.replyInputContainer}
+              >
+                <TextInput
+                  style={styles.replyInput}
+                  placeholder="답글을 입력하세요..."
+                  multiline
+                  autoFocus
+                  value={replyInputs[item.id] || ""}
+                  onChangeText={(text) => handleReplyInputChange(item.id, text)}
+                />
+                <View style={styles.replyInputButtons}>
+                  <TouchableOpacity
+                    style={styles.cancelReplyButton}
+                    onPress={() => {
+                      handleCancelReply(item.id)
+                      if (!hasReplies) {
+                        setExpandedComments(prev => ({ ...prev, [item.id]: false }))
+                      }
+                    }}
+                  >
+                    <Text style={styles.cancelReplyText}>취소</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.postReplyButton, !replyInputs[item.id]?.trim() && styles.postButtonInactive]}
+                    onPress={() => handlePostReply(item.id)}
+                    disabled={!replyInputs[item.id]?.trim()}
+                  >
+                    <Text style={styles.postReplyText}>게시</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+      </View>
     )
   }
 
-  const parentComments = comments.filter((c) => c.parentId === null)
-  const childComments = comments.filter((c) => c.parentId !== null)
-  const getReplies = (parentId: number) => childComments.filter((c) => c.parentId === parentId)
+  const parentComments = comments
 
-  // Find the most liked parent comment
   const findBestComment = () => {
     if (parentComments.length === 0) return null
 
-    return [...parentComments].sort((a, b) => b.likeCount - a.likeCount)[0]
+    const commentsWithLikes = parentComments.filter(comment => comment.likeCount >= 10)
+    if (commentsWithLikes.length === 0) return null
+
+    return [...commentsWithLikes].sort((a, b) => b.likeCount - a.likeCount)[0]
   }
 
   const bestComment = findBestComment()
@@ -429,7 +556,7 @@ const CommentScreen = () => {
       )
     }
 
-    if (comments.length === 0) {
+    if (comments.length === 0 && !newComment) {
       return (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>아직 댓글이 없습니다.</Text>
@@ -438,7 +565,6 @@ const CommentScreen = () => {
       )
     }
 
-    // Sort comments to show best comment first, then others
     const sortedParentComments = [...parentComments].sort((a, b) => {
       if (bestComment && a.id === bestComment.id) return -1
       if (bestComment && b.id === bestComment.id) return 1
@@ -447,51 +573,17 @@ const CommentScreen = () => {
 
     return (
       <>
+        {newComment && renderCommentItem(newComment, 0, 0, false)}
         {sortedParentComments.map((parent, index) => {
-          const isBestComment = bestComment && parent.id === bestComment.id && parent.likeCount > 0
-          const replies = getReplies(parent.id)
-          const visibleCount = visibleRepliesCount[parent.id] || REPLIES_PER_PAGE
-          const visibleReplies = replies.slice(0, visibleCount)
-          const hasMoreReplies = replies.length > visibleCount
-
-          return (
-            <View key={parent.id}>
-              {renderCommentItem(parent, 0, index, isBestComment ?? undefined)}
-
-              {expandedComments[parent.id] && replies.length > 0 && (
-                <View style={styles.repliesContainer}>
-                  {visibleReplies.map((child, childIndex) => renderCommentItem(child, 40, childIndex))}
-                  
-                  {hasMoreReplies && (
-                    <TouchableOpacity
-                      style={styles.loadMoreRepliesButton}
-                      onPress={() => loadMoreReplies(parent.id)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.loadMoreRepliesText}>
-                        답글 더보기 ({visibleCount}/{replies.length})
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              )}
-            </View>
-          )
+          const isBestComment = bestComment ? parent.id === bestComment.id : false
+          return renderCommentItem(parent, 0, index + 1, isBestComment)
         })}
-
-        {hasMoreComments && (
-          <TouchableOpacity
-            style={styles.loadMoreButton}
-            onPress={() => loadComments(false)}
-            disabled={loadingMore}
-            activeOpacity={0.7}
-          >
-            {loadingMore ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Text style={styles.loadMoreText}>더 보기</Text>
-            )}
-          </TouchableOpacity>
+  
+        {hasMoreComments && loadingMore && (
+          <View style={styles.loadingMoreContainer}>
+            <ActivityIndicator size="small" color="#5E72E4" />
+            <Text style={styles.loadingMoreText}>댓글을 불러오는 중...</Text>
+          </View>
         )}
       </>
     )
@@ -506,7 +598,11 @@ const CommentScreen = () => {
         style={{ flex: 1 }}
         keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
       >
-        <ScrollView contentContainerStyle={styles.commentList} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          ref={scrollViewRef}
+          contentContainerStyle={styles.commentList} 
+          showsVerticalScrollIndicator={false}
+        >
           {renderAllComments()}
         </ScrollView>
 
@@ -823,37 +919,65 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#718096",
   },
-  loadMoreButton: {
-    backgroundColor: "#5E72E4",
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    alignSelf: "center",
-    marginTop: 8,
-    marginBottom: 16,
+  loadingMoreContainer: {
+    padding: 40,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  loadMoreText: {
-    color: "#FFFFFF",
-    fontWeight: "600",
-    fontSize: 13,
+  loadingMoreText: {
+    marginTop: 12,
+    color: "#718096",
+    fontSize: 14,
   },
   repliesContainer: {
+    marginLeft: 20,
     marginTop: -8,
     marginBottom: 16,
+    borderLeftWidth: 2,
+    borderLeftColor: '#E2E8F0',
+    paddingLeft: 16,
   },
   loadMoreRepliesButton: {
-    backgroundColor: "#EDF2F7",
-    paddingVertical: 6,
+    marginLeft: 20,
+    paddingVertical: 8,
     paddingHorizontal: 16,
-    borderRadius: 12,
-    alignSelf: "flex-start",
-    marginLeft: 52,
-    marginTop: 4,
+    backgroundColor: '#EDF2F7',
+    borderRadius: 8,
+    marginTop: 8,
   },
   loadMoreRepliesText: {
-    color: "#718096",
-    fontWeight: "500",
-    fontSize: 12,
+    color: '#4A5568',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  replyInputContainer: {
+    marginTop: 8,
+    backgroundColor: '#F7FAFC',
+    borderRadius: 8,
+    padding: 8,
+  },
+  replyInput: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    padding: 8,
+    minHeight: 40,
+    maxHeight: 100,
+  },
+  replyInputButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 8,
+  },
+  postReplyButton: {
+    backgroundColor: '#5E72E4',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  postReplyText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '500',
   },
 })
 

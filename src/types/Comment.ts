@@ -8,4 +8,5 @@ export type Comment = {
     likeCount: number;
     isLiked: boolean;
     parentId: number | null;
+    replies?: Comment[];
   }
