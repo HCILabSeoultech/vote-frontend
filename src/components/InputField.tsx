@@ -1,9 +1,11 @@
 import React from 'react';
-import { TextInput, View, StyleSheet, TextInputProps } from 'react-native';
+import { TextInput, View, StyleSheet, TextInputProps, ViewStyle, TextStyle, StyleProp } from 'react-native';
 
 type InputFieldProps = TextInputProps & {
   value: string;
   onChangeText: (text: string) => void;
+  containerStyle?: StyleProp<ViewStyle>;
+  style?: StyleProp<TextStyle>;
 };
 
 const InputField: React.FC<InputFieldProps> = ({
@@ -11,6 +13,8 @@ const InputField: React.FC<InputFieldProps> = ({
   onChangeText,
   placeholder,
   secureTextEntry,
+  containerStyle,
+  style,
   ...rest
 }) => {
   return (

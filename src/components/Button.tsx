@@ -1,9 +1,18 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, GestureResponderEvent } from 'react-native';
+import {
+  TouchableOpacity,
+  Text,
+  StyleSheet,
+  GestureResponderEvent,
+  ViewStyle,
+  TextStyle,
+} from 'react-native';
 
 type ButtonProps = {
   title: string;
   onPress: (event: GestureResponderEvent) => void;
+  style?: ViewStyle;        
+  textStyle?: TextStyle; 
 };
 
 const Button: React.FC<ButtonProps> = ({ title, onPress }) => (

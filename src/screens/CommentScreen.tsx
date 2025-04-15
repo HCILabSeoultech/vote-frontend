@@ -29,6 +29,7 @@ import type { StackNavigationProp } from "@react-navigation/stack"
 import type { RootStackParamList } from "../navigation/AppNavigator"
 
 const IMAGE_BASE_URL = `${SERVER_URL}`
+const REPLIES_PER_PAGE = 10 // 한 번에 보여줄 답글 수
 
 interface JwtPayload {
   sub: string
@@ -61,6 +62,9 @@ const CommentScreen = () => {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [expandedComments, setExpandedComments] = useState<Record<number, boolean>>({})
+  
+  // 각 부모 댓글별로 현재 표시 중인 답글 수를 관리
+  const [visibleRepliesCount, setVisibleRepliesCount] = useState<Record<number, number>>({})
 
   const [editingCommentId, setEditingCommentId] = useState<number | null>(null)
   const [editedContent, setEditedContent] = useState("")
@@ -112,6 +116,7 @@ const CommentScreen = () => {
       if (reset) {
         setComments(newComments)
         setExpandedComments({})
+        setVisibleRepliesCount({})
       } else {
         setComments((prev) => [...prev, ...newComments])
       }
@@ -216,9 +221,33 @@ const CommentScreen = () => {
   }
 
   const toggleRepliesVisibility = (commentId: number) => {
-    setExpandedComments((prev) => ({
+    setExpandedComments((prev) => {
+      const isCurrentlyExpanded = prev[commentId] || false
+      
+      // 답글을 펼칠 때 초기 표시 개수 설정
+      if (!isCurrentlyExpanded) {
+        setVisibleRepliesCount((prevCounts) => ({
+          ...prevCounts,
+          [commentId]: REPLIES_PER_PAGE
+        }))
+      }
+      
+      return {
+        ...prev,
+        [commentId]: !isCurrentlyExpanded,
+      }
+    })
+  }
+
+  // 특정 부모 댓글에 대한 더 많은 답글 로드
+  const loadMoreReplies = (parentId: number) => {
+    const replies = getReplies(parentId)
+    const currentVisible = visibleRepliesCount[parentId] || REPLIES_PER_PAGE
+    const newVisibleCount = Math.min(currentVisible + REPLIES_PER_PAGE, replies.length)
+    
+    setVisibleRepliesCount((prev) => ({
       ...prev,
-      [commentId]: !prev[commentId],
+      [parentId]: newVisibleCount
     }))
   }
 
@@ -421,6 +450,9 @@ const CommentScreen = () => {
         {sortedParentComments.map((parent, index) => {
           const isBestComment = bestComment && parent.id === bestComment.id && parent.likeCount > 0
           const replies = getReplies(parent.id)
+          const visibleCount = visibleRepliesCount[parent.id] || REPLIES_PER_PAGE
+          const visibleReplies = replies.slice(0, visibleCount)
+          const hasMoreReplies = replies.length > visibleCount
 
           return (
             <View key={parent.id}>
@@ -428,7 +460,19 @@ const CommentScreen = () => {
 
               {expandedComments[parent.id] && replies.length > 0 && (
                 <View style={styles.repliesContainer}>
-                  {replies.map((child, childIndex) => renderCommentItem(child, 40, childIndex))}
+                  {visibleReplies.map((child, childIndex) => renderCommentItem(child, 40, childIndex))}
+                  
+                  {hasMoreReplies && (
+                    <TouchableOpacity
+                      style={styles.loadMoreRepliesButton}
+                      onPress={() => loadMoreReplies(parent.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.loadMoreRepliesText}>
+                        답글 더보기 ({visibleCount}/{replies.length})
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
             </View>
@@ -796,6 +840,20 @@ const styles = StyleSheet.create({
   repliesContainer: {
     marginTop: -8,
     marginBottom: 16,
+  },
+  loadMoreRepliesButton: {
+    backgroundColor: "#EDF2F7",
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignSelf: "flex-start",
+    marginLeft: 52,
+    marginTop: 4,
+  },
+  loadMoreRepliesText: {
+    color: "#718096",
+    fontWeight: "500",
+    fontSize: 12,
   },
 })
 
