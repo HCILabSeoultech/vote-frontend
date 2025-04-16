@@ -1,84 +1,67 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
+  View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Alert,
-  ScrollView,
   Platform,
+  Alert,
+  SafeAreaView,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
-import { getVoteById, reuploadVotePost } from '../api/post';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { reuploadVotePost } from '../api/post';
 
-type ReuploadVoteScreenRouteProp = RouteProp<RootStackParamList, 'ReuploadVoteScreen'>;
-type ReuploadVoteScreenNavigationProp = StackNavigationProp<RootStackParamList, 'ReuploadVoteScreen'>;
+interface RouteParams {
+  voteId: number;
+}
 
-const ReuploadVoteScreen = () => {
-  const route = useRoute<ReuploadVoteScreenRouteProp>();
-  const navigation = useNavigation<ReuploadVoteScreenNavigationProp>();
-  const { voteId } = route.params;
-
-  const [originData, setOriginData] = useState<any>(null);
+const ReuploadVoteScreen: React.FC = () => {
   const [finishTime, setFinishTime] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  useEffect(() => {
-    const fetchVote = async () => {
-      try {
-        const data = await getVoteById(voteId);
-        setOriginData(data);
-        setFinishTime(new Date(data.finishTime));
-      } catch (err) {
-        Alert.alert('불러오기 실패', '게시글 정보를 가져오는 중 오류 발생');
-      }
-    };
-    fetchVote();
-  }, [voteId]);
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
+  const route = useRoute();
+  const { voteId } = route.params as RouteParams;
 
   const handleSubmit = async () => {
+    if (finishTime <= new Date()) {
+      Alert.alert('마감일 오류', '마감일은 현재 시간보다 미래여야 합니다');
+      return;
+    }
+
     try {
-      await reuploadVotePost(voteId, {
-        finishTime: finishTime.toISOString(), 
+      const response = await reuploadVotePost(voteId, {
+        finishTime: finishTime.toISOString()
       });
-  
-      Alert.alert('재업로드 완료', '새로운 투표가 생성되었습니다.', [
-        {
-          text: '확인',
-          onPress: () => {
-            navigation.goBack();
-          },
-        },
+      Alert.alert('재업로드 완료', '게시물이 성공적으로 재업로드되었습니다.', [
+        { text: '확인', onPress: () => navigation.navigate('Main') },
       ]);
-    } catch (err: any) {
-      Alert.alert('실패', err.message || '재업로드 중 오류 발생');
+    } catch (error) {
+      console.error('재업로드 실패:', error);
+      Alert.alert('재업로드 실패', '게시물 재업로드 중 오류가 발생했습니다.');
     }
   };
 
-  if (!originData) return null;
-
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
-      <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.label}>제목</Text>
-        <Text style={styles.readonly}>{originData.title}</Text>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.content}>
+        <Text style={styles.title}>마감일 선택</Text>
+        <Text style={styles.description}>
+          새로운 마감일을 선택해주세요. 마감일은 현재 시간보다 미래여야 합니다.
+        </Text>
 
-        <Text style={styles.label}>내용</Text>
-        <Text style={[styles.readonly, { minHeight: 80 }]}>{originData.content}</Text>
-
-        <Text style={styles.label}>투표 옵션</Text>
-        {originData.voteOptions.map((opt: any, idx: number) => (
-          <Text key={idx} style={styles.readonly}>- {opt.content}</Text>
-        ))}
-
-        <Text style={styles.label}>마감일</Text>
-        <TouchableOpacity style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
+        <TouchableOpacity
+          style={styles.dateButton}
+          onPress={() => setShowDatePicker(true)}
+        >
           <Text style={styles.dateButtonText}>📅 마감일 선택</Text>
         </TouchableOpacity>
-        <Text style={styles.centeredText}>{finishTime.toLocaleString()}</Text>
+        <Text style={styles.selectedDate}>
+          {finishTime.toLocaleString()}
+        </Text>
 
         {showDatePicker && (
           <DateTimePicker
@@ -92,68 +75,72 @@ const ReuploadVoteScreen = () => {
           />
         )}
 
-        <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-          <Text style={styles.submitText}>재업로드</Text>
+        <TouchableOpacity
+          style={styles.submitButton}
+          onPress={handleSubmit}
+        >
+          <Text style={styles.submitText}>재업로드하기</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 30,
-    paddingVertical: 10,
+    flex: 1,
     backgroundColor: '#fff',
   },
-  label: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginTop: 10,
-    marginBottom: 6,
+  content: {
+    flex: 1,
+    padding: 16,
+    justifyContent: 'center',
   },
-  readonly: {
-    fontSize: 14,
-    padding: 10,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 6,
-    marginBottom: 8,
-    color: '#333',
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    color: '#2D3748',
+    textAlign: 'center',
+  },
+  description: {
+    fontSize: 16,
+    color: '#4A5568',
+    marginBottom: 32,
+    textAlign: 'center',
+    lineHeight: 24,
   },
   dateButton: {
-    padding: 10,
-    backgroundColor: '#eee',
-    borderRadius: 10,
+    backgroundColor: '#F7FAFC',
+    padding: 16,
+    borderRadius: 8,
     alignItems: 'center',
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   dateButtonText: {
-    fontSize: 14,
-  },
-  centeredText: {
-    textAlign: 'center',
-    marginVertical: 8,
+    color: '#4A5568',
+    fontSize: 16,
     fontWeight: '600',
   },
+  selectedDate: {
+    textAlign: 'center',
+    color: '#4A5568',
+    marginBottom: 32,
+    fontSize: 16,
+  },
   submitButton: {
-    backgroundColor: '#007bff',
-    padding: 14,
-    borderRadius: 10,
+    backgroundColor: '#5E72E4',
+    padding: 16,
+    borderRadius: 8,
     alignItems: 'center',
-    marginTop: 16,
   },
   submitText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: 'bold',
-  },
-  image: {
-    width: '100%',
-    height: 200,
-    borderRadius: 10,
-    resizeMode: 'cover',
-    marginBottom: 10,
+    fontWeight: '600',
   },
 });
 
-export default ReuploadVoteScreen;
+export default ReuploadVoteScreen; 
