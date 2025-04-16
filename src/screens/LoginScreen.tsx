@@ -7,7 +7,8 @@ import {
   TouchableOpacity, 
   SafeAreaView,
   ScrollView,
-  Image
+  Image,
+  Dimensions
 } from 'react-native';
 import InputField from '../components/InputField';
 import Button from '../components/Button';
@@ -18,6 +19,8 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 type Props = {
   navigation: StackNavigationProp<RootStackParamList, 'Login'>;
 };
+
+const { width } = Dimensions.get('window');
 
 const LoginScreen: React.FC<Props> = ({ navigation }) => {
   const [username, setUsername] = useState('');
@@ -44,8 +47,6 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   const handleFindAccount = () => {
-    // 아이디/비밀번호 찾기 화면으로 이동
-    // 실제 구현 시 해당 화면으로 네비게이션 처리
     Alert.alert("안내", "아이디/비밀번호 찾기 기능은 준비 중입니다.");
   };
 
@@ -57,19 +58,19 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
       >
         <View style={styles.container}>
           <View style={styles.logoContainer}>
-            {/* 로고 이미지 - 실제 앱 로고로 교체 필요 */}
-            <View style={styles.logoPlaceholder}>
-              <Text style={styles.logoText}>LOGO</Text>
+            <View style={styles.logoCircle}>
+              <View style={styles.logoInnerCircle}>
+                <Text style={styles.logoText}>VOTE</Text>
+              </View>
             </View>
-            <Text style={styles.title}>로그인</Text>
-            <Text style={styles.subtitle}>계정 정보를 입력해주세요</Text>
+            <Text style={styles.title}>환영합니다</Text>
+            <Text style={styles.subtitle}>투표를 시작해보세요</Text>
           </View>
           
           <View style={styles.formContainer}>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>아이디</Text>
               <InputField 
-                placeholder="아이디를 입력해주세요" 
+                placeholder="아이디" 
                 value={username} 
                 onChangeText={setUsername}
                 autoCapitalize="none"
@@ -78,9 +79,8 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
             </View>
             
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>비밀번호</Text>
               <InputField 
-                placeholder="비밀번호를 입력해주세요" 
+                placeholder="비밀번호" 
                 value={password} 
                 onChangeText={setPassword} 
                 secureTextEntry
@@ -94,26 +94,23 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
               style={styles.loginButton}
               textStyle={styles.loginButtonText}
             />
+
+            <TouchableOpacity 
+              onPress={handleFindAccount}
+              style={styles.findAccountButton}
+            >
+              <Text style={styles.findAccountText}>아이디/비밀번호 찾기</Text>
+            </TouchableOpacity>
           </View>
           
           <View style={styles.footerContainer}>
-            <View style={styles.linksContainer}>
-              <TouchableOpacity 
-                onPress={() => navigation.navigate('SignupStep1Screen')}
-                style={styles.linkButton}
-              >
-                <Text style={styles.linkText}>회원가입</Text>
-              </TouchableOpacity>
-              
-              <View style={styles.divider} />
-              
-              <TouchableOpacity 
-                onPress={handleFindAccount}
-                style={styles.linkButton}
-              >
-                <Text style={styles.linkText}>아이디/비밀번호 찾기</Text>
-              </TouchableOpacity>
-            </View>
+            <Text style={styles.footerText}>계정이 없으신가요?</Text>
+            <TouchableOpacity 
+              onPress={() => navigation.navigate('SignupStep1Screen')}
+              style={styles.signupButton}
+            >
+              <Text style={styles.signupText}>회원가입</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
@@ -139,29 +136,42 @@ const styles = StyleSheet.create({
     marginTop: 40,
     marginBottom: 40,
   },
-  logoPlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#5C6BC0',
+  logoCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#F0F4FF',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
+    shadowColor: '#5E72E4',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  logoInnerCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#5E72E4',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   logoText: {
     color: 'white',
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: 'bold',
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#212121',
+    color: '#1A202C',
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 14,
-    color: '#757575',
+    fontSize: 16,
+    color: '#718096',
   },
   formContainer: {
     width: '100%',
@@ -170,56 +180,56 @@ const styles = StyleSheet.create({
   inputGroup: {
     marginBottom: 16,
   },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#424242',
-    marginBottom: 6,
-  },
   inputField: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#F7FAFC',
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 8,
-    height: 48,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    height: 56,
+    paddingHorizontal: 16,
   },
   loginButton: {
-    backgroundColor: '#5C6BC0',
-    height: 52,
-    borderRadius: 8,
+    backgroundColor: '#5E72E4',
+    height: 56,
+    borderRadius: 12,
     marginTop: 24,
-    shadowColor: '#3F51B5',
-    shadowOffset: { width: 0, height: 2 },
+    shadowColor: '#5E72E4',
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   loginButtonText: {
     fontSize: 16,
     fontWeight: 'bold',
+    color: '#FFFFFF',
   },
-  footerContainer: {
-    marginBottom: 24,
-  },
-  linksContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+  findAccountButton: {
+    marginTop: 16,
     alignItems: 'center',
   },
-  linkButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  linkText: {
-    color: '#5C6BC0',
+  findAccountText: {
+    color: '#718096',
     fontSize: 14,
     fontWeight: '500',
   },
-  divider: {
-    width: 1,
-    height: 14,
-    backgroundColor: '#E0E0E0',
-    marginHorizontal: 8,
+  footerContainer: {
+    marginBottom: 24,
+    alignItems: 'center',
+  },
+  footerText: {
+    color: '#718096',
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  signupButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  signupText: {
+    color: '#5E72E4',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

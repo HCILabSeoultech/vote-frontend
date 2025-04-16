@@ -152,21 +152,36 @@ const MainScreen: React.FC = () => {
     const hasVoted = !!selectedOptionId
     const showGauge = closed || hasVoted
     const totalCount = item.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0)
+    const hasImageOptions = item.voteOptions.some(opt => opt.optionImage)
 
     const isMyPost = currentUsername !== null && item.username === currentUsername
 
     // Format date to be more readable
     const formatDate = (dateString: string) => {
+      // ISO 문자열을 로컬 시간으로 변환
       const date = new Date(dateString)
       const now = new Date()
-      const diffTime = date.getTime() - now.getTime() // 미래면 양수, 과거면 음수
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+      
+      const diffTime = date.getTime() - now.getTime()      
+      const diffMinutes = Math.floor(diffTime / (1000 * 60))
+      const diffHours = Math.floor(diffTime / (1000 * 60 * 60))
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
 
-      // 마감일이 미래고, 7일 이내면 "~일 후 마감" 표시
-      if (diffDays > 0 && diffDays <= 7) {
-        return `${diffDays}일 후 마감`
+      // 마감일이 현재 시간보다 미래인 경우
+      if (diffTime > 0) {
+        if (diffMinutes < 60) {
+          return `${diffMinutes}분 후 마감`
+        } else if (diffHours < 24) {
+          const remainingMinutes = diffMinutes % 60
+          return `${diffHours}시간 ${remainingMinutes}분 후 마감`
+        } else if (diffDays <= 7) {
+          const remainingHours = diffHours % 24
+          return `${diffDays}일 ${remainingHours}시간 후 마감`
+        } else {
+          return date.toLocaleDateString()
+        }
       } else {
-        return date.toLocaleDateString()
+        return '마감됨'
       }
     }
 
@@ -256,13 +271,13 @@ const MainScreen: React.FC = () => {
         )}
 
         {item.voteOptions.length > 0 && (
-          <View style={styles.optionContainer}>
+          <View style={[styles.optionContainer, hasImageOptions && styles.imageOptionContainer]}>
             {item.voteOptions.map((opt) => {
               const isSelected = selectedOptionId === opt.id
               const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0
 
               return (
-                <View key={opt.id} style={styles.optionWrapper}>
+                <View key={opt.id} style={[styles.optionWrapper, opt.optionImage && styles.imageOptionWrapper]}>
                   {showGauge && (
                     <Animated.View
                       entering={FadeInLeft.duration(600)}
@@ -280,18 +295,41 @@ const MainScreen: React.FC = () => {
                       styles.optionButton,
                       closed && styles.closedOptionButton,
                       !closed && isSelected && styles.selectedOptionButton,
+                      opt.optionImage && styles.optionButtonWithImage,
                     ]}
                     onPress={() => handleVote(item.voteId, opt.id)}
                     disabled={closed || isSelected}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.optionButtonText, isSelected && styles.selectedOptionText]}>
-                      {opt.content}
-                    </Text>
-                    {showGauge && (
-                      <Text style={[styles.percentageText, isSelected && styles.selectedPercentageText]}>
-                        {percentage}%
-                      </Text>
+                    {opt.optionImage ? (
+                      <View style={styles.optionContentWithImage}>
+                        <Image
+                          source={{ uri: `${IMAGE_BASE_URL}${opt.optionImage}` }}
+                          style={styles.largeOptionImage}
+                          resizeMode="cover"
+                        />
+                        <View style={styles.optionTextContainer}>
+                          <Text style={[styles.optionButtonText, isSelected && styles.selectedOptionText]}>
+                            {opt.content}
+                          </Text>
+                          {showGauge && (
+                            <Text style={[styles.percentageText, isSelected && styles.selectedPercentageText]}>
+                              {percentage}%
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    ) : (
+                      <>
+                        <Text style={[styles.optionButtonText, isSelected && styles.selectedOptionText]}>
+                          {opt.content}
+                        </Text>
+                        {showGauge && (
+                          <Text style={[styles.percentageText, isSelected && styles.selectedPercentageText]}>
+                            {percentage}%
+                          </Text>
+                        )}
+                      </>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -476,9 +514,17 @@ const styles = StyleSheet.create({
   optionContainer: {
     marginBottom: 16,
   },
+  imageOptionContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
   optionWrapper: {
     position: "relative",
     marginVertical: 6,
+  },
+  imageOptionWrapper: {
+    width: '48%',
   },
   gaugeBar: {
     position: "absolute",
@@ -499,6 +545,27 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     minHeight: 54,
+  },
+  optionButtonWithImage: {
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    minHeight: 120,
+  },
+  optionContentWithImage: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  largeOptionImage: {
+    width: '100%',
+    height: 120,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  optionTextContainer: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   closedOptionButton: {
     backgroundColor: "#F7FAFC",

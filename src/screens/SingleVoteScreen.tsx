@@ -85,15 +85,20 @@ const SinglePageScreen: React.FC = () => {
     }
   };
 
-  const formatDate = (dateString: string) => {
+  const formatCreatedAt = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
-    const diffTime = date.getTime() - now.getTime(); // 미래면 양수, 과거면 음수
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffMinutes = Math.floor(diffTime / (1000 * 60));
+    const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-    // 마감일이 미래고, 7일 이내면 "~일 후 마감" 표시
-    if (diffDays > 0 && diffDays <= 7) {
-      return `${diffDays}일 후 마감`;
+    if (diffMinutes < 60) {
+      return `${diffMinutes}분 전`;
+    } else if (diffHours < 24) {
+      return `${diffHours}시간 전`;
+    } else if (diffDays < 7) {
+      return `${diffDays}일 전`;
     } else {
       return date.toLocaleDateString();
     }
@@ -169,7 +174,10 @@ const SinglePageScreen: React.FC = () => {
                 }}
                 style={styles.profileImage}
               />
-              <Text style={styles.nickname}>{vote.username}</Text>
+              <View>
+                <Text style={styles.nickname}>{vote.username}</Text>
+                <Text style={styles.createdAtText}>{formatCreatedAt(vote.createdAt)}</Text>
+              </View>
             </View>
             
             {closed && (
@@ -185,7 +193,7 @@ const SinglePageScreen: React.FC = () => {
             <View style={styles.categoryBadge}>
               <Text style={styles.categoryText}>{vote.categoryName}</Text>
             </View>
-            <Text style={styles.dateText}>{formatDate(vote.finishTime)}</Text>
+            <Text style={styles.dateText}>{formatCreatedAt(vote.finishTime)}</Text>
           </View>
 
           {vote.content && (
@@ -219,58 +227,98 @@ const SinglePageScreen: React.FC = () => {
             {closed ? '투표 결과' : hasVoted ? '내 투표 결과' : '투표하기'}
           </Text>
           
-          {vote.voteOptions.map((opt, index) => {
-            const isSelected = selectedOptionId === opt.id;
-            const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
+          <View style={[
+            styles.optionContainer,
+            vote.voteOptions.some(opt => opt.optionImage) && styles.imageOptionContainer
+          ]}>
+            {vote.voteOptions.map((opt, index) => {
+              const isSelected = selectedOptionId === opt.id;
+              const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
+              const hasImage = !!opt.optionImage;
 
-            return (
-              <Animated.View 
-                key={opt.id} 
-                entering={FadeIn.duration(300).delay(300 + index * 100)}
-                style={styles.optionWrapper}
-              >
-                {showGauge && (
-                  <Animated.View
-                    entering={FadeInLeft.duration(600).delay(600 + index * 100)}
-                    style={[
-                      styles.gaugeBar,
-                      {
-                        width: `${percentage}%`,
-                        backgroundColor: isSelected ? '#5E72E4' : '#E2E8F0',
-                      },
-                    ]}
-                  />
-                )}
-                <TouchableOpacity
+              return (
+                <Animated.View 
+                  key={opt.id} 
+                  entering={FadeIn.duration(300).delay(300 + index * 100)}
                   style={[
-                    styles.optionButton,
-                    closed && styles.closedOptionButton,
-                    !closed && isSelected && styles.selectedOptionButton,
+                    styles.optionWrapper,
+                    hasImage && styles.imageOptionWrapper
                   ]}
-                  onPress={() => handleVote(opt.id)}
-                  disabled={closed || isSelected}
-                  activeOpacity={0.7}
                 >
-                  <Text 
-                    style={[
-                      styles.optionButtonText,
-                      isSelected && styles.selectedOptionText
-                    ]}
-                  >
-                    {opt.content}
-                  </Text>
                   {showGauge && (
-                    <Text style={[
-                      styles.percentageText,
-                      isSelected && styles.selectedPercentageText
-                    ]}>
-                      {percentage}%
-                    </Text>
+                    <Animated.View
+                      entering={FadeInLeft.duration(600).delay(600 + index * 100)}
+                      style={[
+                        styles.gaugeBar,
+                        {
+                          width: `${percentage}%`,
+                          backgroundColor: isSelected ? '#5E72E4' : '#E2E8F0',
+                        },
+                      ]}
+                    />
                   )}
-                </TouchableOpacity>
-              </Animated.View>
-            );
-          })}
+                  <TouchableOpacity
+                    style={[
+                      styles.optionButton,
+                      closed && styles.closedOptionButton,
+                      !closed && isSelected && styles.selectedOptionButton,
+                      hasImage && styles.optionButtonWithImage,
+                    ]}
+                    onPress={() => handleVote(opt.id)}
+                    disabled={closed || isSelected}
+                    activeOpacity={0.7}
+                  >
+                    {hasImage ? (
+                      <View style={styles.optionContentWithImage}>
+                        <Image
+                          source={{ uri: `${IMAGE_BASE_URL}${opt.optionImage}` }}
+                          style={styles.largeOptionImage}
+                          resizeMode="cover"
+                        />
+                        <View style={styles.optionTextContainer}>
+                          <Text 
+                            style={[
+                              styles.optionButtonText,
+                              isSelected && styles.selectedOptionText
+                            ]}
+                          >
+                            {opt.content}
+                          </Text>
+                          {showGauge && (
+                            <Text style={[
+                              styles.percentageText,
+                              isSelected && styles.selectedPercentageText
+                            ]}>
+                              {percentage}%
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    ) : (
+                      <>
+                        <Text 
+                          style={[
+                            styles.optionButtonText,
+                            isSelected && styles.selectedOptionText
+                          ]}
+                        >
+                          {opt.content}
+                        </Text>
+                        {showGauge && (
+                          <Text style={[
+                            styles.percentageText,
+                            isSelected && styles.selectedPercentageText
+                          ]}>
+                            {percentage}%
+                          </Text>
+                        )}
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </Animated.View>
+              );
+            })}
+          </View>
           
           {showGauge && totalCount > 0 && (
             <Text style={styles.responseCountText}>{totalCount}명 참여</Text>
@@ -313,43 +361,7 @@ const SinglePageScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
         </Animated.View>
-        
-        <Animated.View 
-          entering={FadeIn.duration(300).delay(500)}
-          style={styles.commentPreviewCard}
-        >
-          <View style={styles.commentPreviewHeader}>
-            <Text style={styles.commentPreviewTitle}>댓글</Text>
-            <TouchableOpacity 
-              style={styles.viewAllButton}
-              onPress={() => navigation.navigate('CommentScreen', { voteId: vote.voteId })}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.viewAllButtonText}>모두 보기</Text>
-              <Ionicons name="chevron-forward" size={16} color="#5E72E4" />
-            </TouchableOpacity>
-          </View>
-          
-          {vote.commentCount > 0 ? (
-            <TouchableOpacity 
-              style={styles.commentPreviewContent}
-              onPress={() => navigation.navigate('CommentScreen', { voteId: vote.voteId })}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.commentPreviewText}>
-                {vote.commentCount}개의 댓글이 있습니다.
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.noCommentsContainer}>
-              <Text style={styles.noCommentsText}>아직 댓글이 없습니다.</Text>
-              <Text style={styles.noCommentsSubText}>첫 댓글을 남겨보세요!</Text>
-            </View>
-          )}
-        </Animated.View>
       </ScrollView>
-      
-      
     </SafeAreaView>
   );
 };
@@ -537,9 +549,20 @@ const styles = StyleSheet.create({
     color: '#2D3748',
     marginBottom: 16,
   },
-  optionWrapper: { 
-    position: 'relative', 
+  optionContainer: {
+    marginBottom: 16,
+  },
+  imageOptionContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  optionWrapper: {
+    position: 'relative',
     marginVertical: 8,
+  },
+  imageOptionWrapper: {
+    width: '48%',
   },
   gaugeBar: {
     position: 'absolute',
@@ -569,8 +592,29 @@ const styles = StyleSheet.create({
     borderColor: '#5E72E4',
     borderWidth: 1.5,
   },
-  optionButtonText: { 
-    fontSize: 16, 
+  optionButtonWithImage: {
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    minHeight: 120,
+  },
+  optionContentWithImage: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  largeOptionImage: {
+    width: '100%',
+    height: 120,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  optionTextContainer: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  optionButtonText: {
+    fontSize: 16,
     color: '#2D3748',
     fontWeight: '500',
     flex: 1,
@@ -579,9 +623,9 @@ const styles = StyleSheet.create({
     color: '#5E72E4',
     fontWeight: '600',
   },
-  percentageText: { 
-    fontSize: 16, 
-    fontWeight: '600', 
+  percentageText: {
+    fontSize: 16,
+    fontWeight: '600',
     color: '#4A5568',
     marginLeft: 8,
   },
@@ -626,63 +670,6 @@ const styles = StyleSheet.create({
     color: '#4A5568',
     fontWeight: '500',
   },
-  commentPreviewCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  commentPreviewHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  commentPreviewTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#2D3748',
-  },
-  viewAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  viewAllButtonText: {
-    fontSize: 14,
-    color: '#5E72E4',
-    fontWeight: '600',
-    marginRight: 4,
-  },
-  commentPreviewContent: {
-    backgroundColor: '#F7FAFC',
-    borderRadius: 12,
-    padding: 16,
-  },
-  commentPreviewText: {
-    fontSize: 15,
-    color: '#4A5568',
-  },
-  noCommentsContainer: {
-    backgroundColor: '#F7FAFC',
-    borderRadius: 12,
-    padding: 24,
-    alignItems: 'center',
-  },
-  noCommentsText: {
-    fontSize: 15,
-    color: '#4A5568',
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  noCommentsSubText: {
-    fontSize: 14,
-    color: '#718096',
-  },
   bottomBar: {
     position: 'absolute',
     bottom: 0,
@@ -698,6 +685,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 3,
     elevation: 5,
+  },
+  createdAtText: {
+    fontSize: 12,
+    color: '#718096',
+    marginTop: 2,
   },
 });
 

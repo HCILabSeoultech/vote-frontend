@@ -211,6 +211,24 @@ const CreatePostScreen: React.FC = () => {
         <Text style={styles.label}>내용</Text>
         <TextInput value={content} onChangeText={setContent} multiline style={[styles.input, { height: 100 }]} placeholder="내용을 입력하세요" />
 
+        <Text style={styles.label}>게시글 이미지</Text>
+        <View style={styles.imageUploadContainer}>
+          <TouchableOpacity
+            onPress={handleSelectImage}
+            style={styles.imageUploadButton}
+          >
+            <Text style={styles.imageUploadText}>
+              {imageUrl ? '이미지 변경' : '이미지 선택'}
+            </Text>
+          </TouchableOpacity>
+          {imageUrl && (
+            <Image
+              source={{ uri: `${SERVER_URL}${imageUrl}` }}
+              style={styles.postImage}
+            />
+          )}
+        </View>
+
         <Text style={styles.label}>옵션 타입 선택</Text>
         <View style={styles.optionTypeContainer}>
           <TouchableOpacity
@@ -532,6 +550,16 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  imageUploadContainer: {
+    marginBottom: 16,
+    gap: 12,
+  },
+  postImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 8,
+    resizeMode: 'cover',
   },
 });
 
