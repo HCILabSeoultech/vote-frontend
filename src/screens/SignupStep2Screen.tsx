@@ -117,6 +117,14 @@ const SignupStep2Screen: React.FC<Props> = ({ navigation, route }) => {
       Alert.alert('입력 오류', '성별을 선택해주세요.');
       return;
     }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // 오늘 날짜의 00:00 기준으로 설정
+    if (birthdate.getTime() >= today.getTime()) {
+      Alert.alert('입력 오류', '생년월일은 오늘보다 이전 날짜여야 합니다.');
+      return;
+      
+    }
     if (!address) {
       Alert.alert('입력 오류', '지역을 선택해주세요.');
       return;

@@ -18,6 +18,17 @@ interface RouteParams {
   voteId: number;
 }
 
+const formatToLocalDateTimeString = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hour = String(date.getHours()).padStart(2, '0');
+  const minute = String(date.getMinutes()).padStart(2, '0');
+  const second = String(date.getSeconds()).padStart(2, '0');
+  const millisecond = String(date.getMilliseconds()).padStart(3, '0');
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}.${millisecond}`;
+};
+
 const ReuploadVoteScreen: React.FC = () => {
   const [finishTime, setFinishTime] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -34,7 +45,7 @@ const ReuploadVoteScreen: React.FC = () => {
 
     try {
       const response = await reuploadVotePost(voteId, {
-        finishTime: finishTime.toISOString()
+        finishTime: formatToLocalDateTimeString(finishTime),
       });
       Alert.alert('재업로드 완료', '게시물이 성공적으로 재업로드되었습니다.', [
         { text: '확인', onPress: () => navigation.navigate('Main') },
@@ -60,7 +71,7 @@ const ReuploadVoteScreen: React.FC = () => {
           <Text style={styles.dateButtonText}>📅 마감일 선택</Text>
         </TouchableOpacity>
         <Text style={styles.selectedDate}>
-          {finishTime.toLocaleString()}
+          {formatToLocalDateTimeString(finishTime)}
         </Text>
 
         {showDatePicker && (

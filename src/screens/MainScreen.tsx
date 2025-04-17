@@ -12,6 +12,7 @@ import {
   Alert,
   Dimensions,
 } from "react-native"
+import { Feather, FontAwesome, MaterialIcons } from '@expo/vector-icons'
 import Animated, { FadeInLeft, FadeIn } from "react-native-reanimated"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import { getMainPageVotes, getVoteById, selectVoteOption } from "../api/post"
@@ -66,6 +67,15 @@ const MainScreen: React.FC = () => {
     }
   }, [isFocused])
 
+  const renderHeader = () => (
+    <View style={styles.header}>
+      <Text style={styles.headerTitle}>VOTY</Text>
+      <TouchableOpacity onPress={() => Alert.alert("알림", "알림 기능 준비 중입니다.")}>
+      <Feather name="bell" size={24} color="#2D3748" />
+      </TouchableOpacity>
+    </View>
+  )
+
   const fetchVotes = async (nextPage: number) => {
     if (loading || isLast) return
     setLoading(true)
@@ -91,7 +101,10 @@ const MainScreen: React.FC = () => {
   }
 
   const isVoteClosed = (finishTime: string) => {
-    return new Date(finishTime).getTime() < new Date().getTime()
+    const finish = new Date(finishTime)
+    const now = new Date() //KST시스템
+
+    return finish.getTime() < now.getTime()
   }
 
   const handleVote = async (voteId: number, optionId: number) => {
@@ -156,18 +169,15 @@ const MainScreen: React.FC = () => {
 
     const isMyPost = currentUsername !== null && item.username === currentUsername
 
-    // Format date to be more readable
     const formatDate = (dateString: string) => {
-      // ISO 문자열을 로컬 시간으로 변환
-      const date = new Date(dateString)
-      const now = new Date()
-      
-      const diffTime = date.getTime() - now.getTime()      
+      const finishDate = new Date(dateString)
+      const now = new Date() 
+    
+      const diffTime = finishDate.getTime() - now.getTime()
       const diffMinutes = Math.floor(diffTime / (1000 * 60))
       const diffHours = Math.floor(diffTime / (1000 * 60 * 60))
       const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
-
-      // 마감일이 현재 시간보다 미래인 경우
+    
       if (diffTime > 0) {
         if (diffMinutes < 60) {
           return `${diffMinutes}분 후 마감`
@@ -178,10 +188,10 @@ const MainScreen: React.FC = () => {
           const remainingHours = diffHours % 24
           return `${diffDays}일 ${remainingHours}시간 후 마감`
         } else {
-          return date.toLocaleDateString()
+          return finishDate.toLocaleDateString("ko-KR")
         }
       } else {
-        return '마감됨'
+        return ''
       }
     }
 
@@ -383,6 +393,7 @@ const MainScreen: React.FC = () => {
         keyExtractor={(item) => item.voteId.toString()}
         renderItem={renderItem}
         contentContainerStyle={styles.container}
+        ListHeaderComponent={renderHeader}
         onEndReached={() => fetchVotes(page)}
         onEndReachedThreshold={0.5}
         ListFooterComponent={
@@ -407,6 +418,21 @@ const styles = StyleSheet.create({
   container: {
     padding: 12,
     paddingBottom: 24,
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 16,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#3182CE",
+  },
+  headerIcon: {
+    fontSize: 24,
   },
   voteItem: {
     position: "relative",

@@ -79,7 +79,7 @@ const SignupStep3Screen: React.FC<Props> = ({ navigation, route }) => {
       if (code === 'ALREADY_EXIST_NAME') {
         Alert.alert('중복 아이디입니다.');
       } else if (code === 'ALREADY_EXIST_PHONE') {
-        Alert.alert('중복 전화번호입니다.');
+        Alert.alert('이미 존재하는 전화번호입니다.');
       } else {
         Alert.alert('회원가입 실패', '잠시 후 다시 시도해주세요.');
       }

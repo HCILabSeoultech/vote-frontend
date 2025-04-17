@@ -163,21 +163,14 @@ const SearchScreen: React.FC = () => {
     setSelectedCategory(categoryId)
   }
 
-  const isVoteClosed = (finishTime: string) => new Date(finishTime).getTime() < Date.now()
+  const isVoteClosed = (finishTime: string) => {
+    const finish = new Date(finishTime)
+    const now = new Date() //KST시스템
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = date.getTime() - now.getTime(); // 미래면 양수, 과거면 음수
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return finish.getTime() < now.getTime()
+  }
 
-    // 마감일이 미래고, 7일 이내면 "~일 후 마감" 표시
-    if (diffDays > 0 && diffDays <= 7) {
-      return `${diffDays}일 후 마감`;
-    } else {
-      return date.toLocaleDateString();
-    }
-  };
+  
 
   const formatCreatedAt = (dateString: string) => {
     const date = new Date(dateString);
@@ -231,6 +224,32 @@ const SearchScreen: React.FC = () => {
     const showGauge = closed || hasVoted
     const totalCount = item.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0)
     const hasImageOptions = item.voteOptions.some(opt => opt.optionImage)
+
+    const formatDate = (dateString: string) => {
+      const finishDate = new Date(dateString)
+      const now = new Date() 
+    
+      const diffTime = finishDate.getTime() - now.getTime()
+      const diffMinutes = Math.floor(diffTime / (1000 * 60))
+      const diffHours = Math.floor(diffTime / (1000 * 60 * 60))
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+    
+      if (diffTime > 0) {
+        if (diffMinutes < 60) {
+          return `${diffMinutes}분 후 마감`
+        } else if (diffHours < 24) {
+          const remainingMinutes = diffMinutes % 60
+          return `${diffHours}시간 ${remainingMinutes}분 후 마감`
+        } else if (diffDays <= 7) {
+          const remainingHours = diffHours % 24
+          return `${diffDays}일 ${remainingHours}시간 후 마감`
+        } else {
+          return finishDate.toLocaleDateString("ko-KR")
+        }
+      } else {
+        return ''
+      }
+    }
 
     return (
       <Animated.View

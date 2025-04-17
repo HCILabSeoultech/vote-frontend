@@ -111,7 +111,12 @@ const UserPageScreen: React.FC = () => {
     }
   };
 
-  const isVoteClosed = (finishTime: string) => new Date(finishTime).getTime() < new Date().getTime();
+  const isVoteClosed = (finishTime: string) => {
+    const finish = new Date(finishTime)
+    const now = new Date() //KST시스템
+
+    return finish.getTime() < now.getTime()
+  }
 
   const handleVote = async (voteId: number, optionId: number) => {
     try {
@@ -205,6 +210,32 @@ const UserPageScreen: React.FC = () => {
     const totalCount = item.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0);
     const hasImageOptions = item.voteOptions.some(opt => opt.optionImage);
 
+    const formatDate = (dateString: string) => {
+      const finishDate = new Date(dateString)
+      const now = new Date() // 이미 시스템 시간 (KST) 기준
+    
+      const diffTime = finishDate.getTime() - now.getTime()
+      const diffMinutes = Math.floor(diffTime / (1000 * 60))
+      const diffHours = Math.floor(diffTime / (1000 * 60 * 60))
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+    
+      if (diffTime > 0) {
+        if (diffMinutes < 60) {
+          return `${diffMinutes}분 후 마감`
+        } else if (diffHours < 24) {
+          const remainingMinutes = diffMinutes % 60
+          return `${diffHours}시간 ${remainingMinutes}분 후 마감`
+        } else if (diffDays <= 7) {
+          const remainingHours = diffHours % 24
+          return `${diffDays}일 ${remainingHours}시간 후 마감`
+        } else {
+          return finishDate.toLocaleDateString("ko-KR")
+        }
+      } else {
+        return ''
+      }
+    }
+
     return (
       <Animated.View 
         entering={FadeIn.duration(400).delay(index * 50)}
@@ -242,7 +273,7 @@ const UserPageScreen: React.FC = () => {
           <View style={styles.categoryBadge}>
             <Text style={styles.categoryText}>{item.categoryName}</Text>
           </View>
-          <Text style={styles.dateText}>{formatFinishTime(item.finishTime)}</Text>
+          <Text style={styles.dateText}>{formatDate(item.finishTime)}</Text>
         </View>
 
         {item.content && (

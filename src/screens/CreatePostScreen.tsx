@@ -28,6 +28,18 @@ const categories = [
   { id: 6, name: '기술' },
 ];
 
+const formatToLocalDateTimeString = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hour = String(date.getHours()).padStart(2, '0');
+  const minute = String(date.getMinutes()).padStart(2, '0');
+  const second = String(date.getSeconds()).padStart(2, '0');
+  const millisecond = String(date.getMilliseconds()).padStart(3, '0');
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}.${millisecond}`;
+};
+
+
 const CreatePostScreen: React.FC = () => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -177,7 +189,7 @@ const CreatePostScreen: React.FC = () => {
         categoryId,
         title,
         content,
-        finishTime: finishTime.toISOString(),
+        finishTime: formatToLocalDateTimeString(finishTime),
         options: options.map(opt => ({
           content: opt.text,
           optionImage: opt.image || null,

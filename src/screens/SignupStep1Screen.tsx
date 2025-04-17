@@ -80,7 +80,7 @@ const SignupStep1Screen: React.FC<Props> = ({ navigation }) => {
         Alert.alert('중복된 아이디', '이미 존재하는 아이디입니다.');
       }
     } catch {
-      Alert.alert('오류', '중복 확인 실패: 서버 오류');
+      Alert.alert('중복된 아이디', '이미 존재하는 아이디입니다.');
     } finally {
       setIsLoading(false);
     }
