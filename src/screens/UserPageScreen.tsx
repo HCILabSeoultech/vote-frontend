@@ -792,7 +792,7 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   selectedOptionButton: {
-    borderColor: '#5E72E4',
+    borderColor: '#1499D9',
     borderWidth: 1.5,
   },
   optionButtonText: { 
@@ -802,7 +802,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   selectedOptionText: {
-    color: '#5E72E4',
+    color: '#1499D9',
     fontWeight: '600',
   },
   percentageText: { 
@@ -812,7 +812,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   selectedPercentageText: {
-    color: '#5E72E4',
+    color: '#1499D9',
   },
   responseCountText: {
     marginTop: 8,

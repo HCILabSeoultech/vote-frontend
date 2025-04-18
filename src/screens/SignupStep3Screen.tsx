@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
   progressFill: {
     width: '100%', // 3/3 단계
     height: '100%',
-    backgroundColor: '#5C6BC0',
+    backgroundColor: '#1499D9',
     borderRadius: 2,
   },
   progressText: {
@@ -275,8 +275,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
   },
   selectedCategory: {
-    backgroundColor: '#5C6BC0',
-    borderColor: '#5C6BC0',
+    backgroundColor: '#1499D9',
+    borderColor: '#1499D9',
   },
   categoryText: {
     color: '#424242',

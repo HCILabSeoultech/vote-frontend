@@ -73,6 +73,15 @@ const CommentScreen = () => {
   const [replyInputStates, setReplyInputStates] = useState<Record<number, boolean>>({})
   const [replyInputs, setReplyInputs] = useState<Record<number, string>>({})
 
+  const handleScroll = (event: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent
+    const isBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 50
+
+    if (isBottom && hasMoreComments && !loadingMore && !loading) {
+      loadComments(false)
+    }
+  }
+
   useEffect(() => {
     loadComments(true)
     fetchUsername()
@@ -124,15 +133,18 @@ const CommentScreen = () => {
       const response = await postComment(voteId, input.trim(), replyTo ?? undefined, token)
       setInput("")
       setReplyTo(null)
-      
+
+      // 댓글 작성 후 스크롤 최상단 이동
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true })
+
       // 새로 작성된 댓글을 상태에 저장
       if (response && response.id) {
         setNewComment(response)
-        // 5초 후에 새 댓글 상태를 초기화
-        setTimeout(() => {
-          setNewComment(null)
-          loadComments(true)
-        }, 5000)
+        // // 5초 후에 새 댓글 상태를 초기화
+        // setTimeout(() => {
+        //   setNewComment(null)
+        //   loadComments(true)
+        // }, 5000)
       }
     } catch (error) {
       console.error("댓글 작성 실패:", error)
@@ -598,10 +610,12 @@ const CommentScreen = () => {
         style={{ flex: 1 }}
         keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
       >
-        <ScrollView 
+        <ScrollView
           ref={scrollViewRef}
-          contentContainerStyle={styles.commentList} 
+          contentContainerStyle={styles.commentList}
           showsVerticalScrollIndicator={false}
+          onScroll={handleScroll}
+          scrollEventThrottle={100}
         >
           {renderAllComments()}
         </ScrollView>
@@ -670,7 +684,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: -10,
     left: 40,
-    backgroundColor: "#F6AD55",
+    backgroundColor: "#1499D9",
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 12,
@@ -788,7 +802,7 @@ const styles = StyleSheet.create({
   },
   replyText: {
     fontSize: 13,
-    color: "#5E72E4",
+    color: "#1499D9",
     fontWeight: "500",
   },
   viewRepliesText: {
@@ -798,7 +812,7 @@ const styles = StyleSheet.create({
   },
   editText: {
     fontSize: 13,
-    color: "#5E72E4",
+    color: "#1499D9",
     fontWeight: "500",
   },
   deleteText: {
@@ -851,7 +865,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   postButtonActive: {
-    backgroundColor: "#5E72E4",
+    backgroundColor: "#1499D9",
   },
   postButtonInactive: {
     backgroundColor: "#EDF2F7",
@@ -969,7 +983,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   postReplyButton: {
-    backgroundColor: '#5E72E4',
+    backgroundColor: '#1499D9',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 4,

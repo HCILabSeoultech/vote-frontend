@@ -12,7 +12,7 @@ import {
   Alert,
   Dimensions,
 } from "react-native"
-import { Feather, FontAwesome, MaterialIcons } from '@expo/vector-icons'
+import { Feather} from '@expo/vector-icons'
 import Animated, { FadeInLeft, FadeIn } from "react-native-reanimated"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import { getMainPageVotes, getVoteById, selectVoteOption } from "../api/post"
@@ -304,7 +304,7 @@ const MainScreen: React.FC = () => {
                     style={[
                       styles.optionButton,
                       closed && styles.closedOptionButton,
-                      !closed && isSelected && styles.selectedOptionButton,
+                      isSelected && styles.selectedOptionButton,
                       opt.optionImage && styles.optionButtonWithImage,
                     ]}
                     onPress={() => handleVote(item.voteId, opt.id)}
@@ -399,7 +399,7 @@ const MainScreen: React.FC = () => {
         ListFooterComponent={
           loading ? (
             <View style={styles.loaderContainer}>
-              <ActivityIndicator size="small" color="#5E72E4" />
+              <ActivityIndicator size="small" color="#1499D9" />
               <Text style={styles.loadingText}>투표 불러오는 중...</Text>
             </View>
           ) : null
@@ -598,7 +598,7 @@ const styles = StyleSheet.create({
     borderColor: "#E2E8F0",
   },
   selectedOptionButton: {
-    borderColor: "#5E72E4",
+    borderColor: "#1499D9",
     borderWidth: 1.5,
   },
   optionButtonText: {
@@ -608,7 +608,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   selectedOptionText: {
-    color: "#5E72E4",
+    color: "#1499D9",
     fontWeight: "600",
   },
   percentageText: {
@@ -618,7 +618,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   selectedPercentageText: {
-    color: "#5E72E4",
+    color: "#1499D9",
   },
   responseCountText: {
     marginTop: 8,
@@ -658,7 +658,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 8,
-    color: "#718096",
+    color: "#1499D9",
     fontSize: 14,
   },
 })

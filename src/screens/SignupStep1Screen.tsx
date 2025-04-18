@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import InputField from '../components/InputField';
 import Button from '../components/Button';
-import { checkUsernameDuplicate, checkPhoneDuplicate } from '../api/auth';
+import { checkUsernameDuplicate } from '../api/auth';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
   progressFill: {
     width: '33.33%',
     height: '100%',
-    backgroundColor: '#6200EE',
+    backgroundColor: '#1499D9',
     borderRadius: 2,
   },
   progressText: {
@@ -376,7 +376,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   checkButton: {
-    backgroundColor: '#6200EE',
+    backgroundColor: '#1499D9',
     height: 48,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
     minWidth: 80,
   },
   checkedButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#1499D9',
   },
   checkButtonText: {
     color: 'white',

@@ -342,7 +342,7 @@ const styles = StyleSheet.create({
   progressFill: {
     width: '66.66%',
     height: '100%',
-    backgroundColor: '#5E72E4',
+    backgroundColor: '#1499D9',
     borderRadius: 3,
   },
   progressText: {
@@ -452,9 +452,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F7FAFC',
   },
   genderButtonSelected: {
-    backgroundColor: '#5E72E4',
-    borderColor: '#5E72E4',
-    shadowColor: '#5E72E4',
+    backgroundColor: '#1499D9',
+    borderColor: '#1499D9',
+    shadowColor: '#1499D9',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,

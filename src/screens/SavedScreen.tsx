@@ -251,7 +251,7 @@ const StorageScreen: React.FC = () => {
                     style={[
                       styles.optionButton,
                       closed && styles.closedOptionButton,
-                      !closed && isSelected && styles.selectedOptionButton,
+                      isSelected && styles.selectedOptionButton,
                       opt.optionImage && styles.optionButtonWithImage,
                     ]}
                     onPress={() => handleVote(item.voteId, opt.id)}
@@ -390,7 +390,7 @@ const StorageScreen: React.FC = () => {
           loading
           ? () => (
               <View style={styles.footerLoading}>
-                <ActivityIndicator size="small" color="#5E72E4" />
+                <ActivityIndicator size="small" color="#1499D9" />
                 <Text style={styles.loadingText}>불러오는 중...</Text>
               </View>
             )
@@ -443,7 +443,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   activeTab: { 
-    backgroundColor: '#5E72E4',
+    backgroundColor: '#1499D9',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -466,7 +466,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    color: '#718096',
+    color: '#1499D9',
     fontSize: 14,
   },
   footerLoading: {
@@ -614,7 +614,7 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   selectedOptionButton: {
-    borderColor: '#5E72E4',
+    borderColor: '#1499D9',
     borderWidth: 1.5,
   },
   optionButtonWithImage: {
@@ -653,7 +653,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   selectedOptionText: {
-    color: '#5E72E4',
+    color: '#1499D9',
     fontWeight: '600',
   },
   percentageText: { 
@@ -663,7 +663,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   selectedPercentageText: {
-    color: '#5E72E4',
+    color: '#1499D9',
   },
   responseCountText: {
     marginTop: 8,

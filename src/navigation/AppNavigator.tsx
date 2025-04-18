@@ -8,7 +8,6 @@ import SignupStep3Screen from '../screens/SignupStep3Screen';
 import LoginScreen from '../screens/LoginScreen';
 import UserPageScreen from '../screens/UserPageScreen';
 
-import CategorySelectionScreen from '../screens/CategorySelectionScreen';
 import MainTabs from './MainTabs';
 import CommentScreen from '../screens/CommentScreen';
 import ReuploadVoteScreen from '../screens/ReuploadVoteScreen';
@@ -21,7 +20,6 @@ export type RootStackParamList = {
   SignupStep1Screen: undefined;
   SignupStep2Screen: { userData: Partial<UserData> };
   SignupStep3Screen: { userData: Partial<UserData> };
-  CategorySelection: { userData: UserData };
   Main: undefined;
   CommentScreen: { voteId: number };
   ReuploadVoteScreen: { voteId: number };
@@ -38,7 +36,6 @@ const AppNavigator = () => (
       <Stack.Screen name="SignupStep1Screen" component={SignupStep1Screen} />
       <Stack.Screen name="SignupStep2Screen" component={SignupStep2Screen} />
       <Stack.Screen name="SignupStep3Screen" component={SignupStep3Screen} />
-      <Stack.Screen name="CategorySelection" component={CategorySelectionScreen} />
       <Stack.Screen name="Main" component={MainTabs} />
       <Stack.Screen name="CommentScreen" component={CommentScreen} />
       <Stack.Screen name="ReuploadVoteScreen" component={ReuploadVoteScreen} />

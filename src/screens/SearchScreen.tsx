@@ -337,7 +337,7 @@ const SearchScreen: React.FC = () => {
                     style={[
                       styles.optionButton,
                       closed && styles.closedOptionButton,
-                      !closed && isSelected && styles.selectedOptionButton,
+                      isSelected && styles.selectedOptionButton,
                       opt.optionImage && styles.optionButtonWithImage,
                     ]}
                     onPress={() => handleVote(item.voteId, opt.id)}
@@ -583,7 +583,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   activeInlineToggle: {
-    backgroundColor: "#5E72E4",
+    backgroundColor: "#1499D9",
   },
   inlineToggleText: {
     fontSize: 14,
@@ -641,8 +641,8 @@ const styles = StyleSheet.create({
     borderColor: "#E2E8F0",
   },
   selectedCategoryButton: {
-    backgroundColor: "#5E72E4",
-    borderColor: "#4C63D9",
+    backgroundColor: "#1499D9",
+    borderColor: "#1499D9",
   },
   categoryButtonText: {
     fontSize: 14,
@@ -824,7 +824,7 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   selectedOptionButton: {
-    borderColor: '#5E72E4',
+    borderColor: '#1499D9',
     borderWidth: 1.5,
   },
   optionButtonWithImage: {
@@ -855,7 +855,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   selectedOptionText: {
-    color: "#5E72E4",
+    color: "#1499D9",
     fontWeight: "600",
   },
   percentageText: {
@@ -865,7 +865,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   selectedPercentageText: {
-    color: "#5E72E4",
+    color: "#1499D9",
   },
   responseCountText: {
     marginTop: 8,

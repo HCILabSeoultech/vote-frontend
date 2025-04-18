@@ -120,7 +120,7 @@ const SinglePageScreen: React.FC = () => {
   if (!vote) {
     return (
       <View style={styles.errorContainer}>
-        <Ionicons name="alert-circle-outline" size={48} color="#CBD5E0" />
+        <Ionicons name="alert-circle-outline" size={48} color="#1499D9" />
         <Text style={styles.errorText}>투표를 불러올 수 없습니다.</Text>
         <TouchableOpacity 
           style={styles.retryButton}
@@ -452,7 +452,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   retryButton: {
-    backgroundColor: '#5E72E4',
+    backgroundColor: '#1499D9',
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 12,
@@ -619,7 +619,7 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   selectedOptionButton: {
-    borderColor: '#5E72E4',
+    borderColor: '#1499D9',
     borderWidth: 1.5,
   },
   optionButtonWithImage: {
@@ -650,7 +650,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   selectedOptionText: {
-    color: '#5E72E4',
+    color: '#1499D9',
     fontWeight: '600',
   },
   percentageText: {
@@ -660,7 +660,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   selectedPercentageText: {
-    color: '#5E72E4',
+    color: '#1499D9',
   },
   responseCountText: {
     marginTop: 12,

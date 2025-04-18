@@ -427,8 +427,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   optionTypeButtonSelected: {
-    backgroundColor: '#5E72E4',
-    borderColor: '#5E72E4',
+    backgroundColor: '#1499D9',
+    borderColor: '#1499D9',
   },
   optionTypeText: {
     fontSize: 16,
@@ -476,7 +476,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   imageUploadButton: {
-    backgroundColor: '#5E72E4',
+    backgroundColor: '#1499D9',
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
@@ -521,8 +521,8 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   selectedCategoryButton: {
-    backgroundColor: '#5E72E4',
-    borderColor: '#5E72E4',
+    backgroundColor: '#1499D9',
+    borderColor: '#1499D9',
   },
   categoryButtonText: {
     color: '#4A5568',
@@ -552,7 +552,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   submitButton: {
-    backgroundColor: '#5E72E4',
+    backgroundColor: '#1499D9',
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',

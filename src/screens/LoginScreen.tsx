@@ -15,6 +15,7 @@ import Button from '../components/Button';
 import { login } from '../api/auth';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import Logo from '../../assets/mainlogo.svg'; 
 
 type Props = {
   navigation: StackNavigationProp<RootStackParamList, 'Login'>;
@@ -60,11 +61,15 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
           <View style={styles.logoContainer}>
             <View style={styles.logoCircle}>
               <View style={styles.logoInnerCircle}>
-                <Text style={styles.logoText}>VOTE</Text>
+              <View style={styles.logoCircle}>
+                <View style={styles.logoInnerCircle}>
+                  <Logo width={100} height={100} />
+                </View>
+              </View>
               </View>
             </View>
-            <Text style={styles.title}>환영합니다</Text>
-            <Text style={styles.subtitle}>투표를 시작해보세요</Text>
+            <Text style={styles.title}>VOTY</Text>
+            <Text style={styles.subtitle}>Just Vote What You Like</Text>
           </View>
           
           <View style={styles.formContainer}>
@@ -133,17 +138,17 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
-    marginTop: 40,
-    marginBottom: 40,
+    marginTop: 80,
+    marginBottom: 0,
   },
   logoCircle: {
-    width: 120,
-    height: 120,
+    width: 60,
+    height: 60,
     borderRadius: 60,
     backgroundColor: '#F0F4FF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
     shadowColor: '#5E72E4',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
@@ -151,22 +156,22 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   logoInnerCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: '#5E72E4',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logoText: {
-    color: 'white',
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
+  // logoImage: {
+  //   width: 100,
+  //   height: 100,
+  // },
+  // logoText: {
+  //   color: 'white',
+  //   fontSize: 24,
+  //   fontWeight: 'bold',
+  // },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#1A202C',
+    color: '#1499D9',
     marginBottom: 8,
   },
   subtitle: {
@@ -175,10 +180,10 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     width: '100%',
-    marginBottom: 40,
+    marginTop: -40,
   },
   inputGroup: {
-    marginBottom: 16,
+    marginBottom: 0,
   },
   inputField: {
     backgroundColor: '#F7FAFC',
@@ -189,15 +194,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   loginButton: {
-    backgroundColor: '#5E72E4',
+    backgroundColor: '#3182CE',
     height: 56,
     borderRadius: 12,
     marginTop: 24,
-    shadowColor: '#5E72E4',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
   },
   loginButtonText: {
     fontSize: 16,
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   signupText: {
-    color: '#5E72E4',
+    color: '#1499D9',
     fontSize: 16,
     fontWeight: '600',
   },
