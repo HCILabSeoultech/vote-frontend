@@ -10,6 +10,8 @@ import {
   Alert,
   TouchableOpacity,
   Dimensions,
+  Modal,
+  Pressable,
 } from 'react-native';
 import Animated, { FadeInLeft, FadeIn } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -20,11 +22,21 @@ import { selectVoteOption, getVoteById, deleteVote } from '../api/post';
 import { VoteResponse } from '../types/Vote';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import { Feather } from '@expo/vector-icons';
+import CommentScreen from '../screens/CommentScreen';
 
 import { SERVER_URL } from '../constant/config';
 
 const IMAGE_BASE_URL = `${SERVER_URL}`;
 const { width } = Dimensions.get('window');
+
+const TABS = [
+  { label: '게시물', value: 'posts' },
+  { label: '팔로워', value: 'followers' },
+  { label: '팔로잉', value: 'following' },
+] as const;
+
+type TabType = 'posts' | 'followers' | 'following';
 
 const MyPageScreen: React.FC = () => {
   const [profile, setProfile] = useState<any>(null);
@@ -33,6 +45,9 @@ const MyPageScreen: React.FC = () => {
   const [isLast, setIsLast] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({});
+  const [selectedVoteId, setSelectedVoteId] = useState<number | null>(null);
+  const [showCommentModal, setShowCommentModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabType>('posts');
 
   const isFocused = useIsFocused();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'CommentScreen'>>();
@@ -169,6 +184,26 @@ const MyPageScreen: React.FC = () => {
       return `${diffDays}일 후 마감`;
     } else {
       return date.toLocaleDateString();
+    }
+  };
+
+  const handleCommentPress = (voteId: number) => {
+    setSelectedVoteId(voteId);
+    setShowCommentModal(true);
+  };
+
+  const handleTabChange = (value: TabType) => {
+    setActiveTab(value);
+    // 탭 변경 시 데이터 초기화 및 새로운 데이터 로드
+    if (value === 'posts') {
+      setPosts([]);
+      setPage(0);
+      setIsLast(false);
+      fetchData(0);
+    } else if (value === 'followers') {
+      // TODO: 팔로워 목록 로드
+    } else if (value === 'following') {
+      // TODO: 팔로잉 목록 로드
     }
   };
 
@@ -369,16 +404,25 @@ const MyPageScreen: React.FC = () => {
             onPress={() => handleToggleLike(item.voteId)}
             activeOpacity={0.7}
           >
-            <Text style={styles.reactionIcon}>{item.isLiked ? '❤️' : '🤍'}</Text>
-            <Text style={styles.reactionText}>{item.likeCount}</Text>
+            <Feather 
+              name={item.isLiked ? "heart" : "heart"} 
+              size={20} 
+              color={item.isLiked ? "#FF4B6E" : "#718096"} 
+            />
+            <Text style={[
+              styles.reactionText,
+              item.isLiked && styles.activeReactionText
+            ]}>
+              {item.likeCount}
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.reactionItem}
-            onPress={() => navigation.navigate('CommentScreen', { voteId: item.voteId })}
+            onPress={() => handleCommentPress(item.voteId)}
             activeOpacity={0.7}
           >
-            <Text style={styles.reactionIcon}>💬</Text>
+            <Feather name="message-circle" size={20} color="#718096" />
             <Text style={styles.reactionText}>{item.commentCount}</Text>
           </TouchableOpacity>
 
@@ -387,11 +431,15 @@ const MyPageScreen: React.FC = () => {
             onPress={() => handleToggleBookmark(item.voteId)}
             activeOpacity={0.7}
           >
-            <Text style={styles.reactionIcon}>{item.isBookmarked ? '🔖' : '📄'}</Text>
+            <Feather 
+              name={item.isBookmarked ? "bookmark" : "bookmark"} 
+              size={20} 
+              color={item.isBookmarked ? "#1499D9" : "#718096"} 
+            />
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.reactionItem} activeOpacity={0.7}>
-            <Text style={styles.reactionIcon}>📊</Text>
+            <Feather name="bar-chart-2" size={20} color="#718096" />
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -408,26 +456,56 @@ const MyPageScreen: React.FC = () => {
     
     const isDefault = profile.profileImage === 'default.jpg';
 
+    const handleLogout = async () => {
+      try {
+        await AsyncStorage.removeItem('token');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        });
+      } catch (err) {
+        Alert.alert('오류', '로그아웃 중 문제가 발생했습니다.');
+      }
+    };
+
     return (
       <Animated.View 
         entering={FadeIn.duration(500)}
         style={styles.profileContainer}
       >
         <View style={styles.profileHeader}>
-          <Image
-            source={{
-              uri: isDefault
-                ? `${IMAGE_BASE_URL}/images/default.jpg`
-                : `${IMAGE_BASE_URL}${profile.profileImage}`,
-            }}
-            style={styles.profileImage}
-          />
-          <View style={styles.profileInfo}>
-            <Text style={styles.username}>{profile.username}</Text>
-            <View style={styles.pointContainer}>
-              <Text style={styles.pointLabel}>포인트</Text>
-              <Text style={styles.pointValue}>{profile.point}</Text>
+          <View style={styles.profileMainInfo}>
+            <Image
+              source={{
+                uri: isDefault
+                  ? `${IMAGE_BASE_URL}/images/default.jpg`
+                  : `${IMAGE_BASE_URL}${profile.profileImage}`,
+              }}
+              style={styles.profileImage}
+            />
+            <View style={styles.profileInfo}>
+              <Text style={styles.username}>{profile.username}</Text>
+              <View style={styles.pointContainer}>
+                <Text style={styles.pointLabel}>포인트</Text>
+                <Text style={styles.pointValue}>{profile.point}</Text>
+              </View>
             </View>
+          </View>
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              style={styles.headerButton}
+              onPress={() => Alert.alert('알림', '프로필 수정 기능은 준비 중입니다.')}
+              activeOpacity={0.7}
+            >
+              <Feather name="edit-2" size={16} color="#3182CE" />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.headerButton}
+              onPress={handleLogout}
+              activeOpacity={0.7}
+            >
+              <Feather name="log-out" size={16} color="#E53E3E" />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -435,26 +513,36 @@ const MyPageScreen: React.FC = () => {
           <Text style={styles.introduction}>{profile.introduction}</Text>
         )}
 
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{profile.postCount}</Text>
-            <Text style={styles.statLabel}>게시물</Text>
+        <View style={styles.tabContainer}>
+          <View style={styles.tabRow}>
+            {TABS.map((tab) => (
+              <TouchableOpacity
+                key={tab.value}
+                style={[styles.tabButton, activeTab === tab.value && styles.activeTab]}
+                onPress={() => handleTabChange(tab.value)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.tabText, activeTab === tab.value && styles.activeTabText]}>
+                  {tab.label} {tab.value === 'posts' ? `(${profile?.postCount || 0})` :
+                             tab.value === 'followers' ? `(${profile?.followerCount || 0})` :
+                             `(${profile?.followingCount || 0})`}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{profile.followerCount}</Text>
-            <Text style={styles.statLabel}>팔로워</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{profile.followingCount}</Text>
-            <Text style={styles.statLabel}>팔로잉</Text>
+          <View style={styles.tabIndicator}>
+            <Animated.View 
+              style={[
+                styles.tabIndicatorBar,
+                { 
+                  left: activeTab === 'posts' ? '0%' : 
+                       activeTab === 'followers' ? '33.333%' : '66.666%',
+                  width: '33.333%'
+                }
+              ]} 
+            />
           </View>
         </View>
-
-        <View style={styles.sectionDivider} />
-        
-        <Text style={styles.sectionTitle}>내 게시물</Text>
       </Animated.View>
     );
   };
@@ -470,27 +558,106 @@ const MyPageScreen: React.FC = () => {
     );
   };
 
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'posts':
+        return (
+          <FlatList
+            data={posts}
+            renderItem={renderPost}
+            keyExtractor={(item) => item.voteId.toString()}
+            onEndReached={() => fetchData(page)}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={
+              loading ? (
+                <View style={styles.loaderContainer}>
+                  <ActivityIndicator size="small" color="#1499D9" />
+                  <Text style={styles.loadingText}>게시물 불러오는 중...</Text>
+                </View>
+              ) : null
+            }
+            ListEmptyComponent={renderEmptyPosts}
+            showsVerticalScrollIndicator={false}
+          />
+        );
+      case 'followers':
+        return (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>팔로워 목록</Text>
+            <Text style={styles.emptySubText}>준비 중입니다.</Text>
+          </View>
+        );
+      case 'following':
+        return (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>팔로잉 목록</Text>
+            <Text style={styles.emptySubText}>준비 중입니다.</Text>
+          </View>
+        );
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <FlatList
-        data={posts}
-        ListHeaderComponent={renderProfile}
-        renderItem={renderPost}
+        ListHeaderComponent={renderProfile()}
+        data={activeTab === 'posts' ? posts : []}
+        renderItem={activeTab === 'posts' ? renderPost : null}
         keyExtractor={(item) => item.voteId.toString()}
-        onEndReached={() => fetchData(page)}
+        onEndReached={() => activeTab === 'posts' && fetchData(page)}
         onEndReachedThreshold={0.5}
-        ListFooterComponent={
-          loading ? (
-            <View style={styles.loaderContainer}>
-              <ActivityIndicator size="small" color="#1499D9" />
-              <Text style={styles.loadingText}>게시물 불러오는 중...</Text>
-            </View>
-          ) : null
+        ListEmptyComponent={
+          !loading && activeTab === 'posts' ? renderEmptyPosts : (
+            activeTab === 'followers' ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>아직 팔로워가 없습니다.</Text>
+              </View>
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>아직 팔로잉하는 사용자가 없습니다.</Text>
+              </View>
+            )
+          )
         }
-        ListEmptyComponent={renderEmptyPosts}
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       />
+
+      {showCommentModal && selectedVoteId && (
+        <Modal
+          visible={showCommentModal}
+          transparent
+          statusBarTranslucent
+          animationType="slide"
+          onRequestClose={() => {
+            refreshVote(selectedVoteId);
+            setShowCommentModal(false);
+            setSelectedVoteId(null);
+          }}
+        >
+          <View style={styles.modalOverlay}>
+            <Pressable 
+              style={styles.modalBackground}
+              onPress={async () => {
+                await refreshVote(selectedVoteId);
+                setShowCommentModal(false);
+                setSelectedVoteId(null);
+              }}
+            >
+              <View style={styles.modalBackdrop} />
+            </Pressable>
+            <View style={styles.modalContainer}>
+              <CommentScreen
+                route={{
+                  params: {
+                    voteId: selectedVoteId
+                  }
+                }}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 };
@@ -523,9 +690,16 @@ const styles = StyleSheet.create({
   profileContainer: { 
     marginBottom: 24,
   },
-  profileHeader: { 
-    flexDirection: 'row', 
+  profileHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  profileMainInfo: {
+    flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
   profileImage: {
     width: 90, 
@@ -571,7 +745,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   introduction: { 
-    marginTop: 16, 
+    marginTop: 8,
+    marginBottom: 20,
     fontSize: 15, 
     color: '#4A5568',
     lineHeight: 22,
@@ -845,6 +1020,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
+    paddingHorizontal: 16,
   },
   reactionItem: { 
     flexDirection: 'row', 
@@ -852,14 +1028,14 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 8,
   },
-  reactionIcon: { 
-    fontSize: 20, 
-    marginRight: 6,
-  },
   reactionText: { 
     fontSize: 14, 
     color: '#4A5568',
     fontWeight: '500',
+    marginLeft: 4,
+  },
+  activeReactionText: {
+    color: '#FF4B6E',
   },
   emptyContainer: {
     padding: 40,
@@ -880,6 +1056,78 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#718096',
     marginTop: 2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalBackground: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  modalContainer: {
+    height: '75%',
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
+  },
+  tabContainer: {
+    backgroundColor: '#FFFFFF',
+    paddingTop: 0,
+    paddingBottom: 0,
+    marginBottom: -20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+    zIndex: 10,
+  },
+  tabRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 0,
+  },
+  tabButton: {
+    paddingVertical: 12,
+    flex: 1,
+    alignItems: 'center',
+  },
+  activeTab: {
+    backgroundColor: 'transparent',
+  },
+  tabText: {
+    fontSize: 14,
+    color: '#718096',
+    fontWeight: '500',
+  },
+  activeTabText: {
+    color: '#1499D9',
+    fontWeight: '600',
+  },
+  tabIndicator: {
+    height: 2,
+    backgroundColor: '#EDF2F7',
+    position: 'relative',
+  },
+  tabIndicatorBar: {
+    position: 'absolute',
+    height: '100%',
+    backgroundColor: '#1499D9',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  headerButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#F7FAFC',
   },
 });
 

@@ -10,6 +10,9 @@ import {
   Alert,
   Image,
   Dimensions,
+  Modal,
+  Pressable,
+  RefreshControl,
 } from 'react-native';
 import Animated, { FadeInLeft, FadeIn } from 'react-native-reanimated';
 import { getStoragePosts } from '../api/storage';
@@ -19,14 +22,16 @@ import { VoteResponse } from '../types/Vote';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import { Feather } from '@expo/vector-icons'
+import CommentScreen from '../screens/CommentScreen';
 
 const STORAGE_TYPES = [
-  { label: '투표한 글', value: 'voted' },
-  { label: '좋아요한 글', value: 'liked' },
-  { label: '북마크한 글', value: 'bookmarked' },
+  { label: '참여한 투표', value: 'voted', count: 0 },
+  { label: '좋아요한 글', value: 'liked', count: 0 },
+  { label: '북마크한 글', value: 'bookmarked', count: 0 },
 ] as const;
 
-type StorageType = typeof STORAGE_TYPES[number]['value'];
+type StorageType = 'voted' | 'liked' | 'bookmarked';
 type NavigationProp = StackNavigationProp<RootStackParamList, 'CommentScreen'>;
 
 import { SERVER_URL } from '../constant/config';
@@ -42,11 +47,39 @@ const StorageScreen: React.FC = () => {
   const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({});
   const navigation = useNavigation<NavigationProp>();
   const [tabRefreshTrigger, setTabRefreshTrigger] = useState(0);
+  const [selectedVoteId, setSelectedVoteId] = useState<number | null>(null);
+  const [showCommentModal, setShowCommentModal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [counts, setCounts] = useState({
+    voted: 0,
+    liked: 0,
+    bookmarked: 0
+  });
 
   const handleTabChange = (value: StorageType) => {
     setStorageType(value);
     setTabRefreshTrigger(prev => prev + 1);
   };
+
+  const fetchAllCounts = async () => {
+    try {
+      const votedRes = await getStoragePosts('voted', 0);
+      const likedRes = await getStoragePosts('liked', 0);
+      const bookmarkedRes = await getStoragePosts('bookmarked', 0);
+      
+      setCounts({
+        voted: votedRes.totalElements,
+        liked: likedRes.totalElements,
+        bookmarked: bookmarkedRes.totalElements
+      });
+    } catch (err) {
+      console.error('개수 불러오기 실패:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchAllCounts();
+  }, []);
 
   const loadPosts = async (nextPage = 0) => {
     if (loading || isLast) return;
@@ -134,6 +167,11 @@ const StorageScreen: React.FC = () => {
     } else {
       return date.toLocaleDateString();
     }
+  };
+
+  const handleCommentPress = (voteId: number) => {
+    setSelectedVoteId(voteId);
+    setShowCommentModal(true);
   };
 
   const renderItem = ({ item, index }: { item: VoteResponse; index: number }) => {
@@ -306,16 +344,25 @@ const StorageScreen: React.FC = () => {
             onPress={() => handleToggleLike(item.voteId)}
             activeOpacity={0.7}
           >
-            <Text style={styles.reactionIcon}>{item.isLiked ? '❤️' : '🤍'}</Text>
-            <Text style={styles.reactionText}>{item.likeCount}</Text>
+            <Feather 
+              name={item.isLiked ? "heart" : "heart"} 
+              size={22} 
+              color={item.isLiked ? "#FF4B6E" : "#718096"} 
+            />
+            <Text style={[
+              styles.reactionText,
+              item.isLiked && styles.activeReactionText
+            ]}>
+              {item.likeCount}
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.reactionItem}
-            onPress={() => navigation.navigate('CommentScreen', { voteId: item.voteId })}
+            onPress={() => handleCommentPress(item.voteId)}
             activeOpacity={0.7}
           >
-            <Text style={styles.reactionIcon}>💬</Text>
+            <Feather name="message-circle" size={22} color="#718096" />
             <Text style={styles.reactionText}>{item.commentCount}</Text>
           </TouchableOpacity>
 
@@ -324,11 +371,15 @@ const StorageScreen: React.FC = () => {
             onPress={() => handleToggleBookmark(item.voteId)}
             activeOpacity={0.7}
           >
-            <Text style={styles.reactionIcon}>{item.isBookmarked ? '🔖' : '📄'}</Text>
+            <Feather 
+              name={item.isBookmarked ? "bookmark" : "bookmark"} 
+              size={22} 
+              color={item.isBookmarked ? "#1499D9" : "#718096"} 
+            />
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.reactionItem} activeOpacity={0.7}>
-            <Text style={styles.reactionIcon}>📊</Text>
+            <Feather name="bar-chart-2" size={22} color="#718096" />
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -338,20 +389,45 @@ const StorageScreen: React.FC = () => {
   const renderTabs = () => (
     <View style={styles.tabContainer}>
       <View style={styles.tabRow}>
-        {STORAGE_TYPES.map(({ label, value }) => (
-          <TouchableOpacity
-            key={value}
-            style={[styles.tabButton, storageType === value && styles.activeTab]}
-            onPress={() => handleTabChange(value)}
-            activeOpacity={0.7}
-          >
-            <Text
-              style={[styles.tabText, storageType === value && styles.activeTabText]}
-            >
-              {label}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        <TouchableOpacity
+          style={[styles.tabButton, storageType === 'voted' && styles.activeTab]}
+          onPress={() => handleTabChange('voted')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.tabText, storageType === 'voted' && styles.activeTabText]}>
+            참여한 투표 ({counts.voted})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabButton, storageType === 'liked' && styles.activeTab]}
+          onPress={() => handleTabChange('liked')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.tabText, storageType === 'liked' && styles.activeTabText]}>
+            좋아요한 글 ({counts.liked})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabButton, storageType === 'bookmarked' && styles.activeTab]}
+          onPress={() => handleTabChange('bookmarked')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.tabText, storageType === 'bookmarked' && styles.activeTabText]}>
+            북마크한 글 ({counts.bookmarked})
+          </Text>
+        </TouchableOpacity>
+      </View>
+      <View style={styles.tabIndicator}>
+        <Animated.View 
+          style={[
+            styles.tabIndicatorBar,
+            { 
+              left: storageType === 'voted' ? '0%' : 
+                   storageType === 'liked' ? '33.333%' : '66.666%',
+              width: '33.333%'
+            }
+          ]} 
+        />
       </View>
     </View>
   );
@@ -360,7 +436,7 @@ const StorageScreen: React.FC = () => {
     let message = '';
     switch (storageType) {
       case 'voted':
-        message = '아직 투표한 글이 없습니다.';
+        message = '아직 참여한 투표가 없습니다.';
         break;
       case 'liked':
         message = '아직 좋아요한 글이 없습니다.';
@@ -377,6 +453,15 @@ const StorageScreen: React.FC = () => {
     );
   };
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    setVotes([]);
+    setPage(0);
+    setIsLast(false);
+    await Promise.all([loadPosts(0), fetchAllCounts()]);
+    setRefreshing(false);
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       {renderTabs()}
@@ -386,6 +471,16 @@ const StorageScreen: React.FC = () => {
         renderItem={renderItem}
         onEndReached={() => loadPosts(page)}
         onEndReachedThreshold={0.5}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#1499D9"]}
+            tintColor="#1499D9"
+            title="새로고침 중..."
+            titleColor="#718096"
+          />
+        }
         ListFooterComponent={
           loading
           ? () => (
@@ -403,6 +498,42 @@ const StorageScreen: React.FC = () => {
         ]}
         showsVerticalScrollIndicator={false}
       />
+
+      {showCommentModal && selectedVoteId && (
+        <Modal
+          visible={showCommentModal}
+          transparent
+          statusBarTranslucent
+          animationType="slide"
+          onRequestClose={() => {
+            refreshVote(selectedVoteId);
+            setShowCommentModal(false);
+            setSelectedVoteId(null);
+          }}
+        >
+          <View style={styles.modalOverlay}>
+            <Pressable 
+              style={styles.modalBackground}
+              onPress={async () => {
+                await refreshVote(selectedVoteId);
+                setShowCommentModal(false);
+                setSelectedVoteId(null);
+              }}
+            >
+              <View style={styles.modalBackdrop} />
+            </Pressable>
+            <View style={styles.modalContainer}>
+              <CommentScreen
+                route={{
+                  params: {
+                    voteId: selectedVoteId
+                  }
+                }}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 };
@@ -414,14 +545,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#F7FAFC' 
   },
   container: { 
-    padding: 16,
+    padding: 14,
     paddingBottom: 24,
     flexGrow: 1,
   },
   tabContainer: {
     backgroundColor: '#FFFFFF',
-    paddingTop: 12,
-    paddingBottom: 12,
+    paddingTop: 0,
+    paddingBottom: 0,
+    marginHorizontal: 12,
+    marginTop: 18,
+    borderRadius: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -430,34 +564,36 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   tabRow: {
-    flexDirection: 'row', 
-    justifyContent: 'space-around', 
-    paddingHorizontal: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 0,
   },
   tabButton: {
-    paddingVertical: 10, 
-    paddingHorizontal: 20,
-    borderRadius: 24, 
-    backgroundColor: '#EDF2F7',
-    minWidth: 100,
+    paddingVertical: 10,
+    flex: 1,
     alignItems: 'center',
   },
-  activeTab: { 
-    backgroundColor: '#1499D9',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+  activeTab: {
+    backgroundColor: 'transparent',
   },
-  tabText: { 
-    fontSize: 14, 
-    color: '#4A5568',
+  tabText: {
+    fontSize: 14,
+    color: '#718096',
+    fontWeight: '500',
+  },
+  activeTabText: {
+    color: '#1499D9',
     fontWeight: '600',
   },
-  activeTabText: { 
-    color: '#FFFFFF', 
-    fontWeight: '700',
+  tabIndicator: {
+    height: 2,
+    backgroundColor: '#EDF2F7',
+    position: 'relative',
+  },
+  tabIndicatorBar: {
+    position: 'absolute',
+    height: '100%',
+    backgroundColor: '#1499D9',
   },
   loadingContainer: {
     flex: 1,
@@ -688,14 +824,14 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 8,
   },
-  reactionIcon: { 
-    fontSize: 20, 
-    marginRight: 6,
-  },
   reactionText: { 
     fontSize: 14, 
     color: '#4A5568',
     fontWeight: '500',
+    marginLeft: 6,
+  },
+  activeReactionText: {
+    color: '#FF4B6E',
   },
   emptyListContainer: { 
     flex: 1, 
@@ -705,6 +841,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#718096',
     marginTop: 2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalBackground: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  modalContainer: {
+    height: '75%',
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
   },
 });
 

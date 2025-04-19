@@ -10,6 +10,8 @@ import {
   Image,
   Alert,
   Dimensions,
+  Modal,
+  Pressable,
 } from 'react-native';
 import Animated, { FadeInLeft, FadeIn } from 'react-native-reanimated';
 import { getVoteById, selectVoteOption } from '../api/post';
@@ -21,6 +23,8 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { checkFollow, followUser, unfollowUser } from '../api/follow';
+import { Feather } from '@expo/vector-icons';
+import CommentScreen from '../screens/CommentScreen';
 
 import { SERVER_URL } from '../constant/config';
 
@@ -36,6 +40,9 @@ const UserPageScreen: React.FC = () => {
   const [profile, setProfile] = useState<any>(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState('posts');
+  const [showCommentModal, setShowCommentModal] = useState(false);
+  const [selectedVoteId, setSelectedVoteId] = useState<number | null>(null);
 
   const isFocused = useIsFocused();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'CommentScreen'>>();
@@ -200,6 +207,11 @@ const UserPageScreen: React.FC = () => {
     } else {
       return date.toLocaleDateString();
     }
+  };
+
+  const handleCommentPress = (voteId: number) => {
+    setSelectedVoteId(voteId);
+    setShowCommentModal(true);
   };
 
   const renderItem = ({ item, index }: { item: VoteResponse, index: number }) => {
@@ -372,16 +384,25 @@ const UserPageScreen: React.FC = () => {
             onPress={() => handleToggleLike(item.voteId)}
             activeOpacity={0.7}
           >
-            <Text style={styles.reactionIcon}>{item.isLiked ? '❤️' : '🤍'}</Text>
-            <Text style={styles.reactionText}>{item.likeCount}</Text>
+            <Feather 
+              name={item.isLiked ? "heart" : "heart"} 
+              size={20} 
+              color={item.isLiked ? "#FF4B6E" : "#718096"} 
+            />
+            <Text style={[
+              styles.reactionText,
+              item.isLiked && styles.activeReactionText
+            ]}>
+              {item.likeCount}
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.reactionItem}
-            onPress={() => navigation.navigate('CommentScreen', { voteId: item.voteId })}
+            onPress={() => handleCommentPress(item.voteId)}
             activeOpacity={0.7}
           >
-            <Text style={styles.reactionIcon}>💬</Text>
+            <Feather name="message-circle" size={20} color="#718096" />
             <Text style={styles.reactionText}>{item.commentCount}</Text>
           </TouchableOpacity>
 
@@ -390,11 +411,15 @@ const UserPageScreen: React.FC = () => {
             onPress={() => handleToggleBookmark(item.voteId)}
             activeOpacity={0.7}
           >
-            <Text style={styles.reactionIcon}>{item.isBookmarked ? '🔖' : '📄'}</Text>
+            <Feather 
+              name={item.isBookmarked ? "bookmark" : "bookmark"} 
+              size={20} 
+              color={item.isBookmarked ? "#1499D9" : "#718096"} 
+            />
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.reactionItem} activeOpacity={0.7}>
-            <Text style={styles.reactionIcon}>📊</Text>
+            <Feather name="bar-chart-2" size={20} color="#718096" />
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -417,69 +442,95 @@ const UserPageScreen: React.FC = () => {
         style={styles.profileContainer}
       >
         <View style={styles.profileHeader}>
-          <Image
-            source={{
-              uri: isDefault
-                ? `${IMAGE_BASE_URL}/images/default.jpg`
-                : `${IMAGE_BASE_URL}${profile.profileImage}`,
-            }}
-            style={styles.profileImage}
-          />
-          
-          <View style={styles.profileInfo}>
-            <View style={styles.usernameRow}>
+          <View style={styles.profileMainInfo}>
+            <Image
+              source={{
+                uri: isDefault
+                  ? `${IMAGE_BASE_URL}/images/default.jpg`
+                  : `${IMAGE_BASE_URL}${profile.profileImage}`,
+              }}
+              style={styles.profileImage}
+            />
+            <View style={styles.profileInfo}>
               <Text style={styles.username}>{profile.username}</Text>
-              {currentUserId !== userId && (
-                <TouchableOpacity
-                  onPress={handleFollowToggle}
-                  style={[
-                    styles.followButton,
-                    isFollowing ? styles.followingButton : styles.followButton
-                  ]}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[
-                    styles.followButtonText,
-                    isFollowing ? styles.followingButtonText : styles.followButtonText
-                  ]}>
-                    {isFollowing ? '팔로잉' : '팔로우'}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            
-            <View style={styles.pointContainer}>
-              <Text style={styles.pointLabel}>포인트</Text>
-              <Text style={styles.pointValue}>{profile.point}</Text>
+              <View style={styles.pointContainer}>
+                <Text style={styles.pointLabel}>포인트</Text>
+                <Text style={styles.pointValue}>{profile.point}</Text>
+              </View>
             </View>
           </View>
+          {currentUserId !== userId && (
+            <TouchableOpacity
+              onPress={handleFollowToggle}
+              style={[
+                styles.followButton,
+                isFollowing ? styles.followingButton : styles.followButton
+              ]}
+              activeOpacity={0.7}
+            >
+              <Text style={[
+                styles.followButtonText,
+                isFollowing ? styles.followingButtonText : styles.followButtonText
+              ]}>
+                {isFollowing ? '팔로잉' : '팔로우'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {profile.introduction && (
           <Text style={styles.introduction}>{profile.introduction}</Text>
         )}
 
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{profile.postCount}</Text>
-            <Text style={styles.statLabel}>게시물</Text>
+        <View style={styles.tabContainer}>
+          <View style={styles.tabRow}>
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'posts' && styles.activeTab]}
+              onPress={() => handleTabChange('posts')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.tabText, activeTab === 'posts' && styles.activeTabText]}>
+                게시물 ({profile.postCount})
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'followers' && styles.activeTab]}
+              onPress={() => handleTabChange('followers')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.tabText, activeTab === 'followers' && styles.activeTabText]}>
+                팔로워 ({profile.followerCount})
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'following' && styles.activeTab]}
+              onPress={() => handleTabChange('following')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.tabText, activeTab === 'following' && styles.activeTabText]}>
+                팔로잉 ({profile.followingCount})
+              </Text>
+            </TouchableOpacity>
           </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{profile.followerCount}</Text>
-            <Text style={styles.statLabel}>팔로워</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{profile.followingCount}</Text>
-            <Text style={styles.statLabel}>팔로잉</Text>
+          <View style={styles.tabIndicator}>
+            <Animated.View 
+              style={[
+                styles.tabIndicatorBar,
+                { 
+                  left: activeTab === 'posts' ? '0%' : 
+                       activeTab === 'followers' ? '33.333%' : '66.666%',
+                  width: '33.333%'
+                }
+              ]} 
+            />
           </View>
         </View>
-
-        <View style={styles.sectionDivider} />
-        
       </Animated.View>
     );
+  };
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
   };
 
   const renderEmptyPosts = () => {
@@ -495,24 +546,72 @@ const UserPageScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <FlatList
-        data={votes}
+        data={activeTab === 'posts' ? votes : []}
         keyExtractor={(item) => item.voteId.toString()}
-        renderItem={renderItem}
+        renderItem={activeTab === 'posts' ? renderItem : null}
         contentContainerStyle={styles.container}
-        onEndReached={() => fetchUserData(page)}
+        onEndReached={() => activeTab === 'posts' && fetchUserData(page)}
         onEndReachedThreshold={0.5}
         ListHeaderComponent={renderHeader}
         ListFooterComponent={
-          loading ? (
+          loading && activeTab === 'posts' ? (
             <View style={styles.loaderContainer}>
               <ActivityIndicator size="small" color="#5E72E4" />
               <Text style={styles.loadingText}>게시물 불러오는 중...</Text>
             </View>
           ) : null
         }
-        ListEmptyComponent={renderEmptyPosts}
+        ListEmptyComponent={
+          !loading && activeTab === 'posts' ? renderEmptyPosts : (
+            activeTab === 'followers' ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>아직 팔로워가 없습니다.</Text>
+              </View>
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>아직 팔로잉하는 사용자가 없습니다.</Text>
+              </View>
+            )
+          )
+        }
         showsVerticalScrollIndicator={false}
       />
+
+      {showCommentModal && selectedVoteId && (
+        <Modal
+          visible={showCommentModal}
+          transparent
+          statusBarTranslucent
+          animationType="slide"
+          onRequestClose={() => {
+            refreshVote(selectedVoteId);
+            setShowCommentModal(false);
+            setSelectedVoteId(null);
+          }}
+        >
+          <View style={styles.modalOverlay}>
+            <Pressable 
+              style={styles.modalBackground}
+              onPress={async () => {
+                await refreshVote(selectedVoteId);
+                setShowCommentModal(false);
+                setSelectedVoteId(null);
+              }}
+            >
+              <View style={styles.modalBackdrop} />
+            </Pressable>
+            <View style={styles.modalContainer}>
+              <CommentScreen
+                route={{
+                  params: {
+                    voteId: selectedVoteId
+                  }
+                }}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 };
@@ -539,9 +638,16 @@ const styles = StyleSheet.create({
   profileContainer: { 
     marginBottom: 24,
   },
-  profileHeader: { 
-    flexDirection: 'row', 
+  profileHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  profileMainInfo: {
+    flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
   profileImage: {
     width: 90, 
@@ -560,19 +666,13 @@ const styles = StyleSheet.create({
     marginLeft: 20,
     flex: 1,
   },
-  usernameRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
   username: { 
     fontSize: 22, 
     fontWeight: 'bold', 
     color: '#2D3748',
   },
   followButton: {
-    backgroundColor: '#5E72E4',
+    backgroundColor: '#3182CE',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
@@ -611,48 +711,55 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   introduction: { 
-    marginTop: 16, 
+    marginTop: 8,
+    marginBottom: 20,
     fontSize: 15, 
     color: '#4A5568',
     lineHeight: 22,
   },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 24,
+  tabContainer: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
+    paddingTop: 0,
+    paddingBottom: 0,
+    marginBottom: -20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
-    elevation: 1,
+    elevation: 2,
+    zIndex: 10,
   },
-  statItem: {
-    alignItems: 'center',
+  tabRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 0,
+  },
+  tabButton: {
+    paddingVertical: 12,
     flex: 1,
+    alignItems: 'center',
   },
-  statValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#2D3748',
-    marginBottom: 2,
+  activeTab: {
+    backgroundColor: 'transparent',
   },
-  statLabel: {
+  tabText: {
     fontSize: 14,
     color: '#718096',
+    fontWeight: '500',
   },
-  statDivider: {
-    width: 1,
-    height: '70%',
-    backgroundColor: '#E2E8F0',
-    alignSelf: 'center',
+  activeTabText: {
+    color: '#1499D9',
+    fontWeight: '600',
   },
-  sectionDivider: {
-    height: 1,
-    backgroundColor: '#E2E8F0',
-    marginVertical: 24,
+  tabIndicator: {
+    height: 2,
+    backgroundColor: '#EDF2F7',
+    position: 'relative',
+  },
+  tabIndicatorBar: {
+    position: 'absolute',
+    height: '100%',
+    backgroundColor: '#1499D9',
   },
   voteItem: {
     position: 'relative',
@@ -830,6 +937,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
+    paddingHorizontal: 16,
   },
   reactionItem: { 
     flexDirection: 'row', 
@@ -837,14 +945,14 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 8,
   },
-  reactionIcon: { 
-    fontSize: 20, 
-    marginRight: 6,
-  },
   reactionText: { 
     fontSize: 14, 
     color: '#4A5568',
     fontWeight: '500',
+    marginLeft: 4,
+  },
+  activeReactionText: {
+    color: '#FF4B6E',
   },
   loaderContainer: {
     padding: 16,
@@ -885,6 +993,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalBackground: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  modalContainer: {
+    height: '75%',
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
   },
 });
 

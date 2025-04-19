@@ -11,6 +11,9 @@ import {
   Image,
   Alert,
   Dimensions,
+  Modal,
+  Pressable,
+  RefreshControl,
 } from "react-native"
 import { Feather} from '@expo/vector-icons'
 import Animated, { FadeInLeft, FadeIn } from "react-native-reanimated"
@@ -22,6 +25,7 @@ import { useIsFocused, useNavigation } from "@react-navigation/native"
 import type { StackNavigationProp } from "@react-navigation/stack"
 import type { RootStackParamList } from "../navigation/AppNavigator"
 import { jwtDecode } from "jwt-decode"
+import CommentScreen from "../screens/CommentScreen"
 
 import { SERVER_URL } from "../constant/config"
 
@@ -40,7 +44,10 @@ const MainScreen: React.FC = () => {
   const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({})
   const [currentUsername, setCurrentUsername] = useState<string | null>(null)
   const isFocused = useIsFocused()
-  const navigation = useNavigation<StackNavigationProp<RootStackParamList, "CommentScreen">>()
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>()
+  const [selectedVoteId, setSelectedVoteId] = useState<number | null>(null)
+  const [showCommentModal, setShowCommentModal] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => {
     const fetchUserFromToken = async () => {
@@ -157,6 +164,11 @@ const MainScreen: React.FC = () => {
       console.error("북마크 실패:", err)
       Alert.alert("에러", "북마크 처리 중 오류가 발생했습니다.")
     }
+  }
+
+  const handleCommentPress = (voteId: number) => {
+    setSelectedVoteId(voteId)
+    setShowCommentModal(true)
   }
 
   const renderItem = ({ item }: { item: VoteResponse }) => {
@@ -357,16 +369,25 @@ const MainScreen: React.FC = () => {
             onPress={() => handleToggleLike(item.voteId)}
             activeOpacity={0.7}
           >
-            <Text style={styles.reactionIcon}>{item.isLiked ? "❤️" : "🤍"}</Text>
-            <Text style={styles.reactionText}>{item.likeCount}</Text>
+            <Feather 
+              name={item.isLiked ? "heart" : "heart"} 
+              size={22} 
+              color={item.isLiked ? "#FF4B6E" : "#718096"} 
+            />
+            <Text style={[
+              styles.reactionText,
+              item.isLiked && styles.activeReactionText
+            ]}>
+              {item.likeCount}
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.reactionItem}
-            onPress={() => navigation.navigate("CommentScreen", { voteId: item.voteId })}
+            onPress={() => handleCommentPress(item.voteId)}
             activeOpacity={0.7}
           >
-            <Text style={styles.reactionIcon}>💬</Text>
+            <Feather name="message-circle" size={22} color="#718096" />
             <Text style={styles.reactionText}>{item.commentCount}</Text>
           </TouchableOpacity>
 
@@ -375,15 +396,28 @@ const MainScreen: React.FC = () => {
             onPress={() => handleToggleBookmark(item.voteId)}
             activeOpacity={0.7}
           >
-            <Text style={styles.reactionIcon}>{item.isBookmarked ? "🔖" : "📄"}</Text>
+            <Feather 
+              name={item.isBookmarked ? "bookmark" : "bookmark"} 
+              size={22} 
+              color={item.isBookmarked ? "#1499D9" : "#718096"} 
+            />
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.reactionItem} activeOpacity={0.7}>
-            <Text style={styles.reactionIcon}>📊</Text>
+            <Feather name="bar-chart-2" size={22} color="#718096" />
           </TouchableOpacity>
         </View>
       </Animated.View>
     )
+  }
+
+  const onRefresh = async () => {
+    setRefreshing(true)
+    setVotes([])
+    setPage(0)
+    setIsLast(false)
+    await fetchVotes(0)
+    setRefreshing(false)
   }
 
   return (
@@ -396,6 +430,16 @@ const MainScreen: React.FC = () => {
         ListHeaderComponent={renderHeader}
         onEndReached={() => fetchVotes(page)}
         onEndReachedThreshold={0.5}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#1499D9"]}
+            tintColor="#1499D9"
+            title="새로고침 중..."
+            titleColor="#718096"
+          />
+        }
         ListFooterComponent={
           loading ? (
             <View style={styles.loaderContainer}>
@@ -406,6 +450,42 @@ const MainScreen: React.FC = () => {
         }
         showsVerticalScrollIndicator={false}
       />
+
+      {showCommentModal && selectedVoteId && (
+        <Modal
+          visible={showCommentModal}
+          transparent
+          statusBarTranslucent
+          animationType="slide"
+          onRequestClose={() => {
+            refreshVote(selectedVoteId)
+            setShowCommentModal(false)
+            setSelectedVoteId(null)
+          }}
+        >
+          <View style={styles.modalOverlay}>
+            <Pressable 
+              style={styles.modalBackground}
+              onPress={async () => {
+                await refreshVote(selectedVoteId)
+                setShowCommentModal(false)
+                setSelectedVoteId(null)
+              }}
+            >
+              <View style={styles.modalBackdrop} />
+            </Pressable>
+            <View style={styles.modalContainer}>
+              <CommentScreen
+                route={{
+                  params: {
+                    voteId: selectedVoteId
+                  }
+                }}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   )
 }
@@ -643,14 +723,14 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 8,
   },
-  reactionIcon: {
-    fontSize: 20,
-    marginRight: 6,
-  },
   reactionText: {
     fontSize: 14,
     color: "#4A5568",
     fontWeight: "500",
+    marginLeft: 6,
+  },
+  activeReactionText: {
+    color: "#FF4B6E",
   },
   loaderContainer: {
     padding: 16,
@@ -660,6 +740,25 @@ const styles = StyleSheet.create({
     marginTop: 8,
     color: "#1499D9",
     fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalBackground: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  modalContainer: {
+    height: '75%',
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
   },
 })
 

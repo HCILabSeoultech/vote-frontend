@@ -57,6 +57,7 @@ const SignupStep2Screen: React.FC<Props> = ({ navigation, route }) => {
   const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
   const [address, setAddress] = useState('');
   const [showAddressPicker, setShowAddressPicker] = useState(false);
+  const [tempBirthdate, setTempBirthdate] = useState(new Date());
 
   useEffect(() => {
     (async () => {
@@ -151,6 +152,17 @@ const SignupStep2Screen: React.FC<Props> = ({ navigation, route }) => {
     return `${year}년 ${month}월 ${day}일`;
   };
 
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    if (selectedDate) {
+      setTempBirthdate(selectedDate);
+    }
+  };
+
+  const handleDateConfirm = () => {
+    setBirthdate(tempBirthdate);
+    setShowDatePicker(false);
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
@@ -224,16 +236,29 @@ const SignupStep2Screen: React.FC<Props> = ({ navigation, route }) => {
                 <Text style={styles.datePickerText}>{formatDate(birthdate)}</Text>
               </TouchableOpacity>
               {showDatePicker && (
-                <DateTimePicker
-                  value={birthdate}
-                  mode="date"
-                  display="spinner"
-                  onChange={(e, selectedDate) => {
-                    if (selectedDate) setBirthdate(selectedDate);
-                    setShowDatePicker(Platform.OS === 'ios');
-                  }}
-                  maximumDate={new Date()}
-                />
+                <View style={styles.datePickerContainer}>
+                  <DateTimePicker
+                    value={tempBirthdate}
+                    mode="date"
+                    display="spinner"
+                    onChange={handleDateChange}
+                    maximumDate={new Date()}
+                  />
+                  <View style={styles.datePickerButtons}>
+                    <TouchableOpacity 
+                      style={styles.datePickerCancelButton} 
+                      onPress={() => setShowDatePicker(false)}
+                    >
+                      <Text style={styles.datePickerCancelText}>취소</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={styles.datePickerConfirmButton} 
+                      onPress={handleDateConfirm}
+                    >
+                      <Text style={styles.datePickerConfirmText}>확인</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
               )}
             </View>
 
@@ -323,16 +348,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   header: {
-    marginBottom: 32,
+    marginBottom: 24,
     alignItems: 'center',
   },
   progressContainer: {
     width: '100%',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   progressBar: {
-    width: '100%',
+    width: '80%',
     height: 6,
     backgroundColor: '#F0F4FF',
     borderRadius: 3,
@@ -348,22 +373,22 @@ const styles = StyleSheet.create({
   progressText: {
     fontSize: 14,
     color: '#718096',
-    fontWeight: '500',
+    letterSpacing: 0.5,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#1A202C',
+    color: '#1499D9',
     marginBottom: 8,
-    textAlign: 'center',
+    letterSpacing: 1,
   },
   subtitle: {
     fontSize: 16,
     color: '#718096',
-    textAlign: 'center',
+    letterSpacing: 0.5,
   },
   formContainer: {
-    marginBottom: 24,
+    marginBottom: 40,
   },
   imageContainer: {
     alignItems: 'center',
@@ -375,11 +400,11 @@ const styles = StyleSheet.create({
     borderRadius: 60,
     borderWidth: 4,
     borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowColor: '#1499D9',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
   placeholder: {
     width: 120,
@@ -394,25 +419,26 @@ const styles = StyleSheet.create({
   },
   placeholderText: {
     color: '#718096',
-    fontSize: 14,
+    fontSize: 12,
     textAlign: 'center',
     paddingHorizontal: 10,
+    letterSpacing: 0.5,
   },
   removeButton: {
     position: 'absolute',
     top: -5,
     right: -5,
-    backgroundColor: '#F56565',
+    backgroundColor: '#FF5252',
     borderRadius: 12,
     width: 24,
     height: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#F56565',
-    shadowOffset: { width: 0, height: 2 },
+    shadowColor: '#FF5252',
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   removeText: {
     color: 'white',
@@ -420,21 +446,23 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: 12,
   },
   inputLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#2D3748',
+    color: '#1A202C',
     marginBottom: 8,
+    letterSpacing: 0.5,
   },
   inputField: {
     backgroundColor: '#F7FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 12,
+    borderRadius: 16,
     height: 56,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
+    fontSize: 16,
   },
   genderContainer: {
     flexDirection: 'row',
@@ -448,7 +476,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 12,
+    borderRadius: 16,
     backgroundColor: '#F7FAFC',
   },
   genderButtonSelected: {
@@ -456,7 +484,7 @@ const styles = StyleSheet.create({
     borderColor: '#1499D9',
     shadowColor: '#1499D9',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 4,
   },
@@ -464,6 +492,7 @@ const styles = StyleSheet.create({
     color: '#718096',
     fontSize: 14,
     fontWeight: '600',
+    letterSpacing: 0.5,
   },
   genderTextSelected: {
     color: 'white',
@@ -471,37 +500,39 @@ const styles = StyleSheet.create({
   datePickerButton: {
     height: 56,
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     backgroundColor: '#F7FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 12,
+    borderRadius: 16,
   },
   datePickerText: {
-    color: '#2D3748',
-    fontSize: 14,
+    color: '#1A202C',
+    fontSize: 16,
+    letterSpacing: 0.5,
   },
   addressPickerButton: {
     height: 56,
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     backgroundColor: '#F7FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 12,
+    borderRadius: 16,
   },
   addressPickerText: {
-    color: '#2D3748',
-    fontSize: 14,
+    color: '#1A202C',
+    fontSize: 16,
+    letterSpacing: 0.5,
   },
   buttonContainer: {
-    marginTop: 16,
+    marginTop: 8,
   },
   nextButton: {
-    backgroundColor: '#5E72E4',
+    backgroundColor: '#1499D9',
     height: 56,
-    borderRadius: 12,
-    shadowColor: '#5E72E4',
+    borderRadius: 16,
+    shadowColor: '#1499D9',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -510,17 +541,18 @@ const styles = StyleSheet.create({
   nextButtonText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    letterSpacing: 1,
   },
   backButton: {
-    paddingVertical: 16,
+    paddingVertical: 12,
     alignItems: 'center',
     marginTop: 12,
   },
   backButtonText: {
     color: '#718096',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
+    letterSpacing: 0.5,
   },
   modalOverlay: {
     flex: 1,
@@ -529,15 +561,15 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     backgroundColor: 'white',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     maxHeight: '70%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
   },
@@ -545,24 +577,69 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1A202C',
+    letterSpacing: 0.5,
   },
   modalCloseText: {
     fontSize: 16,
-    color: '#5E72E4',
+    color: '#1499D9',
     fontWeight: '600',
+    letterSpacing: 0.5,
   },
   regionItem: {
-    padding: 16,
+    padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
   },
   regionItemText: {
     fontSize: 16,
-    color: '#2D3748',
+    color: '#1A202C',
+    letterSpacing: 0.5,
   },
   selectedRegionText: {
-    color: '#5E72E4',
+    color: '#1499D9',
     fontWeight: 'bold',
+  },
+  datePickerContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginTop: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  datePickerButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  datePickerCancelButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#F7FAFC',
+  },
+  datePickerCancelText: {
+    color: '#718096',
+    fontSize: 14,
+    fontWeight: '500',
+    letterSpacing: 0.5,
+  },
+  datePickerConfirmButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#1499D9',
+  },
+  datePickerConfirmText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
 });
 

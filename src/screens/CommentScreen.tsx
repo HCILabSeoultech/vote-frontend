@@ -1,6 +1,10 @@
 import React, { useEffect, useState, useRef } from "react"
 import { jwtDecode } from "jwt-decode"
 import { Alert } from "react-native"
+import { Feather } from "@expo/vector-icons"
+import { useNavigation, useRoute } from "@react-navigation/native"
+import type { StackNavigationProp } from "@react-navigation/stack"
+import type { RootStackParamList } from "../navigation/AppNavigator"
 
 import {
   View,
@@ -14,19 +18,31 @@ import {
   SafeAreaView,
   ScrollView,
   ActivityIndicator,
+  Dimensions,
+  Modal,
+  Pressable,
 } from "react-native"
-import { useRoute } from "@react-navigation/native"
 import { fetchComments, postComment, editComment, deleteComment } from "../api/comment"
 import { toggleCommentLike } from "../api/commentLike"
 import type { Comment } from "../types/Comment"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import { SERVER_URL } from "../constant/config"
-import Animated, { FadeIn } from "react-native-reanimated"
-import { useNavigation } from "@react-navigation/native"
-import type { StackNavigationProp } from "@react-navigation/stack"
-import type { RootStackParamList } from "../navigation/AppNavigator"
+import Animated, { 
+  FadeIn, 
+  useAnimatedStyle, 
+  useSharedValue, 
+  withSpring, 
+  withTiming,
+  runOnJS,
+  interpolate,
+  Extrapolate
+} from "react-native-reanimated"
+import { Gesture, GestureDetector } from "react-native-gesture-handler"
+import { RouteProp } from "@react-navigation/native"
 
 const IMAGE_BASE_URL = `${SERVER_URL}`
+const { height: SCREEN_HEIGHT } = Dimensions.get('window')
+const MODAL_HEIGHT = SCREEN_HEIGHT * 0.8
 
 interface JwtPayload {
   sub: string
@@ -45,33 +61,82 @@ interface CommentPage {
   number: number
 }
 
-const CommentScreen = () => {
-  const route = useRoute()
-  const { voteId } = route.params as { voteId: number }
-  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>()
+type CommentScreenNavigationProp = StackNavigationProp<RootStackParamList, 'CommentScreen'>
+type CommentScreenRouteProp = RouteProp<RootStackParamList, 'CommentScreen'>
 
-  const [comments, setComments] = useState<Comment[]>([])
-  const [page, setPage] = useState(0)
-  const [hasMoreComments, setHasMoreComments] = useState(true)
-  const [input, setInput] = useState("")
-  const [replyTo, setReplyTo] = useState<number | null>(null)
-  const [currentUsername, setCurrentUsername] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [expandedComments, setExpandedComments] = useState<Record<number, boolean>>({})
-  const [newComment, setNewComment] = useState<Comment | null>(null)
+type CommentScreenProps = {
+  route: {
+    params: {
+      voteId: number;
+    };
+  };
+};
 
-  const [editingCommentId, setEditingCommentId] = useState<number | null>(null)
-  const [editedContent, setEditedContent] = useState("")
+const CommentScreen = ({ route }: CommentScreenProps) => {
+  const { voteId } = route.params;
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [page, setPage] = useState(0);
+  const [hasMoreComments, setHasMoreComments] = useState(true);
+  const [input, setInput] = useState("");
+  const [replyTo, setReplyTo] = useState<number | null>(null);
+  const [currentUsername, setCurrentUsername] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [expandedComments, setExpandedComments] = useState<Record<number, boolean>>({});
+  const [newComment, setNewComment] = useState<Comment | null>(null);
 
-  const [expandedReplies, setExpandedReplies] = useState<Record<number, number>>({})
-  const [replyPages, setReplyPages] = useState<Record<number, number>>({})
+  const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
+  const [editedContent, setEditedContent] = useState("");
 
-  const scrollViewRef = useRef<ScrollView>(null)
-  const replyInputRefs = useRef<Record<number, View>>({})
+  const [expandedReplies, setExpandedReplies] = useState<Record<number, number>>({});
+  const [replyPages, setReplyPages] = useState<Record<number, number>>({});
 
-  const [replyInputStates, setReplyInputStates] = useState<Record<number, boolean>>({})
-  const [replyInputs, setReplyInputs] = useState<Record<number, string>>({})
+  const scrollViewRef = useRef<ScrollView>(null);
+  const replyInputRefs = useRef<Record<number, View>>({});
+
+  const [replyInputStates, setReplyInputStates] = useState<Record<number, boolean>>({});
+  const [replyInputs, setReplyInputs] = useState<Record<number, string>>({});
+
+  const translateY = useSharedValue(0);
+  const context = useSharedValue({ y: 0 });
+  const [isVisible, setIsVisible] = useState(true);
+
+  const gesture = Gesture.Pan()
+    .onStart(() => {
+      context.value = { y: translateY.value }
+    })
+    .onUpdate((event) => {
+      translateY.value = event.translationY + context.value.y
+    })
+    .onEnd(() => {
+      if (translateY.value > MODAL_HEIGHT * 0.3) {
+        translateY.value = withSpring(MODAL_HEIGHT, {}, () => {
+          runOnJS(setIsVisible)(false)
+          runOnJS(handleClose)()
+        })
+      } else {
+        translateY.value = withSpring(0)
+      }
+    })
+
+  const rStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateY: translateY.value }],
+      borderTopLeftRadius: interpolate(
+        translateY.value,
+        [0, MODAL_HEIGHT],
+        [20, 0],
+        Extrapolate.CLAMP
+      ),
+      borderTopRightRadius: interpolate(
+        translateY.value,
+        [0, MODAL_HEIGHT],
+        [20, 0],
+        Extrapolate.CLAMP
+      ),
+    }
+  })
 
   const handleScroll = (event: any) => {
     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent
@@ -348,6 +413,11 @@ const CommentScreen = () => {
     }
   }
 
+  const handleUserPress = (userId: number) => {
+    handleClose()
+    navigation.navigate('UserPageScreen', { userId })
+  }
+
   const renderCommentItem = (item: Comment, indent = 0, index = 0, isBestComment = false) => {
     const isDefault = item.profileImage === "default.jpg"
     const imageUrl = isDefault ? `${IMAGE_BASE_URL}/images/default.jpg` : `${IMAGE_BASE_URL}${item.profileImage}`
@@ -384,7 +454,7 @@ const CommentScreen = () => {
             <View style={styles.commentHeader}>
               <View style={styles.userInfo}>
                 <TouchableOpacity
-                  onPress={() => navigation.navigate("UserPageScreen", { userId: item.userId })}
+                  onPress={() => handleUserPress(item.userId)}
                   activeOpacity={0.7}
                 >
                   <Text style={styles.username}>{item.username}</Text>
@@ -603,23 +673,36 @@ const CommentScreen = () => {
 
   const replyingToUser = replyTo ? comments.find((c) => c.id === replyTo)?.username : null
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
-      >
-        <ScrollView
-          ref={scrollViewRef}
-          contentContainerStyle={styles.commentList}
-          showsVerticalScrollIndicator={false}
-          onScroll={handleScroll}
-          scrollEventThrottle={100}
-        >
-          {renderAllComments()}
-        </ScrollView>
+  const handleClose = () => {
+    navigation.goBack();
+  };
 
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <View style={styles.backButton} />
+        <Text style={styles.headerTitle}>댓글</Text>
+        <View style={styles.backButton} />
+      </View>
+
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.scrollView}
+        contentContainerStyle={styles.commentList}
+        showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={100}
+        keyboardDismissMode="on-drag"
+      >
+        {renderAllComments()}
+        <View style={{ height: 120 }} />
+      </ScrollView>
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "position" : "padding"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 200 : 120}
+        style={styles.keyboardView}
+      >
         {replyTo && (
           <View style={styles.replyingContainer}>
             <View style={styles.replyingBadge}>
@@ -657,49 +740,94 @@ const CommentScreen = () => {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F7FAFC",
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    zIndex: 10,
+  },
+  backButton: {
+    padding: 8,
+    width: 40,
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#2D3748',
+    textAlign: 'center',
   },
   commentList: {
-    padding: 16,
-    paddingBottom: 100,
+    padding: 12,
+    paddingBottom: 80,
+  },
+  keyboardView: {
+    width: '100%',
+    backgroundColor: '#F7FAFC',
+    borderTopWidth: 1,
+    borderColor: '#E2E8F0',
+    position: 'absolute',
+    bottom: 30,
+    left: 0,
+    right: 0,
+  },
+  inputContainer: {
+    flexDirection: "row",
+    padding: 8,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    backgroundColor: "#F7FAFC",
+    borderRadius: 20,
+    marginHorizontal: 8,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  input: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    fontSize: 14,
+    maxHeight: 80,
+    color: "#2D3748",
+    minHeight: 36,
   },
   commentItem: {
     flexDirection: "row",
-    marginBottom: 16,
+    marginBottom: 12,
     alignItems: "flex-start",
     position: "relative",
   },
-  bestCommentItem: {
-    marginTop: 8,
-    marginBottom: 24,
-  },
-  bestCommentBadge: {
-    position: "absolute",
-    top: -10,
-    left: 40,
-    backgroundColor: "#1499D9",
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 12,
-    zIndex: 1,
-  },
-  bestCommentText: {
-    color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "700",
-  },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginRight: 8,
     backgroundColor: "#E2E8F0",
     borderWidth: 1,
     borderColor: "#E2E8F0",
@@ -707,24 +835,17 @@ const styles = StyleSheet.create({
   commentContent: {
     flex: 1,
     backgroundColor: "#FFFFFF",
-    padding: 14,
-    borderRadius: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  bestCommentContent: {
-    backgroundColor: "#FFFAF0",
+    padding: 10,
+    paddingBottom: 8,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#F6AD55",
+    borderColor: "#E2E8F0",
   },
   commentHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 4,
   },
   userInfo: {
     flexDirection: "row",
@@ -733,35 +854,35 @@ const styles = StyleSheet.create({
   username: {
     fontWeight: "600",
     color: "#2D3748",
-    fontSize: 15,
+    fontSize: 13,
   },
   authorBadge: {
     backgroundColor: "#EBF8FF",
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 10,
-    marginLeft: 8,
+    borderRadius: 8,
+    marginLeft: 6,
   },
   authorBadgeText: {
     color: "#3182CE",
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "500",
   },
   timestamp: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#718096",
     fontWeight: "500",
   },
   commentText: {
-    fontSize: 15,
+    fontSize: 14,
     color: "#4A5568",
-    lineHeight: 22,
+    lineHeight: 18,
   },
   actionRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 12,
+    marginTop: 6,
   },
   likeContainer: {
     flexDirection: "row",
@@ -770,109 +891,48 @@ const styles = StyleSheet.create({
   likeButton: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 12,
+    paddingVertical: 2,
+    paddingHorizontal: 4,
   },
   heart: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#A0AEC0",
-    marginRight: 6,
+    marginRight: 4,
   },
   liked: {
     color: "#F56565",
   },
   likeCount: {
-    fontSize: 13,
+    fontSize: 12,
     color: "#4A5568",
     fontWeight: "500",
   },
-  actionButtons: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
   actionButton: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-  },
-  commentActions: {
-    flexDirection: "row",
-    alignItems: "center",
+    paddingVertical: 2,
+    paddingHorizontal: 6,
   },
   replyText: {
-    fontSize: 13,
+    fontSize: 12,
     color: "#1499D9",
     fontWeight: "500",
-  },
-  viewRepliesText: {
-    fontSize: 13,
-    color: "#718096",
-    fontWeight: "500",
-  },
-  editText: {
-    fontSize: 13,
-    color: "#1499D9",
-    fontWeight: "500",
-  },
-  deleteText: {
-    fontSize: 13,
-    color: "#F56565",
-    fontWeight: "500",
-  },
-  saveText: {
-    fontSize: 13,
-    color: "#38B2AC",
-    fontWeight: "500",
-  },
-  cancelText: {
-    fontSize: 13,
-    color: "#718096",
-    fontWeight: "500",
-  },
-  editInput: {
-    backgroundColor: "#EDF2F7",
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 15,
-    color: "#2D3748",
-    minHeight: 80,
-    textAlignVertical: "top",
-  },
-  inputContainer: {
-    flexDirection: "row",
-    padding: 8,
-    borderTopWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#FFFFFF",
-    alignItems: "flex-end",
-  },
-  input: {
-    flex: 1,
-    backgroundColor: "#EDF2F7",
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    fontSize: 15,
-    maxHeight: 100,
-    color: "#2D3748",
   },
   postButton: {
     justifyContent: "center",
-    marginLeft: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    marginLeft: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 16,
   },
   postButtonActive: {
     backgroundColor: "#1499D9",
   },
   postButtonInactive: {
-    backgroundColor: "#EDF2F7",
+    backgroundColor: "transparent",
   },
   postButtonText: {
     fontWeight: "600",
     fontSize: 14,
+    textAlign: "center",
   },
   postButtonTextActive: {
     color: "#FFFFFF",
@@ -886,6 +946,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     backgroundColor: "#EDF2F7",
+    marginBottom: 8,
   },
   replyingBadge: {
     backgroundColor: "#5E72E4",
@@ -992,6 +1053,72 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '500',
+  },
+  bestCommentItem: {
+    marginTop: 8,
+    marginBottom: 24,
+  },
+  bestCommentBadge: {
+    position: "absolute",
+    top: -10,
+    left: 40,
+    backgroundColor: "#1499D9",
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 12,
+    zIndex: 1,
+  },
+  bestCommentText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  bestCommentContent: {
+    backgroundColor: "#FFFAF0",
+    borderWidth: 1,
+    borderColor: "#F6AD55",
+  },
+  editInput: {
+    backgroundColor: "#EDF2F7",
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 15,
+    color: "#2D3748",
+    minHeight: 80,
+    textAlignVertical: "top",
+  },
+  actionButtons: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  commentActions: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  saveText: {
+    fontSize: 13,
+    color: "#38B2AC",
+    fontWeight: "500",
+  },
+  editText: {
+    fontSize: 13,
+    color: "#1499D9",
+    fontWeight: "500",
+  },
+  deleteText: {
+    fontSize: 13,
+    color: "#F56565",
+    fontWeight: "500",
+  },
+  viewRepliesText: {
+    fontSize: 13,
+    color: "#718096",
+    fontWeight: "500",
+  },
+  cancelText: {
+    fontSize: 13,
+    color: "#718096",
+    fontWeight: "500",
   },
 })
 

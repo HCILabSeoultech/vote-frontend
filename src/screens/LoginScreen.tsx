@@ -61,11 +61,7 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
           <View style={styles.logoContainer}>
             <View style={styles.logoCircle}>
               <View style={styles.logoInnerCircle}>
-              <View style={styles.logoCircle}>
-                <View style={styles.logoInnerCircle}>
-                  <Logo width={100} height={100} />
-                </View>
-              </View>
+                <Logo width={100} height={100} />
               </View>
             </View>
             <Text style={styles.title}>VOTY</Text>
@@ -138,80 +134,91 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
-    marginTop: 80,
-    marginBottom: 0,
+    marginTop: 60,
+    marginBottom: 40,
   },
   logoCircle: {
-    width: 60,
-    height: 60,
+    width: 120,
+    height: 120,
     borderRadius: 60,
     backgroundColor: '#F0F4FF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
-    shadowColor: '#5E72E4',
+    marginBottom: 24,
+    shadowColor: '#1499D9',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  logoInnerCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#1499D9',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
   },
-  logoInnerCircle: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  // logoImage: {
-  //   width: 100,
-  //   height: 100,
-  // },
-  // logoText: {
-  //   color: 'white',
-  //   fontSize: 24,
-  //   fontWeight: 'bold',
-  // },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
     color: '#1499D9',
     marginBottom: 8,
+    letterSpacing: 1,
   },
   subtitle: {
     fontSize: 16,
     color: '#718096',
+    letterSpacing: 0.5,
   },
   formContainer: {
     width: '100%',
-    marginTop: -40,
+    marginBottom: 40,
   },
   inputGroup: {
-    marginBottom: 0,
+    marginBottom: 12,
   },
   inputField: {
     backgroundColor: '#F7FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 12,
+    borderRadius: 16,
     height: 56,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
+    fontSize: 16,
   },
   loginButton: {
-    backgroundColor: '#3182CE',
+    backgroundColor: '#1499D9',
     height: 56,
-    borderRadius: 12,
+    borderRadius: 16,
     marginTop: 24,
+    shadowColor: '#1499D9',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   loginButtonText: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#FFFFFF',
+    letterSpacing: 1,
   },
   findAccountButton: {
-    marginTop: 16,
+    marginTop: 20,
     alignItems: 'center',
+    paddingVertical: 8,
   },
   findAccountText: {
     color: '#718096',
     fontSize: 14,
     fontWeight: '500',
+    letterSpacing: 0.5,
   },
   footerContainer: {
     marginBottom: 24,
@@ -221,15 +228,19 @@ const styles = StyleSheet.create({
     color: '#718096',
     fontSize: 14,
     marginBottom: 8,
+    letterSpacing: 0.5,
   },
   signupButton: {
     paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
+    backgroundColor: '#F0F4FF',
+    borderRadius: 12,
   },
   signupText: {
     color: '#1499D9',
     fontSize: 16,
     fontWeight: '600',
+    letterSpacing: 0.5,
   },
 });
 
