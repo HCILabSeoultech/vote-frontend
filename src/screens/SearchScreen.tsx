@@ -23,7 +23,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage"
 import { getTopLikedVotes, getVoteById, selectVoteOption, getVotesByCategory } from "../api/post"
 import { toggleLike, toggleBookmark } from "../api/reaction"
 import { searchUsers, searchVotes } from "../api/search"
-import type { VoteResponse } from "../types/Vote"
+import type { VoteResponse, SearchVoteResponse, VoteOption } from "../types/Vote"
 import type { UserDocument } from "../types/UserData"
 import { useNavigation } from "@react-navigation/native"
 import type { StackNavigationProp } from "@react-navigation/stack"
@@ -55,6 +55,7 @@ const sortOptions = [
 const SearchScreen: React.FC = () => {
   const [votes, setVotes] = useState<VoteResponse[]>([])
   const [userResults, setUserResults] = useState<UserDocument[]>([])
+  const [searchResults, setSearchResults] = useState<SearchVoteResponse[]>([])
   const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({})
   const [searchKeyword, setSearchKeyword] = useState("")
   const [searchType, setSearchType] = useState<"vote" | "user">("vote")
@@ -83,7 +84,7 @@ const SearchScreen: React.FC = () => {
 
   const fetchVotes = async () => {
     try {
-      const res = await getTopLikedVotes()
+      const res = await getTopLikedVotes(30)
       setVotes(res)
     } catch (err) {
       console.error("인기 투표 불러오기 실패:", err)
@@ -92,7 +93,7 @@ const SearchScreen: React.FC = () => {
 
   const fetchCategoryVotes = async (categoryId: number) => {
     try {
-      const res = await getVotesByCategory(categoryId)
+      const res = await getVotesByCategory(categoryId, 0, 30)
       if (res && res.content) {
         setVotes(res.content)
       }
@@ -145,6 +146,7 @@ const SearchScreen: React.FC = () => {
     setSearchKeyword(text)
     if (text.trim() === "") {
       setUserResults([])
+      setSearchResults([])
       if (selectedCategory === 0) {
         fetchVotes()
       } else {
@@ -157,7 +159,7 @@ const SearchScreen: React.FC = () => {
     try {
       if (searchType === "vote") {
         const res = await searchVotes(text)
-        setVotes(res)
+        setSearchResults(res)
       } else {
         const users = await searchUsers(text)
         setUserResults(users)
@@ -263,36 +265,36 @@ const SearchScreen: React.FC = () => {
     return option ? option.name : '좋아요순';
   };
 
-  const renderVoteItem = ({ item, index }: { item: VoteResponse; index: number }) => {
-    if (searchKeyword.trim() !== "") {
-      return (
-        <Animated.View 
-          entering={FadeIn.duration(300).delay(index * 50)}
-          style={styles.itemShadow}
+  const renderSearchResultItem = ({ item, index }: { item: SearchVoteResponse; index: number }) => {
+    return (
+      <Animated.View 
+        entering={FadeIn.duration(300).delay(index * 50)}
+        style={styles.itemShadow}
+      >
+        <TouchableOpacity
+          style={styles.simpleVoteItem}
+          onPress={() => navigation.navigate("SingleVoteScreen", { voteId: item.id })}
+          activeOpacity={0.7}
         >
-          <TouchableOpacity
-            style={styles.simpleVoteItem}
-            onPress={() => navigation.navigate("SingleVoteScreen", { voteId: item.voteId })}
-            activeOpacity={0.7}
-          >
-            <View style={styles.simpleVoteContent}>
-              <View style={styles.simpleVoteInfo}>
-                <View style={styles.voteHeader}>
-                  <Text style={styles.simpleTitle} numberOfLines={2}>{item.title}</Text>
-                  <View style={styles.categoryBadge}>
-                    <Text style={styles.categoryText}>{item.categoryName}</Text>
-                  </View>
-                </View>
-                <View style={styles.authorInfo}>
-                  <Text style={styles.authorName}>{item.username}</Text>
+          <View style={styles.simpleVoteContent}>
+            <View style={styles.simpleVoteInfo}>
+              <View style={styles.voteHeader}>
+                <Text style={styles.simpleTitle} numberOfLines={2}>{item.title}</Text>
+                <View style={styles.categoryBadge}>
+                  <Text style={styles.categoryText}>{item.category}</Text>
                 </View>
               </View>
+              <View style={styles.authorInfo}>
+                <Text style={styles.authorName}>{item.username}</Text>
+              </View>
             </View>
-          </TouchableOpacity>
-        </Animated.View>
-      );
-    }
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  };
 
+  const renderVoteItem = ({ item, index }: { item: VoteResponse; index: number }) => {
     return (
       <Animated.View 
         entering={FadeIn.duration(300).delay(index * 50)}
@@ -341,7 +343,7 @@ const SearchScreen: React.FC = () => {
                   <View style={styles.statItem}>
                     <Feather name="users" size={14} color="#718096" />
                     <Text style={styles.statText}>
-                      {item.voteOptions?.reduce((sum, opt) => sum + (opt.voteCount || 0), 0) || 0}
+                      {item.voteOptions?.reduce((sum: number, opt: VoteOption) => sum + (opt.voteCount || 0), 0) || 0}
                     </Text>
                   </View>
                   <View style={styles.statItem}>
@@ -363,7 +365,7 @@ const SearchScreen: React.FC = () => {
         </TouchableOpacity>
       </Animated.View>
     );
-  }
+  };
 
   const renderEmptyResults = () => {
     if (loading) return null
@@ -434,7 +436,7 @@ const SearchScreen: React.FC = () => {
           </View>
         </View>
 
-        {searchKeyword.trim() === "" && searchType === "vote" && (
+        {searchType === "vote" && searchKeyword.trim() === "" && (
           <View style={styles.filterContainer}>
             <View style={styles.filterRow}>
               <TouchableOpacity
@@ -587,10 +589,19 @@ const SearchScreen: React.FC = () => {
           ListEmptyComponent={renderEmptyResults}
           showsVerticalScrollIndicator={false}
         />
+      ) : searchKeyword.trim() !== "" ? (
+        <FlatList
+          data={searchResults}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderSearchResultItem}
+          contentContainerStyle={[styles.container, searchResults.length === 0 && styles.emptyListContainer]}
+          ListEmptyComponent={renderEmptyResults}
+          showsVerticalScrollIndicator={false}
+        />
       ) : (
         <FlatList
           data={getSortedVotes(getFilteredVotes())}
-          keyExtractor={(item, index) => (item?.voteId !== undefined ? item.voteId.toString() : `vote-${index}`)}
+          keyExtractor={(item) => item.voteId.toString()}
           renderItem={renderVoteItem}
           contentContainerStyle={[styles.container, votes.length === 0 && styles.emptyListContainer]}
           ListEmptyComponent={renderEmptyResults}

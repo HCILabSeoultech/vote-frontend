@@ -55,4 +55,11 @@ export type VotePageResponse = {
   last: boolean;
   number: number;
 };
+
+export interface SearchVoteResponse {
+  id: number;
+  title: string;
+  username: string;
+  category: string;
+}
   

@@ -785,9 +785,10 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: '#E2E8F0',
     position: 'absolute',
-    bottom: 30,
+    bottom: 0,
     left: 0,
     right: 0,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 0,
   },
   inputContainer: {
     flexDirection: "row",

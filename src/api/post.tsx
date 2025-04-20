@@ -107,7 +107,7 @@ export const getVoteById = async (voteId: number): Promise<VoteResponse> => {
 };
 
 //좋아요 개수 Top10
-export const getTopLikedVotes = async (): Promise<VoteResponse[]> => {
+export const getTopLikedVotes = async (size: number = 30): Promise<VoteResponse[]> => {
   const token = await AsyncStorage.getItem('token');
   if (!token) throw new Error('JWT 토큰이 없습니다.');
 
@@ -115,13 +115,16 @@ export const getTopLikedVotes = async (): Promise<VoteResponse[]> => {
     headers: {
       Authorization: `Bearer ${token}`,
     },
+    params: {
+      size
+    }
   });
 
   return response.data;
 };
 
 //카테고리별 인기글
-export const getVotesByCategory = async (categoryId: number, page: number = 0, size: number = 10): Promise<{ content: VoteResponse[]; last: boolean; number: number }> => {
+export const getVotesByCategory = async (categoryId: number, page: number = 0, size: number = 30): Promise<{ content: VoteResponse[]; last: boolean; number: number }> => {
   const token = await AsyncStorage.getItem('token');
   const response = await axios.get(`${API_URL}/category/${categoryId}`, {
     headers: {
