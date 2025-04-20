@@ -13,6 +13,7 @@ import {
   Modal,
   Pressable,
   RefreshControl,
+  ScrollView,
 } from 'react-native';
 import Animated, { FadeInLeft, FadeIn } from 'react-native-reanimated';
 import { getStoragePosts } from '../api/storage';
@@ -24,6 +25,9 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { Feather } from '@expo/vector-icons'
 import CommentScreen from '../screens/CommentScreen';
+import RegionStatistics from '../components/statistics/RegionStatistics';
+import AgeStatistics from '../components/statistics/AgeStatistics';
+import GenderStatistics from '../components/statistics/GenderStatistics';
 
 const STORAGE_TYPES = [
   { label: '참여한 투표', value: 'voted', count: 0 },
@@ -55,6 +59,9 @@ const StorageScreen: React.FC = () => {
     liked: 0,
     bookmarked: 0
   });
+  const [showStatisticsModal, setShowStatisticsModal] = useState(false);
+  const [selectedVoteForStats, setSelectedVoteForStats] = useState<number | null>(null);
+  const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('region');
 
   const handleTabChange = (value: StorageType) => {
     setStorageType(value);
@@ -172,6 +179,19 @@ const StorageScreen: React.FC = () => {
   const handleCommentPress = (voteId: number) => {
     setSelectedVoteId(voteId);
     setShowCommentModal(true);
+  };
+
+  const handleStatisticsPress = (voteId: number) => {
+    const vote = votes.find(v => v.voteId === voteId);
+    const totalCount = vote?.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0) || 0;
+    
+    if (totalCount === 0) {
+      Alert.alert('알림', '투표 데이터가 없습니다.');
+      return;
+    }
+    
+    setSelectedVoteForStats(voteId);
+    setShowStatisticsModal(true);
   };
 
   const renderItem = ({ item, index }: { item: VoteResponse; index: number }) => {
@@ -378,7 +398,11 @@ const StorageScreen: React.FC = () => {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.reactionItem} activeOpacity={0.7}>
+          <TouchableOpacity 
+            style={styles.reactionItem} 
+            onPress={() => handleStatisticsPress(item.voteId)}
+            activeOpacity={0.7}
+          >
             <Feather name="bar-chart-2" size={22} color="#718096" />
           </TouchableOpacity>
         </View>
@@ -506,7 +530,7 @@ const StorageScreen: React.FC = () => {
           statusBarTranslucent
           animationType="slide"
           onRequestClose={() => {
-            refreshVote(selectedVoteId);
+            refreshVote(selectedVoteId!);
             setShowCommentModal(false);
             setSelectedVoteId(null);
           }}
@@ -515,7 +539,7 @@ const StorageScreen: React.FC = () => {
             <Pressable 
               style={styles.modalBackground}
               onPress={async () => {
-                await refreshVote(selectedVoteId);
+                await refreshVote(selectedVoteId!);
                 setShowCommentModal(false);
                 setSelectedVoteId(null);
               }}
@@ -534,6 +558,90 @@ const StorageScreen: React.FC = () => {
           </View>
         </Modal>
       )}
+
+      <Modal
+        visible={showStatisticsModal}
+        transparent
+        statusBarTranslucent
+        animationType="slide"
+        onRequestClose={() => {
+          setShowStatisticsModal(false);
+          setSelectedVoteForStats(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable 
+            style={styles.modalBackground}
+            onPress={() => {
+              setShowStatisticsModal(false);
+              setSelectedVoteForStats(null);
+            }}
+          >
+            <View style={styles.modalBackdrop} />
+          </Pressable>
+          <View style={[styles.modalContainer, styles.statisticsModalContainer]}>
+            <View style={styles.statisticsHeader}>
+              <Text style={styles.statisticsTitle}>투표 통계</Text>
+              <TouchableOpacity 
+                onPress={() => {
+                  setShowStatisticsModal(false);
+                  setSelectedVoteForStats(null);
+                }}
+                style={styles.closeButton}
+              >
+                <Feather name="x" size={24} color="#4A5568" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.statisticsTabContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.statisticsTabButton,
+                  activeStatTab === 'region' && styles.activeStatisticsTab
+                ]}
+                onPress={() => setActiveStatTab('region')}
+              >
+                <Text style={[
+                  styles.statisticsTabText,
+                  activeStatTab === 'region' && styles.activeStatisticsTabText
+                ]}>지역별</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.statisticsTabButton,
+                  activeStatTab === 'age' && styles.activeStatisticsTab
+                ]}
+                onPress={() => setActiveStatTab('age')}
+              >
+                <Text style={[
+                  styles.statisticsTabText,
+                  activeStatTab === 'age' && styles.activeStatisticsTabText
+                ]}>연령별</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.statisticsTabButton,
+                  activeStatTab === 'gender' && styles.activeStatisticsTab
+                ]}
+                onPress={() => setActiveStatTab('gender')}
+              >
+                <Text style={[
+                  styles.statisticsTabText,
+                  activeStatTab === 'gender' && styles.activeStatisticsTabText
+                ]}>성별</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.statisticsContent}>
+              {selectedVoteForStats && (
+                <>
+                  {activeStatTab === 'region' && <RegionStatistics voteId={selectedVoteForStats} />}
+                  {activeStatTab === 'age' && <AgeStatistics voteId={selectedVoteForStats} />}
+                  {activeStatTab === 'gender' && <GenderStatistics voteId={selectedVoteForStats} />}
+                </>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -815,8 +923,10 @@ const styles = StyleSheet.create({
   },
   reactionRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 24,
+    gap: 16,
   },
   reactionItem: { 
     flexDirection: 'row', 
@@ -860,6 +970,53 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     overflow: 'hidden',
+  },
+  statisticsModalContainer: {
+    height: '85%',
+  },
+  statisticsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  statisticsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#2D3748',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  statisticsTabContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+  },
+  statisticsTabButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  activeStatisticsTab: {
+    borderBottomColor: '#1499D9',
+  },
+  statisticsTabText: {
+    fontSize: 15,
+    color: '#718096',
+    fontWeight: '500',
+  },
+  activeStatisticsTabText: {
+    color: '#1499D9',
+    fontWeight: '600',
+  },
+  statisticsContent: {
+    flex: 1,
   },
 });
 

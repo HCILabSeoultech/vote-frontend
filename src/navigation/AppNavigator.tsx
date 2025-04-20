@@ -8,6 +8,7 @@ import SignupStep3Screen from '../screens/SignupStep3Screen';
 import LoginScreen from '../screens/LoginScreen';
 import UserPageScreen from '../screens/UserPageScreen';
 import CommentScreen from '../screens/CommentScreen';
+import StatisticsScreen from '../screens/StatisticsScreen';
 
 import MainTabs from './MainTabs';
 import ReuploadVoteScreen from '../screens/ReuploadVoteScreen';
@@ -25,6 +26,7 @@ export type RootStackParamList = {
   SingleVoteScreen: { voteId: number };
   UserPageScreen: { userId: number };
   CommentScreen: { voteId: number };
+  Statistics: { voteId: number };
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -41,6 +43,7 @@ const AppNavigator = () => (
       <Stack.Screen name="SingleVoteScreen" component={SingleVoteScreen} />
       <Stack.Screen name="UserPageScreen" component={UserPageScreen} />
       <Stack.Screen name="CommentScreen" component={CommentScreen} />
+      <Stack.Screen name="Statistics" component={StatisticsScreen} />
     </Stack.Navigator>
   </NavigationContainer>
 );

@@ -26,6 +26,9 @@ import { Ionicons } from '@expo/vector-icons';
 import CommentScreen from './CommentScreen';
 import { Gesture, GestureDetector } from "react-native-gesture-handler"
 import { Feather } from '@expo/vector-icons';
+import RegionStatistics from '../components/statistics/RegionStatistics';
+import AgeStatistics from '../components/statistics/AgeStatistics';
+import GenderStatistics from '../components/statistics/GenderStatistics';
 
 import { SERVER_URL } from '../constant/config';
 const IMAGE_BASE_URL = `${SERVER_URL}`;
@@ -49,13 +52,14 @@ const SinglePageScreen: React.FC = () => {
   const [isBookmarking, setIsBookmarking] = useState(false);
   const likeScale = useSharedValue(1);
   const bookmarkScale = useSharedValue(1);
+  const [showStatisticsModal, setShowStatisticsModal] = useState(false);
+  const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('region');
 
   useEffect(() => {
     fetchVote();
   }, [voteId]);
 
   const fetchVote = async () => {
-    setLoading(true);
     try {
       const res = await getVoteById(voteId);
       setVote(res);
@@ -437,6 +441,14 @@ const SinglePageScreen: React.FC = () => {
             </Animated.View>
             <TouchableOpacity 
               style={styles.statItem}
+              onPress={() => {
+                const totalCount = vote?.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0) || 0;
+                if (totalCount === 0) {
+                  Alert.alert('알림', '투표 데이터가 없습니다.');
+                  return;
+                }
+                setShowStatisticsModal(true);
+              }}
               activeOpacity={0.7}
             >
               <Ionicons name="stats-chart" size={20} color="#718096" />
@@ -467,6 +479,77 @@ const SinglePageScreen: React.FC = () => {
           </Pressable>
           <View style={styles.modalContainer}>
             <CommentScreen route={{ params: { voteId: voteId } }} />
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showStatisticsModal}
+        transparent
+        statusBarTranslucent
+        animationType="slide"
+        onRequestClose={() => setShowStatisticsModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable 
+            style={styles.modalBackground}
+            onPress={() => setShowStatisticsModal(false)}
+          >
+            <View style={styles.modalBackdrop} />
+          </Pressable>
+          <View style={[styles.modalContainer, styles.statisticsModalContainer]}>
+            <View style={styles.statisticsHeader}>
+              <Text style={styles.statisticsTitle}>투표 통계</Text>
+              <TouchableOpacity 
+                onPress={() => setShowStatisticsModal(false)}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color="#4A5568" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.statisticsTabContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.statisticsTabButton,
+                  activeStatTab === 'region' && styles.activeStatisticsTab
+                ]}
+                onPress={() => setActiveStatTab('region')}
+              >
+                <Text style={[
+                  styles.statisticsTabText,
+                  activeStatTab === 'region' && styles.activeStatisticsTabText
+                ]}>지역별</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.statisticsTabButton,
+                  activeStatTab === 'age' && styles.activeStatisticsTab
+                ]}
+                onPress={() => setActiveStatTab('age')}
+              >
+                <Text style={[
+                  styles.statisticsTabText,
+                  activeStatTab === 'age' && styles.activeStatisticsTabText
+                ]}>연령별</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.statisticsTabButton,
+                  activeStatTab === 'gender' && styles.activeStatisticsTab
+                ]}
+                onPress={() => setActiveStatTab('gender')}
+              >
+                <Text style={[
+                  styles.statisticsTabText,
+                  activeStatTab === 'gender' && styles.activeStatisticsTabText
+                ]}>성별</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.statisticsContent}>
+              {activeStatTab === 'region' && <RegionStatistics voteId={voteId} />}
+              {activeStatTab === 'age' && <AgeStatistics voteId={voteId} />}
+              {activeStatTab === 'gender' && <GenderStatistics voteId={voteId} />}
+            </View>
           </View>
         </View>
       </Modal>
@@ -707,11 +790,10 @@ const styles = StyleSheet.create({
   },
   reactionRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 4,
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    gap: 16,
   },
   statItem: {
     flexDirection: 'row',
@@ -749,6 +831,53 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     overflow: 'hidden',
+  },
+  statisticsModalContainer: {
+    height: '85%',
+  },
+  statisticsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  statisticsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#2D3748',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  statisticsTabContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+  },
+  statisticsTabButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  activeStatisticsTab: {
+    borderBottomColor: '#1499D9',
+  },
+  statisticsTabText: {
+    fontSize: 15,
+    color: '#718096',
+    fontWeight: '500',
+  },
+  activeStatisticsTabText: {
+    color: '#1499D9',
+    fontWeight: '600',
+  },
+  statisticsContent: {
+    flex: 1,
   },
 });
 

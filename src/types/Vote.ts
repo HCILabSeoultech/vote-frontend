@@ -62,4 +62,43 @@ export interface SearchVoteResponse {
   username: string;
   category: string;
 }
+
+export interface StatOption {
+  [key: string]: number;
+}
+
+export interface StatData {
+  stat: StatOption;
+}
+
+export interface GenderStatistics {
+  [key: string]: StatData;
+}
+
+export interface AgeStatistics {
+  [key: string]: StatData;
+}
+
+export interface RegionStatistics {
+  regions: {
+    [key: string]: {
+      totalVotes: number;
+      participationRate: number;
+    };
+  };
+}
+
+export interface VoteStatistics {
+  gender: GenderStatistics;
+  age: AgeStatistics;
+  region: RegionStatistics;
+}
+
+export interface ChartData {
+  labels: string[];
+  datasets: {
+    data: number[];
+    color?: (opacity: number) => string;
+  }[];
+}
   

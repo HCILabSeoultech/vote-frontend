@@ -1,6 +1,6 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { CreateVoteRequest, VotePageResponse, VoteResponse} from '../types/Vote';
+import { CreateVoteRequest, VotePageResponse, VoteResponse, VoteStatistics} from '../types/Vote';
 
 import { SERVER_URL } from '../constant/config';
 
@@ -133,6 +133,45 @@ export const getVotesByCategory = async (categoryId: number, page: number = 0, s
     params: {
       page,
       size,
+    },
+  });
+  return response.data;
+};
+
+// 투표 통계 (성별)
+export const getVoteStatisticsByGender = async (voteId: number) => {
+  const token = await AsyncStorage.getItem('token');
+  const response = await axios.get(`${API_URL}/${voteId}/statistics/gender`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+  });
+  return response.data;
+};
+
+// 투표 통계 (연령대)
+export const getVoteStatisticsByAge = async (voteId: number) => {
+  const token = await AsyncStorage.getItem('token');
+  const response = await axios.get(`${API_URL}/${voteId}/statistics/age`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+  });
+  return response.data;
+};
+
+// 투표 통계 (지역)
+export const getVoteStatisticsByRegion = async (voteId: number) => {
+  const token = await AsyncStorage.getItem('token');
+  const response = await axios.get(`${API_URL}/${voteId}/statistics/region`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
     },
   });
   return response.data;

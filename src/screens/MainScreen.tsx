@@ -26,6 +26,9 @@ import type { StackNavigationProp } from "@react-navigation/stack"
 import type { RootStackParamList } from "../navigation/AppNavigator"
 import { jwtDecode } from "jwt-decode"
 import CommentScreen from "../screens/CommentScreen"
+import RegionStatistics from "../components/statistics/RegionStatistics"
+import AgeStatistics from "../components/statistics/AgeStatistics"
+import GenderStatistics from "../components/statistics/GenderStatistics"
 
 import { SERVER_URL } from "../constant/config"
 
@@ -48,6 +51,9 @@ const MainScreen: React.FC = () => {
   const [selectedVoteId, setSelectedVoteId] = useState<number | null>(null)
   const [showCommentModal, setShowCommentModal] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [showStatisticsModal, setShowStatisticsModal] = useState(false)
+  const [selectedVoteForStats, setSelectedVoteForStats] = useState<number | null>(null)
+  const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('region')
 
   useEffect(() => {
     const fetchUserFromToken = async () => {
@@ -169,6 +175,16 @@ const MainScreen: React.FC = () => {
   const handleCommentPress = (voteId: number) => {
     setSelectedVoteId(voteId)
     setShowCommentModal(true)
+  }
+
+  const handleStatisticsPress = (vote: VoteResponse) => {
+    const totalVotes = vote.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0)
+    if (totalVotes === 0) {
+      Alert.alert('알림', '아직 투표 데이터가 없습니다.')
+      return
+    }
+    setSelectedVoteForStats(vote.voteId)
+    setShowStatisticsModal(true)
   }
 
   const renderItem = ({ item }: { item: VoteResponse }) => {
@@ -403,8 +419,12 @@ const MainScreen: React.FC = () => {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.reactionItem} activeOpacity={0.7}>
-            <Feather name="bar-chart-2" size={22} color="#718096" />
+          <TouchableOpacity
+            style={styles.reactionItem}
+            onPress={() => handleStatisticsPress(item)}
+            activeOpacity={0.7}
+          >
+            <Feather name="bar-chart-2" size={20} color="#718096" />
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -486,6 +506,90 @@ const MainScreen: React.FC = () => {
           </View>
         </Modal>
       )}
+
+      <Modal
+        visible={showStatisticsModal}
+        transparent
+        statusBarTranslucent
+        animationType="slide"
+        onRequestClose={() => {
+          setShowStatisticsModal(false)
+          setSelectedVoteForStats(null)
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable 
+            style={styles.modalBackground}
+            onPress={() => {
+              setShowStatisticsModal(false)
+              setSelectedVoteForStats(null)
+            }}
+          >
+            <View style={styles.modalBackdrop} />
+          </Pressable>
+          <View style={[styles.modalContainer, styles.statisticsModalContainer]}>
+            <View style={styles.statisticsHeader}>
+              <Text style={styles.statisticsTitle}>투표 통계</Text>
+              <TouchableOpacity 
+                onPress={() => {
+                  setShowStatisticsModal(false)
+                  setSelectedVoteForStats(null)
+                }}
+                style={styles.closeButton}
+              >
+                <Feather name="x" size={24} color="#4A5568" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.statisticsTabContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.statisticsTabButton,
+                  activeStatTab === 'region' && styles.activeStatisticsTab
+                ]}
+                onPress={() => setActiveStatTab('region')}
+              >
+                <Text style={[
+                  styles.statisticsTabText,
+                  activeStatTab === 'region' && styles.activeStatisticsTabText
+                ]}>지역별</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.statisticsTabButton,
+                  activeStatTab === 'age' && styles.activeStatisticsTab
+                ]}
+                onPress={() => setActiveStatTab('age')}
+              >
+                <Text style={[
+                  styles.statisticsTabText,
+                  activeStatTab === 'age' && styles.activeStatisticsTabText
+                ]}>연령별</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.statisticsTabButton,
+                  activeStatTab === 'gender' && styles.activeStatisticsTab
+                ]}
+                onPress={() => setActiveStatTab('gender')}
+              >
+                <Text style={[
+                  styles.statisticsTabText,
+                  activeStatTab === 'gender' && styles.activeStatisticsTabText
+                ]}>성별</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.statisticsContent}>
+              {selectedVoteForStats && (
+                <>
+                  {activeStatTab === 'region' && <RegionStatistics voteId={selectedVoteForStats} />}
+                  {activeStatTab === 'age' && <AgeStatistics voteId={selectedVoteForStats} />}
+                  {activeStatTab === 'gender' && <GenderStatistics voteId={selectedVoteForStats} />}
+                </>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   )
 }
@@ -759,6 +863,53 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     overflow: 'hidden',
+  },
+  statisticsModalContainer: {
+    height: '85%',
+  },
+  statisticsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  statisticsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#2D3748',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  statisticsTabContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+  },
+  statisticsTabButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  activeStatisticsTab: {
+    borderBottomColor: '#1499D9',
+  },
+  statisticsTabText: {
+    fontSize: 15,
+    color: '#718096',
+    fontWeight: '500',
+  },
+  activeStatisticsTabText: {
+    color: '#1499D9',
+    fontWeight: '600',
+  },
+  statisticsContent: {
+    flex: 1,
   },
 })
 

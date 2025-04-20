@@ -837,11 +837,11 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
   },
   categoryBadge: {
-    backgroundColor: "#EBF4FF",
+    backgroundColor: '#EBF4FF',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
-    marginRight: 8,
+    flexShrink: 0,
   },
   categoryText: {
     color: "#3182CE",
@@ -1083,6 +1083,7 @@ const styles = StyleSheet.create({
     color: '#1A202C',
     marginBottom: 4,
     lineHeight: 22,
+    flex: 1,
   },
   voteStatusContainer: {
     flexDirection: 'row',
@@ -1270,6 +1271,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 4,
+    gap: 8,
   },
   authorInfo: {
     flexDirection: 'row',

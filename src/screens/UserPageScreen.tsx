@@ -12,6 +12,7 @@ import {
   Dimensions,
   Modal,
   Pressable,
+  ScrollView,
 } from 'react-native';
 import Animated, { FadeInLeft, FadeIn } from 'react-native-reanimated';
 import { getVoteById, selectVoteOption } from '../api/post';
@@ -25,6 +26,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { checkFollow, followUser, unfollowUser } from '../api/follow';
 import { Feather } from '@expo/vector-icons';
 import CommentScreen from '../screens/CommentScreen';
+import RegionStatistics from '../components/statistics/RegionStatistics';
+import AgeStatistics from '../components/statistics/AgeStatistics';
+import GenderStatistics from '../components/statistics/GenderStatistics';
 
 import { SERVER_URL } from '../constant/config';
 
@@ -43,6 +47,8 @@ const UserPageScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState('posts');
   const [showCommentModal, setShowCommentModal] = useState(false);
   const [selectedVoteId, setSelectedVoteId] = useState<number | null>(null);
+  const [showStatisticsModal, setShowStatisticsModal] = useState(false);
+  const [selectedVoteForStats, setSelectedVoteForStats] = useState<number | null>(null);
 
   const isFocused = useIsFocused();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'CommentScreen'>>();
@@ -212,6 +218,11 @@ const UserPageScreen: React.FC = () => {
   const handleCommentPress = (voteId: number) => {
     setSelectedVoteId(voteId);
     setShowCommentModal(true);
+  };
+
+  const handleStatisticsPress = (voteId: number) => {
+    setSelectedVoteForStats(voteId);
+    setShowStatisticsModal(true);
   };
 
   const renderItem = ({ item, index }: { item: VoteResponse, index: number }) => {
@@ -418,8 +429,12 @@ const UserPageScreen: React.FC = () => {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.reactionItem} activeOpacity={0.7}>
-            <Feather name="bar-chart-2" size={20} color="#718096" />
+          <TouchableOpacity 
+            style={styles.reactionItem} 
+            onPress={() => handleStatisticsPress(item.voteId)}
+            activeOpacity={0.7}
+          >
+            <Feather name="bar-chart-2" size={22} color="#718096" />
           </TouchableOpacity>
         </View>
       </Animated.View>
