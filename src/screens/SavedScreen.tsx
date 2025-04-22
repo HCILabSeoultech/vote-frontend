@@ -15,12 +15,12 @@ import {
   RefreshControl,
   ScrollView,
 } from 'react-native';
-import Animated, { FadeInLeft, FadeIn } from 'react-native-reanimated';
+import Animated, { SlideInDown, FadeIn, useAnimatedStyle, withRepeat, withTiming, withSequence, useSharedValue } from 'react-native-reanimated';
 import { getStoragePosts } from '../api/storage';
 import { toggleLike, toggleBookmark } from '../api/reaction';
 import { getVoteById, selectVoteOption } from '../api/post';
 import { VoteResponse } from '../types/Vote';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { Feather } from '@expo/vector-icons'
@@ -42,12 +42,49 @@ import { SERVER_URL } from '../constant/config';
 const IMAGE_BASE_URL = `${SERVER_URL}`;
 const { width } = Dimensions.get('window');
 
+// 스켈레톤 UI 컴포넌트
+const SkeletonLoader = () => {
+  const opacity = useSharedValue(0.3)
+  
+  useEffect(() => {
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.7, { duration: 1000 }),
+        withTiming(0.3, { duration: 1000 })
+      ),
+      -1,
+      true
+    )
+  }, [])
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }))
+
+  return (
+    <Animated.View style={[styles.skeletonItem, animatedStyle]}>
+      <View style={styles.skeletonHeader}>
+        <View style={styles.skeletonAvatar} />
+        <View style={styles.skeletonUserInfo}>
+          <View style={styles.skeletonText} />
+          <View style={[styles.skeletonText, { width: '60%' }]} />
+        </View>
+      </View>
+      <View style={styles.skeletonTitle} />
+      <View style={styles.skeletonOptions}>
+        <View style={styles.skeletonOption} />
+        <View style={styles.skeletonOption} />
+      </View>
+    </Animated.View>
+  )
+}
+
 const StorageScreen: React.FC = () => {
   const [storageType, setStorageType] = useState<StorageType>('voted');
   const [votes, setVotes] = useState<VoteResponse[]>([]);
   const [page, setPage] = useState(0);
   const [isLast, setIsLast] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({});
   const navigation = useNavigation<NavigationProp>();
   const [tabRefreshTrigger, setTabRefreshTrigger] = useState(0);
@@ -90,16 +127,24 @@ const StorageScreen: React.FC = () => {
 
   const loadPosts = async (nextPage = 0) => {
     if (loading || isLast) return;
+    
     setLoading(true);
+    
     try {
       const res = await getStoragePosts(storageType, nextPage);
-      setVotes(prev => nextPage === 0 ? res.content : [...prev, ...res.content]);
-      setPage(res.number + 1);
-      setIsLast(res.last);
+      
+      if (res && res.content) {
+        setVotes(prev => nextPage === 0 ? res.content : [...prev, ...res.content]);
+        setPage(res.number + 1);
+        setIsLast(res.last);
+      }
     } catch (err) {
       console.error(`${storageType} 불러오기 실패:`, err);
     } finally {
-      setLoading(false);
+      // 자연스러운 로딩을 위해 약간의 지연 추가
+      setTimeout(() => {
+        setLoading(false);
+      }, 500);
     }
   };
 
@@ -107,8 +152,26 @@ const StorageScreen: React.FC = () => {
     setVotes([]);
     setPage(0);
     setIsLast(false);
+    setLoading(true);
     loadPosts(0);
   }, [storageType, tabRefreshTrigger]);
+
+  // 탭 전환 시 새로고침 기능 추가
+  useFocusEffect(
+    React.useCallback(() => {
+      // 화면이 포커스될 때마다 실행
+      setVotes([]);
+      setPage(0);
+      setIsLast(false);
+      setLoading(true);
+      loadPosts(0);
+      fetchAllCounts();
+      
+      return () => {
+        // 화면이 포커스를 잃을 때 실행 (선택적)
+      };
+    }, [storageType, tabRefreshTrigger])
+  );
 
   const isVoteClosed = (finishTime: string) => {
     const finish = new Date(finishTime)
@@ -295,7 +358,7 @@ const StorageScreen: React.FC = () => {
                 <View key={opt.id} style={[styles.optionWrapper, opt.optionImage && styles.imageOptionWrapper]}>
                   {showGauge && (
                     <Animated.View
-                      entering={FadeInLeft.duration(600)}
+                      entering={FadeIn.duration(600)}
                       style={[
                         styles.gaugeBar,
                         {
@@ -486,42 +549,60 @@ const StorageScreen: React.FC = () => {
     setRefreshing(false);
   };
 
+  // 스켈레톤 UI 렌더링 함수
+  const renderSkeletonList = () => {
+    return Array(3).fill(0).map((_, index) => (
+      <SkeletonLoader key={index} />
+    ));
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       {renderTabs()}
-      <FlatList
-        data={votes}
-        keyExtractor={(item) => item.voteId.toString()}
-        renderItem={renderItem}
-        onEndReached={() => loadPosts(page)}
-        onEndReachedThreshold={0.5}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={["#1499D9"]}
-            tintColor="#1499D9"
-            title="새로고침 중..."
-            titleColor="#718096"
+      {(() => {
+        return loading && votes.length === 0 ? (
+          <ScrollView
+            contentContainerStyle={styles.container}
+            showsVerticalScrollIndicator={false}
+          >
+            {renderSkeletonList()}
+          </ScrollView>
+        ) : (
+          <FlatList
+            data={votes}
+            keyExtractor={(item) => item.voteId.toString()}
+            renderItem={renderItem}
+            onEndReached={() => loadPosts(page)}
+            onEndReachedThreshold={0.5}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={["#1499D9"]}
+                tintColor="#1499D9"
+                title="새로고침 중..."
+                titleColor="#718096"
+              />
+            }
+            ListFooterComponent={
+              loading
+              ? () => (
+                  <View style={styles.footerLoading}>
+                    <ActivityIndicator size="small" color="#1499D9" />
+                    <Text style={styles.loadingText}>불러오는 중...</Text>
+                  </View>
+                )
+              : null
+            }
+            ListEmptyComponent={!loading ? renderEmptyList : null}
+            contentContainerStyle={[
+              styles.container,
+              votes.length === 0 && !loading && styles.emptyListContainer,
+            ]}
+            showsVerticalScrollIndicator={false}
           />
-        }
-        ListFooterComponent={
-          loading
-          ? () => (
-              <View style={styles.footerLoading}>
-                <ActivityIndicator size="small" color="#1499D9" />
-                <Text style={styles.loadingText}>불러오는 중...</Text>
-              </View>
-            )
-          : null
-        }
-        ListEmptyComponent={!loading ? renderEmptyList : null}
-        contentContainerStyle={[
-          styles.container,
-          votes.length === 0 && !loading && styles.emptyListContainer,
-        ]}
-        showsVerticalScrollIndicator={false}
-      />
+        );
+      })()}
 
       {showCommentModal && selectedVoteId && (
         <Modal
@@ -1017,6 +1098,50 @@ const styles = StyleSheet.create({
   },
   statisticsContent: {
     flex: 1,
+  },
+  // 스켈레톤 UI 스타일
+  skeletonItem: {
+    backgroundColor: '#F7FAFC',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  skeletonHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  skeletonAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#E2E8F0',
+    marginRight: 10,
+  },
+  skeletonUserInfo: {
+    flex: 1,
+  },
+  skeletonText: {
+    height: 14,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 7,
+    marginBottom: 4,
+    width: '80%',
+  },
+  skeletonTitle: {
+    height: 24,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
+    marginBottom: 16,
+    width: '90%',
+  },
+  skeletonOptions: {
+    gap: 8,
+  },
+  skeletonOption: {
+    height: 54,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
   },
 });
 

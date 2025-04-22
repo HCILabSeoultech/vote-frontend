@@ -16,7 +16,7 @@ import {
   RefreshControl,
 } from "react-native"
 import { Feather} from '@expo/vector-icons'
-import Animated, { FadeInLeft, FadeIn } from "react-native-reanimated"
+import Animated, { FadeInLeft, FadeIn, useAnimatedStyle, withRepeat, withSequence, withTiming, useSharedValue } from "react-native-reanimated"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import { getMainPageVotes, getVoteById, selectVoteOption } from "../api/post"
 import { toggleLike, toggleBookmark } from "../api/reaction"
@@ -39,6 +39,42 @@ interface JwtPayload {
   sub: string
 }
 
+const SkeletonLoader = () => {
+  const opacity = useSharedValue(0.3)
+  
+  useEffect(() => {
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.7, { duration: 1000 }),
+        withTiming(0.3, { duration: 1000 })
+      ),
+      -1,
+      true
+    )
+  }, [])
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }))
+
+  return (
+    <Animated.View style={[styles.skeletonItem, animatedStyle]}>
+      <View style={styles.skeletonHeader}>
+        <View style={styles.skeletonAvatar} />
+        <View style={styles.skeletonUserInfo}>
+          <View style={styles.skeletonText} />
+          <View style={[styles.skeletonText, { width: '60%' }]} />
+        </View>
+      </View>
+      <View style={styles.skeletonTitle} />
+      <View style={styles.skeletonOptions}>
+        <View style={styles.skeletonOption} />
+        <View style={styles.skeletonOption} />
+      </View>
+    </Animated.View>
+  )
+}
+
 const MainScreen: React.FC = () => {
   const [votes, setVotes] = useState<VoteResponse[]>([])
   const [page, setPage] = useState(0)
@@ -54,6 +90,7 @@ const MainScreen: React.FC = () => {
   const [showStatisticsModal, setShowStatisticsModal] = useState(false)
   const [selectedVoteForStats, setSelectedVoteForStats] = useState<number | null>(null)
   const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('region')
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const fetchUserFromToken = async () => {
@@ -72,11 +109,25 @@ const MainScreen: React.FC = () => {
   }, [])
 
   useEffect(() => {
+    const fetchInitialVotes = async () => {
+      setIsLoading(true)
+      try {
+        const res = await getMainPageVotes(0)
+        setVotes(res.content)
+        setPage(res.number + 1)
+        setIsLast(res.last)
+      } catch (err) {
+        console.error("초기 투표 불러오기 실패:", err)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
     if (isFocused) {
       setVotes([])
       setPage(0)
       setIsLast(false)
-      fetchVotes(0)
+      fetchInitialVotes()
     }
   }, [isFocused])
 
@@ -433,19 +484,32 @@ const MainScreen: React.FC = () => {
 
   const onRefresh = async () => {
     setRefreshing(true)
-    setVotes([])
-    setPage(0)
-    setIsLast(false)
-    await fetchVotes(0)
-    setRefreshing(false)
+    setIsLoading(true)
+    try {
+      const res = await getMainPageVotes(0)
+      setVotes(res.content)
+      setPage(res.number + 1)
+      setIsLast(res.last)
+    } catch (err) {
+      console.error("새로고침 실패:", err)
+    } finally {
+      setRefreshing(false)
+      setIsLoading(false)
+    }
   }
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <FlatList
-        data={votes}
-        keyExtractor={(item) => item.voteId.toString()}
-        renderItem={renderItem}
+        data={isLoading ? Array(5).fill({}) : votes}
+        keyExtractor={(item, index) => item.voteId?.toString() || `skeleton-${index}`}
+        renderItem={({ item, index }) => 
+          isLoading ? (
+            <SkeletonLoader />
+          ) : (
+            renderItem({ item })
+          )
+        }
         contentContainerStyle={styles.container}
         ListHeaderComponent={renderHeader}
         onEndReached={() => fetchVotes(page)}
@@ -456,15 +520,12 @@ const MainScreen: React.FC = () => {
             onRefresh={onRefresh}
             colors={["#1499D9"]}
             tintColor="#1499D9"
-            title="새로고침 중..."
-            titleColor="#718096"
           />
         }
         ListFooterComponent={
-          loading ? (
+          loading && !isLoading ? (
             <View style={styles.loaderContainer}>
               <ActivityIndicator size="small" color="#1499D9" />
-              <Text style={styles.loadingText}>투표 불러오는 중...</Text>
             </View>
           ) : null
         }
@@ -910,6 +971,49 @@ const styles = StyleSheet.create({
   },
   statisticsContent: {
     flex: 1,
+  },
+  skeletonItem: {
+    backgroundColor: '#F7FAFC',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  skeletonHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  skeletonAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#E2E8F0',
+    marginRight: 10,
+  },
+  skeletonUserInfo: {
+    flex: 1,
+  },
+  skeletonText: {
+    height: 14,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 7,
+    marginBottom: 4,
+    width: '80%',
+  },
+  skeletonTitle: {
+    height: 24,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
+    marginBottom: 16,
+    width: '90%',
+  },
+  skeletonOptions: {
+    gap: 8,
+  },
+  skeletonOption: {
+    height: 54,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
   },
 })
 

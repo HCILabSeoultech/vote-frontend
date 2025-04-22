@@ -14,7 +14,7 @@ import {
   Pressable,
   ScrollView,
 } from 'react-native';
-import Animated, { FadeInLeft, FadeIn } from 'react-native-reanimated';
+import Animated, { FadeInLeft, FadeIn, useAnimatedStyle, withRepeat, withTiming, withSequence, useSharedValue } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { getMyPage } from '../api/user';
@@ -41,6 +41,43 @@ const TABS = [
 ] as const;
 
 type TabType = 'posts' | 'followers' | 'following';
+
+// 스켈레톤 UI 컴포넌트
+const SkeletonLoader = () => {
+  const opacity = useSharedValue(0.3)
+  
+  useEffect(() => {
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.7, { duration: 1000 }),
+        withTiming(0.3, { duration: 1000 })
+      ),
+      -1,
+      true
+    )
+  }, [])
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }))
+
+  return (
+    <Animated.View style={[styles.skeletonItem, animatedStyle]}>
+      <View style={styles.skeletonHeader}>
+        <View style={styles.skeletonAvatar} />
+        <View style={styles.skeletonUserInfo}>
+          <View style={styles.skeletonText} />
+          <View style={[styles.skeletonText, { width: '60%' }]} />
+        </View>
+      </View>
+      <View style={styles.skeletonTitle} />
+      <View style={styles.skeletonOptions}>
+        <View style={styles.skeletonOption} />
+        <View style={styles.skeletonOption} />
+      </View>
+    </Animated.View>
+  )
+}
 
 const MyPageScreen: React.FC = () => {
   const [profile, setProfile] = useState<any>(null);
@@ -585,7 +622,16 @@ const MyPageScreen: React.FC = () => {
   const renderContent = () => {
     switch (activeTab) {
       case 'posts':
-        return (
+        return loading && posts.length === 0 ? (
+          <ScrollView
+            contentContainerStyle={styles.container}
+            showsVerticalScrollIndicator={false}
+          >
+            {Array(3).fill(0).map((_, index) => (
+              <SkeletonLoader key={index} />
+            ))}
+          </ScrollView>
+        ) : (
           <FlatList
             data={posts}
             renderItem={renderPost}
@@ -1284,6 +1330,50 @@ const styles = StyleSheet.create({
   },
   statisticsContent: {
     flex: 1,
+  },
+  // 스켈레톤 UI 스타일
+  skeletonItem: {
+    backgroundColor: '#F7FAFC',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  skeletonHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  skeletonAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#E2E8F0',
+    marginRight: 10,
+  },
+  skeletonUserInfo: {
+    flex: 1,
+  },
+  skeletonText: {
+    height: 14,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 7,
+    marginBottom: 4,
+    width: '80%',
+  },
+  skeletonTitle: {
+    height: 24,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
+    marginBottom: 16,
+    width: '90%',
+  },
+  skeletonOptions: {
+    gap: 8,
+  },
+  skeletonOption: {
+    height: 54,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
   },
 });
 

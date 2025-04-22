@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { Ionicons, Feather } from "@expo/vector-icons"
 import {
   View,
@@ -18,14 +18,14 @@ import {
   Modal,
   ActivityIndicator,
 } from "react-native"
-import Animated, { FadeInLeft, FadeIn } from "react-native-reanimated"
+import Animated, { FadeInLeft, FadeIn, useAnimatedStyle, withRepeat, withSequence, withTiming, useSharedValue } from "react-native-reanimated"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import { getTopLikedVotes, getVoteById, selectVoteOption, getVotesByCategory } from "../api/post"
 import { toggleLike, toggleBookmark } from "../api/reaction"
 import { searchUsers, searchVotes } from "../api/search"
 import type { VoteResponse, SearchVoteResponse, VoteOption } from "../types/Vote"
 import type { UserDocument } from "../types/UserData"
-import { useNavigation } from "@react-navigation/native"
+import { useNavigation, useFocusEffect } from "@react-navigation/native"
 import type { StackNavigationProp } from "@react-navigation/stack"
 import type { RootStackParamList } from "../navigation/AppNavigator"
 import MainLogo from '../../assets/mainlogo.svg'
@@ -52,6 +52,81 @@ const sortOptions = [
   { id: 'participants' as const, name: '참여자순' },
 ];
 
+const SkeletonLoader = () => {
+  const opacity = useSharedValue(0.3)
+  
+  useEffect(() => {
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.7, { duration: 1000 }),
+        withTiming(0.3, { duration: 1000 })
+      ),
+      -1,
+      true
+    )
+  }, [])
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }))
+
+  return (
+    <Animated.View style={[styles.skeletonItem, animatedStyle]}>
+      <View style={styles.simpleVoteContent}>
+        <View style={styles.skeletonImage} />
+        <View style={styles.simpleVoteInfo}>
+          <View style={styles.voteHeader}>
+            <View style={styles.skeletonTitle} />
+            <View style={styles.skeletonCategory} />
+          </View>
+          <View style={styles.authorInfo}>
+            <View style={styles.skeletonAuthor} />
+            <View style={styles.skeletonDot} />
+            <View style={styles.skeletonDate} />
+          </View>
+          <View style={styles.simpleMetaRow}>
+            <View style={styles.skeletonTime} />
+            <View style={styles.statsContainer}>
+              <View style={styles.skeletonStat} />
+              <View style={styles.skeletonStat} />
+              <View style={styles.skeletonStat} />
+            </View>
+          </View>
+        </View>
+      </View>
+    </Animated.View>
+  )
+}
+
+const SkeletonUserLoader = () => {
+  const opacity = useSharedValue(0.3)
+  
+  useEffect(() => {
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.7, { duration: 1000 }),
+        withTiming(0.3, { duration: 1000 })
+      ),
+      -1,
+      true
+    )
+  }, [])
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }))
+
+  return (
+    <Animated.View style={[styles.skeletonItem, animatedStyle]}>
+      <View style={styles.userItem}>
+        <View style={styles.skeletonUserImage} />
+        <View style={styles.skeletonUserName} />
+        <View style={styles.skeletonChevron} />
+      </View>
+    </Animated.View>
+  )
+}
+
 const SearchScreen: React.FC = () => {
   const [votes, setVotes] = useState<VoteResponse[]>([])
   const [userResults, setUserResults] = useState<UserDocument[]>([])
@@ -67,6 +142,23 @@ const SearchScreen: React.FC = () => {
   const [showSortModal, setShowSortModal] = useState(false);
 
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, "CommentScreen">>()
+
+  const resetScreen = useCallback(() => {
+    setSearchKeyword("")
+    setUserResults([])
+    setSearchResults([])
+    setVoteStatus("all")
+    setSelectedCategory(0)
+    setSortOption('likes')
+    setSearchType("vote")
+    fetchVotes()
+  }, [])
+
+  useFocusEffect(
+    useCallback(() => {
+      resetScreen()
+    }, [resetScreen])
+  )
 
   useEffect(() => {
     fetchVotes()
@@ -172,8 +264,52 @@ const SearchScreen: React.FC = () => {
     }
   }
 
-  const handleCategorySelect = (categoryId: number) => {
+  const handleCategorySelect = async (categoryId: number) => {
+    setLoading(true)
     setSelectedCategory(categoryId)
+    try {
+      if (categoryId === 0) {
+        await fetchVotes()
+      } else {
+        await fetchCategoryVotes(categoryId)
+      }
+    } catch (error) {
+      console.error("카테고리 변경 실패:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSortOptionSelect = async (option: 'likes' | 'comments' | 'participants') => {
+    setLoading(true)
+    setSortOption(option)
+    try {
+      if (selectedCategory === 0) {
+        await fetchVotes()
+      } else {
+        await fetchCategoryVotes(selectedCategory)
+      }
+    } catch (error) {
+      console.error("정렬 옵션 변경 실패:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleVoteStatusChange = async (newStatus: "ongoing" | "closed" | "all") => {
+    setLoading(true)
+    setVoteStatus(newStatus)
+    try {
+      if (selectedCategory === 0) {
+        await fetchVotes()
+      } else {
+        await fetchCategoryVotes(selectedCategory)
+      }
+    } catch (error) {
+      console.error("투표 상태 변경 실패:", error)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const isVoteClosed = (finishTime: string) => {
@@ -460,7 +596,7 @@ const SearchScreen: React.FC = () => {
 
             <TouchableOpacity
               style={[styles.ongoingButton, voteStatus === "ongoing" && styles.activeFilterButton]}
-              onPress={() => setVoteStatus(voteStatus === "ongoing" ? "all" : "ongoing")}
+              onPress={() => handleVoteStatusChange(voteStatus === "ongoing" ? "all" : "ongoing")}
               activeOpacity={0.7}
             >
               <Feather 
@@ -533,7 +669,7 @@ const SearchScreen: React.FC = () => {
                 key={option.id}
                 style={styles.modalOption}
                 onPress={() => {
-                  setSortOption(option.id);
+                  handleSortOptionSelect(option.id);
                   setShowSortModal(false);
                 }}
               >
@@ -553,10 +689,13 @@ const SearchScreen: React.FC = () => {
       </Modal>
 
       {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#1499D9" />
-          <Text style={styles.loadingText}>검색 중...</Text>
-        </View>
+        <FlatList
+          data={Array(5).fill({})}
+          keyExtractor={(_, index) => `skeleton-${index}`}
+          renderItem={() => searchType === "user" ? <SkeletonUserLoader /> : <SkeletonLoader />}
+          contentContainerStyle={styles.container}
+          showsVerticalScrollIndicator={false}
+        />
       ) : searchType === "user" ? (
         <FlatList
           data={userResults}
@@ -1290,6 +1429,88 @@ const styles = StyleSheet.create({
   createdAt: {
     fontSize: 13,
     color: '#718096',
+  },
+  skeletonItem: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  skeletonImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+    marginRight: 16,
+    backgroundColor: '#EDF2F7',
+  },
+  skeletonTitle: {
+    height: 20,
+    width: '70%',
+    backgroundColor: '#EDF2F7',
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  skeletonCategory: {
+    height: 20,
+    width: 60,
+    backgroundColor: '#EDF2F7',
+    borderRadius: 12,
+  },
+  skeletonAuthor: {
+    height: 16,
+    width: 80,
+    backgroundColor: '#EDF2F7',
+    borderRadius: 4,
+  },
+  skeletonDot: {
+    height: 16,
+    width: 16,
+    backgroundColor: '#EDF2F7',
+    borderRadius: 8,
+    marginHorizontal: 6,
+  },
+  skeletonDate: {
+    height: 16,
+    width: 60,
+    backgroundColor: '#EDF2F7',
+    borderRadius: 4,
+  },
+  skeletonTime: {
+    height: 16,
+    width: 100,
+    backgroundColor: '#EDF2F7',
+    borderRadius: 4,
+  },
+  skeletonStat: {
+    height: 16,
+    width: 30,
+    backgroundColor: '#EDF2F7',
+    borderRadius: 4,
+  },
+  skeletonUserImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#EDF2F7',
+  },
+  skeletonUserName: {
+    height: 16,
+    width: 120,
+    backgroundColor: '#EDF2F7',
+    borderRadius: 4,
+    marginLeft: 12,
+    flex: 1,
+  },
+  skeletonChevron: {
+    height: 20,
+    width: 20,
+    backgroundColor: '#EDF2F7',
+    borderRadius: 10,
   },
 })
 
