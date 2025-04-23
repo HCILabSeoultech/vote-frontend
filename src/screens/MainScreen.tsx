@@ -91,6 +91,7 @@ const MainScreen: React.FC = () => {
   const [selectedVoteForStats, setSelectedVoteForStats] = useState<number | null>(null)
   const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('region')
   const [isLoading, setIsLoading] = useState(true)
+  const [hasLoaded, setHasLoaded] = useState(false)
 
   useEffect(() => {
     const fetchUserFromToken = async () => {
@@ -110,12 +111,15 @@ const MainScreen: React.FC = () => {
 
   useEffect(() => {
     const fetchInitialVotes = async () => {
+      if (hasLoaded) return;
+      
       setIsLoading(true)
       try {
         const res = await getMainPageVotes(0)
         setVotes(res.content)
         setPage(res.number + 1)
         setIsLast(res.last)
+        setHasLoaded(true)
       } catch (err) {
         console.error("초기 투표 불러오기 실패:", err)
       } finally {
@@ -123,13 +127,8 @@ const MainScreen: React.FC = () => {
       }
     }
 
-    if (isFocused) {
-      setVotes([])
-      setPage(0)
-      setIsLast(false)
-      fetchInitialVotes()
-    }
-  }, [isFocused])
+    fetchInitialVotes()
+  }, [hasLoaded])
 
   const renderHeader = () => (
     <View style={styles.header}>

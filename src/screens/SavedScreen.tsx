@@ -87,22 +87,40 @@ const StorageScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({});
   const navigation = useNavigation<NavigationProp>();
-  const [tabRefreshTrigger, setTabRefreshTrigger] = useState(0);
-  const [selectedVoteId, setSelectedVoteId] = useState<number | null>(null);
-  const [showCommentModal, setShowCommentModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [counts, setCounts] = useState({
     voted: 0,
     liked: 0,
     bookmarked: 0
   });
+  const [selectedVoteId, setSelectedVoteId] = useState<number | null>(null);
+  const [showCommentModal, setShowCommentModal] = useState(false);
   const [showStatisticsModal, setShowStatisticsModal] = useState(false);
   const [selectedVoteForStats, setSelectedVoteForStats] = useState<number | null>(null);
   const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('region');
 
   const handleTabChange = (value: StorageType) => {
     setStorageType(value);
-    setTabRefreshTrigger(prev => prev + 1);
+  };
+
+  const loadPosts = async (nextPage = 0) => {
+    if (loading || isLast) return;
+    
+    setLoading(true);
+    
+    try {
+      const res = await getStoragePosts(storageType, nextPage);
+      
+      if (res && res.content) {
+        setVotes(prev => nextPage === 0 ? res.content : [...prev, ...res.content]);
+        setPage(res.number + 1);
+        setIsLast(res.last);
+      }
+    } catch (err) {
+      console.error(`${storageType} 불러오기 실패:`, err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fetchAllCounts = async () => {
@@ -121,45 +139,9 @@ const StorageScreen: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    fetchAllCounts();
-  }, []);
-
-  const loadPosts = async (nextPage = 0) => {
-    if (loading || isLast) return;
-    
-    setLoading(true);
-    
-    try {
-      const res = await getStoragePosts(storageType, nextPage);
-      
-      if (res && res.content) {
-        setVotes(prev => nextPage === 0 ? res.content : [...prev, ...res.content]);
-        setPage(res.number + 1);
-        setIsLast(res.last);
-      }
-    } catch (err) {
-      console.error(`${storageType} 불러오기 실패:`, err);
-    } finally {
-      // 자연스러운 로딩을 위해 약간의 지연 추가
-      setTimeout(() => {
-        setLoading(false);
-      }, 500);
-    }
-  };
-
-  useEffect(() => {
-    setVotes([]);
-    setPage(0);
-    setIsLast(false);
-    setLoading(true);
-    loadPosts(0);
-  }, [storageType, tabRefreshTrigger]);
-
-  // 탭 전환 시 새로고침 기능 추가
+  // 화면이 포커스될 때마다 실행
   useFocusEffect(
     React.useCallback(() => {
-      // 화면이 포커스될 때마다 실행
       setVotes([]);
       setPage(0);
       setIsLast(false);
@@ -168,10 +150,19 @@ const StorageScreen: React.FC = () => {
       fetchAllCounts();
       
       return () => {
-        // 화면이 포커스를 잃을 때 실행 (선택적)
+        // cleanup
       };
-    }, [storageType, tabRefreshTrigger])
+    }, [storageType])
   );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    setVotes([]);
+    setPage(0);
+    setIsLast(false);
+    await Promise.all([loadPosts(0), fetchAllCounts()]);
+    setRefreshing(false);
+  };
 
   const isVoteClosed = (finishTime: string) => {
     const finish = new Date(finishTime)
@@ -540,15 +531,6 @@ const StorageScreen: React.FC = () => {
     );
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    setVotes([]);
-    setPage(0);
-    setIsLast(false);
-    await Promise.all([loadPosts(0), fetchAllCounts()]);
-    setRefreshing(false);
-  };
-
   // 스켈레톤 UI 렌더링 함수
   const renderSkeletonList = () => {
     return Array(3).fill(0).map((_, index) => (
@@ -559,50 +541,47 @@ const StorageScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       {renderTabs()}
-      {(() => {
-        return loading && votes.length === 0 ? (
-          <ScrollView
-            contentContainerStyle={styles.container}
-            showsVerticalScrollIndicator={false}
-          >
-            {renderSkeletonList()}
-          </ScrollView>
-        ) : (
-          <FlatList
-            data={votes}
-            keyExtractor={(item) => item.voteId.toString()}
-            renderItem={renderItem}
-            onEndReached={() => loadPosts(page)}
-            onEndReachedThreshold={0.5}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={["#1499D9"]}
-                tintColor="#1499D9"
-                title="새로고침 중..."
-                titleColor="#718096"
-              />
-            }
-            ListFooterComponent={
-              loading
-              ? () => (
-                  <View style={styles.footerLoading}>
-                    <ActivityIndicator size="small" color="#1499D9" />
-                    <Text style={styles.loadingText}>불러오는 중...</Text>
-                  </View>
-                )
-              : null
-            }
-            ListEmptyComponent={!loading ? renderEmptyList : null}
-            contentContainerStyle={[
-              styles.container,
-              votes.length === 0 && !loading && styles.emptyListContainer,
-            ]}
-            showsVerticalScrollIndicator={false}
+      <FlatList
+        data={votes}
+        keyExtractor={(item) => item.voteId.toString()}
+        renderItem={renderItem}
+        onEndReached={() => loadPosts(page)}
+        onEndReachedThreshold={0.5}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#1499D9"]}
+            tintColor="#1499D9"
+            title="새로고침 중..."
+            titleColor="#718096"
           />
-        );
-      })()}
+        }
+        ListFooterComponent={
+          loading && votes.length > 0
+          ? () => (
+              <View style={styles.footerLoading}>
+                <ActivityIndicator size="small" color="#1499D9" />
+                <Text style={styles.loadingText}>불러오는 중...</Text>
+              </View>
+            )
+          : null
+        }
+        ListEmptyComponent={
+          loading 
+          ? () => (
+              <View style={styles.container}>
+                {renderSkeletonList()}
+              </View>
+            )
+          : renderEmptyList
+        }
+        contentContainerStyle={[
+          styles.container,
+          votes.length === 0 && !loading && styles.emptyListContainer,
+        ]}
+        showsVerticalScrollIndicator={false}
+      />
 
       {showCommentModal && selectedVoteId && (
         <Modal

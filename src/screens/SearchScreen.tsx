@@ -17,6 +17,7 @@ import {
   ScrollView,
   Modal,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native"
 import Animated, { FadeInLeft, FadeIn, useAnimatedStyle, withRepeat, withSequence, withTiming, useSharedValue } from "react-native-reanimated"
 import AsyncStorage from "@react-native-async-storage/async-storage"
@@ -140,6 +141,8 @@ const SearchScreen: React.FC = () => {
   const [sortOption, setSortOption] = useState<'likes' | 'comments' | 'participants'>('likes')
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showSortModal, setShowSortModal] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, "CommentScreen">>()
 
@@ -151,33 +154,34 @@ const SearchScreen: React.FC = () => {
     setSelectedCategory(0)
     setSortOption('likes')
     setSearchType("vote")
-    fetchVotes()
-  }, [])
-
-  useFocusEffect(
-    useCallback(() => {
-      resetScreen()
-    }, [resetScreen])
-  )
+    if (!hasLoaded) {
+      fetchVotes()
+    }
+  }, [hasLoaded])
 
   useEffect(() => {
+    if (!hasLoaded) {
     fetchVotes()
-  }, [])
+    }
+  }, [hasLoaded])
 
   useEffect(() => {
     if (searchKeyword.trim() === "") {
       if (selectedCategory === 0) {
+        if (!hasLoaded) {
         fetchVotes()
+        }
       } else {
         fetchCategoryVotes(selectedCategory)
       }
     }
-  }, [selectedCategory])
+  }, [selectedCategory, hasLoaded])
 
   const fetchVotes = async () => {
     try {
       const res = await getTopLikedVotes(30)
       setVotes(res)
+      setHasLoaded(true)
     } catch (err) {
       console.error("인기 투표 불러오기 실패:", err)
     }
@@ -239,11 +243,6 @@ const SearchScreen: React.FC = () => {
     if (text.trim() === "") {
       setUserResults([])
       setSearchResults([])
-      if (selectedCategory === 0) {
-        fetchVotes()
-      } else {
-        fetchCategoryVotes(selectedCategory)
-      }
       return
     }
 
@@ -516,6 +515,33 @@ const SearchScreen: React.FC = () => {
     )
   }
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    setLoading(true);
+    try {
+      if (searchKeyword.trim() === "") {
+        if (selectedCategory === 0) {
+          await fetchVotes();
+        } else {
+          await fetchCategoryVotes(selectedCategory);
+        }
+      } else {
+        if (searchType === "vote") {
+          const res = await searchVotes(searchKeyword);
+          setSearchResults(res);
+        } else {
+          const users = await searchUsers(searchKeyword);
+          setUserResults(users);
+        }
+      }
+    } catch (error) {
+      console.error("새로고침 실패:", error);
+    } finally {
+      setRefreshing(false);
+      setLoading(false);
+    }
+  }, [searchKeyword, selectedCategory, searchType]);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.searchContainer}>
@@ -695,6 +721,16 @@ const SearchScreen: React.FC = () => {
           renderItem={() => searchType === "user" ? <SkeletonUserLoader /> : <SkeletonLoader />}
           contentContainerStyle={styles.container}
           showsVerticalScrollIndicator={false}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#1499D9"
+              colors={["#1499D9"]}
+            />
+          }
         />
       ) : searchType === "user" ? (
         <FlatList
@@ -727,6 +763,16 @@ const SearchScreen: React.FC = () => {
           contentContainerStyle={[styles.container, userResults.length === 0 && styles.emptyListContainer]}
           ListEmptyComponent={renderEmptyResults}
           showsVerticalScrollIndicator={false}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#1499D9"
+              colors={["#1499D9"]}
+            />
+          }
         />
       ) : searchKeyword.trim() !== "" ? (
         <FlatList
@@ -736,6 +782,16 @@ const SearchScreen: React.FC = () => {
           contentContainerStyle={[styles.container, searchResults.length === 0 && styles.emptyListContainer]}
           ListEmptyComponent={renderEmptyResults}
           showsVerticalScrollIndicator={false}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#1499D9"
+              colors={["#1499D9"]}
+            />
+          }
         />
       ) : (
         <FlatList
@@ -745,6 +801,16 @@ const SearchScreen: React.FC = () => {
           contentContainerStyle={[styles.container, votes.length === 0 && styles.emptyListContainer]}
           ListEmptyComponent={renderEmptyResults}
           showsVerticalScrollIndicator={false}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#1499D9"
+              colors={["#1499D9"]}
+            />
+          }
         />
       )}
     </SafeAreaView>

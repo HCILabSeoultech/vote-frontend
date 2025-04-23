@@ -14,7 +14,7 @@ import {
   Pressable,
   ScrollView,
 } from 'react-native';
-import Animated, { FadeInLeft, FadeIn } from 'react-native-reanimated';
+import Animated, { FadeInLeft, FadeIn, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { getVoteById, selectVoteOption } from '../api/post';
 import { toggleLike, toggleBookmark } from '../api/reaction';
 import { getUserPage } from '../api/user';
@@ -34,6 +34,67 @@ import { SERVER_URL } from '../constant/config';
 
 const IMAGE_BASE_URL = `${SERVER_URL}`;
 const { width } = Dimensions.get('window');
+
+const SkeletonLoader = () => {
+  const opacity = useSharedValue(0.3);
+  
+  useEffect(() => {
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.7, { duration: 1000 }),
+        withTiming(0.3, { duration: 1000 })
+      ),
+      -1,
+      true
+    );
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Animated.View style={[styles.skeletonContainer, animatedStyle]}>
+      <View style={styles.skeletonProfile}>
+        <View style={styles.skeletonProfileImage} />
+        <View style={styles.skeletonProfileInfo}>
+          <View style={styles.skeletonText} />
+          <View style={styles.skeletonText} />
+        </View>
+      </View>
+      <View style={styles.skeletonTabs}>
+        <View style={styles.skeletonTab} />
+        <View style={styles.skeletonTab} />
+        <View style={styles.skeletonTab} />
+      </View>
+      {[1, 2, 3].map((_, index) => (
+        <View key={index} style={styles.skeletonPost}>
+          <View style={styles.skeletonPostHeader}>
+            <View style={styles.skeletonAvatar} />
+            <View style={styles.skeletonPostInfo}>
+              <View style={styles.skeletonText} />
+              <View style={styles.skeletonText} />
+            </View>
+          </View>
+          <View style={styles.skeletonPostContent}>
+            <View style={[styles.skeletonText, { width: '80%' }]} />
+            <View style={[styles.skeletonText, { width: '60%' }]} />
+          </View>
+          <View style={styles.skeletonOptions}>
+            <View style={styles.skeletonOption} />
+            <View style={styles.skeletonOption} />
+          </View>
+          <View style={styles.skeletonReactions}>
+            <View style={styles.skeletonReaction} />
+            <View style={styles.skeletonReaction} />
+            <View style={styles.skeletonReaction} />
+            <View style={styles.skeletonReaction} />
+          </View>
+        </View>
+      ))}
+    </Animated.View>
+  );
+};
 
 const UserPageScreen: React.FC = () => {
   const [votes, setVotes] = useState<VoteResponse[]>([]);
@@ -444,18 +505,25 @@ const UserPageScreen: React.FC = () => {
   const renderHeader = () => {
     if (!profile) return (
       <View style={styles.loadingProfileContainer}>
-        <ActivityIndicator size="large" color="#5E72E4" />
-        <Text style={styles.loadingText}>프로필 불러오는 중...</Text>
+        <View style={styles.skeletonProfile}>
+          <View style={styles.skeletonProfileImage} />
+          <View style={styles.skeletonProfileInfo}>
+            <View style={styles.skeletonText} />
+            <View style={styles.skeletonText} />
+          </View>
+        </View>
+        <View style={styles.skeletonTabs}>
+          <View style={styles.skeletonTab} />
+          <View style={styles.skeletonTab} />
+          <View style={styles.skeletonTab} />
+        </View>
       </View>
     );
     
     const isDefault = profile.profileImage === 'default.jpg';
   
     return (
-      <Animated.View 
-        entering={FadeIn.duration(500)}
-        style={styles.profileContainer}
-      >
+      <View style={styles.profileContainer}>
         <View style={styles.profileHeader}>
           <View style={styles.profileMainInfo}>
             <Image
@@ -540,7 +608,7 @@ const UserPageScreen: React.FC = () => {
             />
           </View>
         </View>
-      </Animated.View>
+      </View>
     );
   };
 
@@ -570,25 +638,36 @@ const UserPageScreen: React.FC = () => {
         ListHeaderComponent={renderHeader}
         ListFooterComponent={
           loading && activeTab === 'posts' ? (
-            <View style={styles.loaderContainer}>
-              <ActivityIndicator size="small" color="#5E72E4" />
-              <Text style={styles.loadingText}>게시물 불러오는 중...</Text>
+            <View style={styles.skeletonContainer}>
+              {[1, 2, 3].map((_, index) => (
+                <View key={index} style={styles.skeletonPost}>
+                  <View style={styles.skeletonPostHeader}>
+                    <View style={styles.skeletonAvatar} />
+                    <View style={styles.skeletonPostInfo}>
+                      <View style={styles.skeletonText} />
+                      <View style={styles.skeletonText} />
+                    </View>
+                  </View>
+                  <View style={styles.skeletonPostContent}>
+                    <View style={[styles.skeletonText, { width: '80%' }]} />
+                    <View style={[styles.skeletonText, { width: '60%' }]} />
+                  </View>
+                  <View style={styles.skeletonOptions}>
+                    <View style={styles.skeletonOption} />
+                    <View style={styles.skeletonOption} />
+                  </View>
+                  <View style={styles.skeletonReactions}>
+                    <View style={styles.skeletonReaction} />
+                    <View style={styles.skeletonReaction} />
+                    <View style={styles.skeletonReaction} />
+                    <View style={styles.skeletonReaction} />
+                  </View>
+                </View>
+              ))}
             </View>
           ) : null
         }
-        ListEmptyComponent={
-          !loading && activeTab === 'posts' ? renderEmptyPosts : (
-            activeTab === 'followers' ? (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>아직 팔로워가 없습니다.</Text>
-              </View>
-            ) : (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>아직 팔로잉하는 사용자가 없습니다.</Text>
-              </View>
-            )
-          )
-        }
+        ListEmptyComponent={null}
         showsVerticalScrollIndicator={false}
       />
 
@@ -1027,6 +1106,93 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     overflow: 'hidden',
+  },
+  skeletonContainer: {
+    padding: 16,
+  },
+  skeletonProfile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  skeletonProfileImage: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: '#E2E8F0',
+  },
+  skeletonProfileInfo: {
+    marginLeft: 20,
+    flex: 1,
+    gap: 8,
+  },
+  skeletonTabs: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  skeletonTab: {
+    flex: 1,
+    height: 40,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 8,
+    marginHorizontal: 4,
+  },
+  skeletonPost: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  skeletonPostHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  skeletonAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#E2E8F0',
+    marginRight: 10,
+  },
+  skeletonPostInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  skeletonPostContent: {
+    gap: 8,
+    marginBottom: 16,
+  },
+  skeletonText: {
+    height: 16,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+  },
+  skeletonOptions: {
+    gap: 8,
+    marginBottom: 12,
+  },
+  skeletonOption: {
+    height: 54,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
+  },
+  skeletonReactions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingHorizontal: 16,
+  },
+  skeletonReaction: {
+    width: 24,
+    height: 24,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
   },
 });
 

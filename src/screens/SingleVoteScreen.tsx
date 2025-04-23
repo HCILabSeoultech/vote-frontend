@@ -14,7 +14,7 @@ import {
   Modal,
   Pressable,
 } from 'react-native';
-import Animated, { FadeInLeft, FadeIn, useAnimatedStyle, useSharedValue, withSpring, withTiming, runOnJS, interpolate, Extrapolate, withSequence, withDelay } from 'react-native-reanimated';
+import Animated, { FadeInLeft, FadeIn, useAnimatedStyle, useSharedValue, withSpring, withTiming, runOnJS, interpolate, Extrapolate, withSequence, withDelay, withRepeat } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -33,6 +33,65 @@ import GenderStatistics from '../components/statistics/GenderStatistics';
 import { SERVER_URL } from '../constant/config';
 const IMAGE_BASE_URL = `${SERVER_URL}`;
 const { width } = Dimensions.get('window');
+
+const SkeletonLoader = () => {
+  const opacity = useSharedValue(0.3);
+  
+  useEffect(() => {
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.7, { duration: 1000 }),
+        withTiming(0.3, { duration: 1000 })
+      ),
+      -1,
+      true
+    );
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Animated.View style={[styles.skeletonItem, animatedStyle]}>
+      <View style={styles.skeletonHeader}>
+        <View style={styles.skeletonProfile}>
+          <View style={styles.skeletonAvatar} />
+          <View style={styles.skeletonUserInfo}>
+            <View style={styles.skeletonUsername} />
+            <View style={styles.skeletonDate} />
+          </View>
+        </View>
+        <View style={styles.skeletonBadge} />
+      </View>
+
+      <View style={styles.skeletonTitle} />
+      
+      <View style={styles.skeletonMeta}>
+        <View style={styles.skeletonCategory} />
+        <View style={styles.skeletonTime} />
+      </View>
+
+      <View style={styles.skeletonContent} />
+
+      <View style={styles.skeletonImage} />
+
+      <View style={styles.skeletonOptions}>
+        {[1, 2].map((_, index) => (
+          <View key={index} style={styles.skeletonOption}>
+            <View style={styles.skeletonOptionText} />
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.skeletonReactions}>
+        {[1, 2, 3, 4].map((_, index) => (
+          <View key={index} style={styles.skeletonReaction} />
+        ))}
+      </View>
+    </Animated.View>
+  );
+};
 
 const SinglePageScreen: React.FC = () => {
   const route = useRoute<any>();
@@ -199,10 +258,17 @@ const SinglePageScreen: React.FC = () => {
 
   if (loading) {
     return (
-      <View style={styles.loaderContainer}>
-        <ActivityIndicator size="large" color="#5E72E4" />
-        <Text style={styles.loadingText}>투표 불러오는 중...</Text>
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        <View style={styles.header}>
+          <View style={styles.skeletonBackButton} />
+          <View style={styles.skeletonHeaderTitle} />
+          <View style={styles.skeletonShareButton} />
       </View>
+        <ScrollView contentContainerStyle={styles.container}>
+          <SkeletonLoader />
+        </ScrollView>
+      </SafeAreaView>
     );
   }
 
@@ -878,6 +944,133 @@ const styles = StyleSheet.create({
   },
   statisticsContent: {
     flex: 1,
+  },
+  skeletonItem: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  skeletonHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  skeletonProfile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  skeletonAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E2E8F0',
+    marginRight: 12,
+  },
+  skeletonUserInfo: {
+    gap: 4,
+  },
+  skeletonUsername: {
+    width: 100,
+    height: 16,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+  },
+  skeletonDate: {
+    width: 60,
+    height: 12,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+  },
+  skeletonBadge: {
+    width: 60,
+    height: 24,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
+  },
+  skeletonTitle: {
+    width: '80%',
+    height: 24,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+    marginBottom: 12,
+  },
+  skeletonMeta: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  skeletonCategory: {
+    width: 60,
+    height: 24,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
+  },
+  skeletonTime: {
+    width: 100,
+    height: 20,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+  },
+  skeletonContent: {
+    width: '100%',
+    height: 60,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+    marginBottom: 16,
+  },
+  skeletonImage: {
+    width: '100%',
+    height: width * 0.6,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  skeletonOptions: {
+    gap: 8,
+    marginBottom: 16,
+  },
+  skeletonOption: {
+    height: 54,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 16,
+  },
+  skeletonOptionText: {
+    width: '70%',
+    height: 20,
+    backgroundColor: '#F7FAFC',
+    borderRadius: 4,
+  },
+  skeletonReactions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+  },
+  skeletonReaction: {
+    width: 24,
+    height: 24,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
+  },
+  skeletonBackButton: {
+    width: 32,
+    height: 32,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 16,
+  },
+  skeletonHeaderTitle: {
+    width: 100,
+    height: 24,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+  },
+  skeletonShareButton: {
+    width: 32,
+    height: 32,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 16,
   },
 });
 

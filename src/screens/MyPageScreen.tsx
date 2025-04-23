@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  RefreshControl,
 } from 'react-native';
 import Animated, { FadeInLeft, FadeIn, useAnimatedStyle, withRepeat, withTiming, withSequence, useSharedValue } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -44,7 +45,7 @@ type TabType = 'posts' | 'followers' | 'following';
 
 // 스켈레톤 UI 컴포넌트
 const SkeletonLoader = () => {
-  const opacity = useSharedValue(0.3)
+  const opacity = useSharedValue(0.3);
   
   useEffect(() => {
     opacity.value = withRepeat(
@@ -54,37 +55,62 @@ const SkeletonLoader = () => {
       ),
       -1,
       true
-    )
-  }, [])
+    );
+  }, []);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
-  }))
+  }));
 
   return (
-    <Animated.View style={[styles.skeletonItem, animatedStyle]}>
-      <View style={styles.skeletonHeader}>
-        <View style={styles.skeletonAvatar} />
-        <View style={styles.skeletonUserInfo}>
+    <Animated.View style={[styles.skeletonContainer, animatedStyle]}>
+      <View style={styles.skeletonProfile}>
+        <View style={styles.skeletonProfileImage} />
+        <View style={styles.skeletonProfileInfo}>
           <View style={styles.skeletonText} />
-          <View style={[styles.skeletonText, { width: '60%' }]} />
+          <View style={styles.skeletonText} />
         </View>
       </View>
-      <View style={styles.skeletonTitle} />
-      <View style={styles.skeletonOptions}>
-        <View style={styles.skeletonOption} />
-        <View style={styles.skeletonOption} />
+      <View style={styles.skeletonTabs}>
+        <View style={styles.skeletonTab} />
+        <View style={styles.skeletonTab} />
+        <View style={styles.skeletonTab} />
       </View>
+      {[1, 2, 3].map((_, index) => (
+        <View key={index} style={styles.skeletonPost}>
+          <View style={styles.skeletonPostHeader}>
+            <View style={styles.skeletonAvatar} />
+            <View style={styles.skeletonPostInfo}>
+              <View style={styles.skeletonText} />
+              <View style={styles.skeletonText} />
+            </View>
+          </View>
+          <View style={styles.skeletonPostContent}>
+            <View style={[styles.skeletonText, { width: '80%' }]} />
+            <View style={[styles.skeletonText, { width: '60%' }]} />
+          </View>
+          <View style={styles.skeletonOptions}>
+            <View style={styles.skeletonOption} />
+            <View style={styles.skeletonOption} />
+          </View>
+          <View style={styles.skeletonReactions}>
+            <View style={styles.skeletonReaction} />
+            <View style={styles.skeletonReaction} />
+            <View style={styles.skeletonReaction} />
+            <View style={styles.skeletonReaction} />
+          </View>
+        </View>
+      ))}
     </Animated.View>
-  )
-}
+  );
+};
 
 const MyPageScreen: React.FC = () => {
   const [profile, setProfile] = useState<any>(null);
   const [posts, setPosts] = useState<VoteResponse[]>([]);
   const [page, setPage] = useState(0);
   const [isLast, setIsLast] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({});
   const [selectedVoteId, setSelectedVoteId] = useState<number | null>(null);
   const [showCommentModal, setShowCommentModal] = useState(false);
@@ -92,28 +118,30 @@ const MyPageScreen: React.FC = () => {
   const [showStatisticsModal, setShowStatisticsModal] = useState(false);
   const [selectedVoteForStats, setSelectedVoteForStats] = useState<number | null>(null);
   const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('region');
+  const [refreshing, setRefreshing] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   const isFocused = useIsFocused();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'CommentScreen'>>();
 
   useEffect(() => {
-    if (isFocused) {
-      setPosts([]);
-      setPage(0);
-      setIsLast(false);
+    if (isFocused && !hasLoaded) {
       fetchData(0);
     }
   }, [isFocused]);
 
   const fetchData = async (nextPage: number) => {
-    if (loading || isLast) return;
+    if (loading && nextPage !== 0) return;
     setLoading(true);
     try {
       const res = await getMyPage(nextPage);
-      if (nextPage === 0) setProfile(res);
-      setPosts(prev =>
-        nextPage === 0 ? res.posts.content : [...prev, ...res.posts.content]
-      );
+      if (nextPage === 0) {
+        setProfile(res);
+        setPosts(res.posts.content);
+        setHasLoaded(true);
+      } else {
+        setPosts(prev => [...prev, ...res.posts.content]);
+      }
       setPage(res.posts.number + 1);
       setIsLast(res.posts.last);
     } catch (err) {
@@ -122,6 +150,23 @@ const MyPageScreen: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    setLoading(true);
+    try {
+      const res = await getMyPage(0);
+      setProfile(res);
+      setPosts(res.posts.content);
+      setPage(1);
+      setIsLast(res.posts.last);
+    } catch (err) {
+      Alert.alert('에러', '마이페이지 정보를 불러오지 못했습니다.');
+    } finally {
+      setRefreshing(false);
+      setLoading(false);
+    }
+  }, []);
 
   const isVoteClosed = (finishTime: string) => {
     const finish = new Date(finishTime)
@@ -508,12 +553,7 @@ const MyPageScreen: React.FC = () => {
   };
 
   const renderProfile = () => {
-    if (!profile) return (
-      <View style={styles.loadingProfileContainer}>
-        <ActivityIndicator size="large" color="#5E72E4" />
-        <Text style={styles.loadingText}>프로필 불러오는 중...</Text>
-      </View>
-    );
+    if (!profile) return null;
     
     const isDefault = profile.profileImage === 'default.jpg';
 
@@ -608,29 +648,11 @@ const MyPageScreen: React.FC = () => {
     );
   };
 
-  const renderEmptyPosts = () => {
-    if (loading) return null;
-    
-    return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>아직 게시물이 없습니다.</Text>
-        <Text style={styles.emptySubText}>첫 투표를 만들어보세요!</Text>
-      </View>
-    );
-  };
-
   const renderContent = () => {
     switch (activeTab) {
       case 'posts':
-        return loading && posts.length === 0 ? (
-          <ScrollView
-            contentContainerStyle={styles.container}
-            showsVerticalScrollIndicator={false}
-          >
-            {Array(3).fill(0).map((_, index) => (
-              <SkeletonLoader key={index} />
-            ))}
-          </ScrollView>
+        return (loading || refreshing) ? (
+          <SkeletonLoader />
         ) : (
           <FlatList
             data={posts}
@@ -640,58 +662,128 @@ const MyPageScreen: React.FC = () => {
             onEndReachedThreshold={0.5}
             ListFooterComponent={
               loading ? (
-                <View style={styles.loaderContainer}>
-                  <ActivityIndicator size="small" color="#1499D9" />
-                  <Text style={styles.loadingText}>게시물 불러오는 중...</Text>
+                <View style={styles.skeletonContainer}>
+                  {[1, 2, 3].map((_, index) => (
+                    <View key={index} style={styles.skeletonPost}>
+                      <View style={styles.skeletonPostHeader}>
+                        <View style={styles.skeletonAvatar} />
+                        <View style={styles.skeletonPostInfo}>
+                          <View style={styles.skeletonText} />
+                          <View style={styles.skeletonText} />
+                        </View>
+                      </View>
+                      <View style={styles.skeletonPostContent}>
+                        <View style={[styles.skeletonText, { width: '80%' }]} />
+                        <View style={[styles.skeletonText, { width: '60%' }]} />
+                      </View>
+                      <View style={styles.skeletonOptions}>
+                        <View style={styles.skeletonOption} />
+                        <View style={styles.skeletonOption} />
+                      </View>
+                      <View style={styles.skeletonReactions}>
+                        <View style={styles.skeletonReaction} />
+                        <View style={styles.skeletonReaction} />
+                        <View style={styles.skeletonReaction} />
+                        <View style={styles.skeletonReaction} />
+                      </View>
+                    </View>
+                  ))}
                 </View>
               ) : null
             }
-            ListEmptyComponent={renderEmptyPosts}
+            ListEmptyComponent={null}
             showsVerticalScrollIndicator={false}
           />
         );
       case 'followers':
-        return (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>팔로워 목록</Text>
-            <Text style={styles.emptySubText}>준비 중입니다.</Text>
+        return (loading || refreshing) ? (
+          <View style={styles.skeletonContainer}>
+            <View style={styles.skeletonProfile}>
+              <View style={styles.skeletonProfileImage} />
+              <View style={styles.skeletonProfileInfo}>
+                <View style={styles.skeletonText} />
+                <View style={styles.skeletonText} />
+              </View>
+            </View>
+            <View style={styles.skeletonTabs}>
+              <View style={styles.skeletonTab} />
+              <View style={styles.skeletonTab} />
+              <View style={styles.skeletonTab} />
+            </View>
+            {[1, 2, 3].map((_, index) => (
+              <View key={index} style={styles.skeletonFollower}>
+                <View style={styles.skeletonFollowerHeader}>
+                  <View style={styles.skeletonAvatar} />
+                  <View style={styles.skeletonFollowerInfo}>
+                    <View style={styles.skeletonText} />
+                    <View style={styles.skeletonText} />
+                  </View>
+                </View>
+              </View>
+            ))}
           </View>
-        );
+        ) : null;
       case 'following':
-        return (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>팔로잉 목록</Text>
-            <Text style={styles.emptySubText}>준비 중입니다.</Text>
+        return (loading || refreshing) ? (
+          <View style={styles.skeletonContainer}>
+            <View style={styles.skeletonProfile}>
+              <View style={styles.skeletonProfileImage} />
+              <View style={styles.skeletonProfileInfo}>
+                <View style={styles.skeletonText} />
+                <View style={styles.skeletonText} />
+              </View>
+            </View>
+            <View style={styles.skeletonTabs}>
+              <View style={styles.skeletonTab} />
+              <View style={styles.skeletonTab} />
+              <View style={styles.skeletonTab} />
+            </View>
+            {[1, 2, 3].map((_, index) => (
+              <View key={index} style={styles.skeletonFollower}>
+                <View style={styles.skeletonFollowerHeader}>
+                  <View style={styles.skeletonAvatar} />
+                  <View style={styles.skeletonFollowerInfo}>
+                    <View style={styles.skeletonText} />
+                    <View style={styles.skeletonText} />
+                  </View>
+                </View>
+              </View>
+            ))}
           </View>
-        );
+        ) : null;
     }
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <FlatList
-        ListHeaderComponent={renderProfile()}
-        data={activeTab === 'posts' ? posts : []}
-        renderItem={activeTab === 'posts' ? renderPost : null}
-        keyExtractor={(item) => item.voteId.toString()}
-        onEndReached={() => activeTab === 'posts' && fetchData(page)}
-        onEndReachedThreshold={0.5}
-        ListEmptyComponent={
-          !loading && activeTab === 'posts' ? renderEmptyPosts : (
-            activeTab === 'followers' ? (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>아직 팔로워가 없습니다.</Text>
-              </View>
-            ) : (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>아직 팔로잉하는 사용자가 없습니다.</Text>
-              </View>
-            )
-          )
-        }
-        contentContainerStyle={styles.container}
-        showsVerticalScrollIndicator={false}
-      />
+      {loading && !hasLoaded ? (
+        <View style={styles.container}>
+          <SkeletonLoader />
+        </View>
+      ) : (
+        <FlatList
+          ListHeaderComponent={renderProfile()}
+          data={activeTab === 'posts' ? posts : []}
+          renderItem={activeTab === 'posts' ? renderPost : null}
+          keyExtractor={(item) => item.voteId.toString()}
+          onEndReached={() => activeTab === 'posts' && fetchData(page)}
+          onEndReachedThreshold={0.5}
+          ListEmptyComponent={null}
+          contentContainerStyle={styles.container}
+          showsVerticalScrollIndicator={false}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#1499D9"
+              colors={["#1499D9"]}
+              progressViewOffset={50}
+            />
+          }
+        />
+      )}
 
       {showCommentModal && selectedVoteId && (
         <Modal
@@ -821,7 +913,7 @@ const styles = StyleSheet.create({
     flex: 1, 
     backgroundColor: '#F7FAFC' 
   },
-  container: { 
+  container: {
     padding: 16,
     paddingBottom: 24,
   },
@@ -1332,13 +1424,49 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   // 스켈레톤 UI 스타일
-  skeletonItem: {
-    backgroundColor: '#F7FAFC',
+  skeletonContainer: {
+    padding: 16,
+  },
+  skeletonProfile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  skeletonProfileImage: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: '#E2E8F0',
+  },
+  skeletonProfileInfo: {
+    marginLeft: 20,
+    flex: 1,
+    gap: 8,
+  },
+  skeletonTabs: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  skeletonTab: {
+    flex: 1,
+    height: 40,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 8,
+    marginHorizontal: 4,
+  },
+  skeletonPost: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  skeletonHeader: {
+  skeletonPostHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
@@ -1350,30 +1478,58 @@ const styles = StyleSheet.create({
     backgroundColor: '#E2E8F0',
     marginRight: 10,
   },
-  skeletonUserInfo: {
+  skeletonPostInfo: {
     flex: 1,
+    gap: 4,
+  },
+  skeletonPostContent: {
+    gap: 8,
+    marginBottom: 16,
   },
   skeletonText: {
-    height: 14,
+    height: 16,
     backgroundColor: '#E2E8F0',
-    borderRadius: 7,
-    marginBottom: 4,
-    width: '80%',
-  },
-  skeletonTitle: {
-    height: 24,
-    backgroundColor: '#E2E8F0',
-    borderRadius: 12,
-    marginBottom: 16,
-    width: '90%',
+    borderRadius: 4,
   },
   skeletonOptions: {
     gap: 8,
+    marginBottom: 12,
   },
   skeletonOption: {
     height: 54,
     backgroundColor: '#E2E8F0',
     borderRadius: 12,
+  },
+  skeletonReactions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingHorizontal: 16,
+  },
+  skeletonReaction: {
+    width: 24,
+    height: 24,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
+  },
+  skeletonFollower: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  skeletonFollowerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  skeletonFollowerInfo: {
+    marginLeft: 12,
+    flex: 1,
+    gap: 4,
   },
 });
 
