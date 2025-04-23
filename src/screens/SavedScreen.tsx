@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -79,6 +79,13 @@ const SkeletonLoader = () => {
   )
 }
 
+interface ApiError {
+  response?: {
+    status: number;
+    data: any;
+  };
+}
+
 const StorageScreen: React.FC = () => {
   const [storageType, setStorageType] = useState<StorageType>('voted');
   const [votes, setVotes] = useState<VoteResponse[]>([]);
@@ -98,13 +105,124 @@ const StorageScreen: React.FC = () => {
   const [showStatisticsModal, setShowStatisticsModal] = useState(false);
   const [selectedVoteForStats, setSelectedVoteForStats] = useState<number | null>(null);
   const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('region');
+  
+  // 각 탭의 데이터를 저장할 상태 추가
+  const [cachedData, setCachedData] = useState<{
+    voted: VoteResponse[];
+    liked: VoteResponse[];
+    bookmarked: VoteResponse[];
+  }>({
+    voted: [],
+    liked: [],
+    bookmarked: []
+  });
+
+  // 각 탭의 페이지 정보를 저장할 상태 추가
+  const [cachedPages, setCachedPages] = useState<{
+    voted: number;
+    liked: number;
+    bookmarked: number;
+  }>({
+    voted: 0,
+    liked: 0,
+    bookmarked: 0
+  });
+
+  // 각 탭의 마지막 페이지 여부를 저장할 상태 추가
+  const [cachedIsLast, setCachedIsLast] = useState<{
+    voted: boolean;
+    liked: boolean;
+    bookmarked: boolean;
+  }>({
+    voted: false,
+    liked: false,
+    bookmarked: false
+  });
+
+  const [hasInitialLoad, setHasInitialLoad] = useState(false);
 
   const handleTabChange = (value: StorageType) => {
     setStorageType(value);
+    // 캐시된 데이터로 상태 업데이트
+    setVotes(cachedData[value]);
+    setPage(cachedPages[value]);
+    setIsLast(cachedIsLast[value]);
   };
 
+  // 화면이 처음 마운트될 때만 모든 데이터를 가져옴
+  useFocusEffect(
+    React.useCallback(() => {
+      const loadAllData = async () => {
+        if (hasInitialLoad) {
+          return;
+        }
+
+        setLoading(true);
+        
+        try {
+          const [votedRes, likedRes, bookmarkedRes] = await Promise.all([
+            getStoragePosts('voted', 0),
+            getStoragePosts('liked', 0),
+            getStoragePosts('bookmarked', 0)
+          ]);
+          
+          // 각 탭의 데이터 캐시
+          setCachedData({
+            voted: votedRes?.content || [],
+            liked: likedRes?.content || [],
+            bookmarked: bookmarkedRes?.content || []
+          });
+          
+          // 각 탭의 페이지 정보 캐시
+          setCachedPages({
+            voted: votedRes?.number + 1 || 0,
+            liked: likedRes?.number + 1 || 0,
+            bookmarked: bookmarkedRes?.number + 1 || 0
+          });
+          
+          // 각 탭의 마지막 페이지 여부 캐시
+          setCachedIsLast({
+            voted: votedRes?.last || false,
+            liked: likedRes?.last || false,
+            bookmarked: bookmarkedRes?.last || false
+          });
+          
+          // 현재 선택된 탭의 데이터 설정
+          setVotes(votedRes?.content || []);
+          setPage(votedRes?.number + 1 || 0);
+          setIsLast(votedRes?.last || false);
+          
+          // 카운트 정보 업데이트
+          setCounts({
+            voted: votedRes?.totalElements || 0,
+            liked: likedRes?.totalElements || 0,
+            bookmarked: bookmarkedRes?.totalElements || 0
+          });
+
+          setHasInitialLoad(true);
+        } catch (err) {
+          console.error('[초기 데이터 로드 에러]', err);
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      loadAllData();
+      
+      return () => {
+        // cleanup
+      };
+    }, [hasInitialLoad])
+  );
+
   const loadPosts = async (nextPage = 0) => {
-    if (loading || isLast) return;
+    if (loading && nextPage !== 0) {
+      return;
+    }
+    
+    if (!hasInitialLoad && nextPage === 0) {
+      return;
+    }
     
     setLoading(true);
     
@@ -112,12 +230,29 @@ const StorageScreen: React.FC = () => {
       const res = await getStoragePosts(storageType, nextPage);
       
       if (res && res.content) {
-        setVotes(prev => nextPage === 0 ? res.content : [...prev, ...res.content]);
+        const newVotes = nextPage === 0 ? res.content : [...cachedData[storageType], ...res.content];
+        
+        // 캐시 데이터 업데이트
+        setCachedData(prev => ({
+          ...prev,
+          [storageType]: newVotes
+        }));
+        setCachedPages(prev => ({
+          ...prev,
+          [storageType]: res.number + 1
+        }));
+        setCachedIsLast(prev => ({
+          ...prev,
+          [storageType]: res.last
+        }));
+        
+        // 현재 화면 상태 업데이트
+        setVotes(newVotes);
         setPage(res.number + 1);
         setIsLast(res.last);
       }
     } catch (err) {
-      console.error(`${storageType} 불러오기 실패:`, err);
+      console.error('[API 에러]', err);
     } finally {
       setLoading(false);
     }
@@ -130,38 +265,51 @@ const StorageScreen: React.FC = () => {
       const bookmarkedRes = await getStoragePosts('bookmarked', 0);
       
       setCounts({
-        voted: votedRes.totalElements,
-        liked: likedRes.totalElements,
-        bookmarked: bookmarkedRes.totalElements
+        voted: votedRes?.totalElements || 0,
+        liked: likedRes?.totalElements || 0,
+        bookmarked: bookmarkedRes?.totalElements || 0
       });
     } catch (err) {
-      console.error('개수 불러오기 실패:', err);
+      console.error('[카운트 조회 에러]', err);
     }
   };
 
-  // 화면이 포커스될 때마다 실행
-  useFocusEffect(
-    React.useCallback(() => {
-      setVotes([]);
-      setPage(0);
-      setIsLast(false);
-      setLoading(true);
-      loadPosts(0);
-      fetchAllCounts();
-      
-      return () => {
-        // cleanup
-      };
-    }, [storageType])
-  );
-
   const onRefresh = async () => {
+    if (refreshing) {
+      return;
+    }
+    
     setRefreshing(true);
-    setVotes([]);
-    setPage(0);
-    setIsLast(false);
-    await Promise.all([loadPosts(0), fetchAllCounts()]);
-    setRefreshing(false);
+    try {
+      const res = await getStoragePosts(storageType, 0);
+      if (res && res.content) {
+        // 현재 탭의 캐시 데이터만 업데이트
+        setCachedData(prev => ({
+          ...prev,
+          [storageType]: res.content
+        }));
+        setCachedPages(prev => ({
+          ...prev,
+          [storageType]: res.number + 1
+        }));
+        setCachedIsLast(prev => ({
+          ...prev,
+          [storageType]: res.last
+        }));
+        
+        // 현재 화면 상태 업데이트
+        setVotes(res.content);
+        setPage(res.number + 1);
+        setIsLast(res.last);
+        
+        // 카운트 정보도 업데이트
+        await fetchAllCounts();
+      }
+    } catch (err) {
+      console.error('[새로고침 에러]', err);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const isVoteClosed = (finishTime: string) => {
@@ -248,7 +396,11 @@ const StorageScreen: React.FC = () => {
     setShowStatisticsModal(true);
   };
 
-  const renderItem = ({ item, index }: { item: VoteResponse; index: number }) => {
+  const keyExtractor = useCallback((item: VoteResponse) => {
+    return item.voteId.toString();
+  }, []);
+
+  const renderItem = useCallback(({ item, index }: { item: VoteResponse; index: number }) => {
     const closed = isVoteClosed(item.finishTime);
     const selectedOptionId = item.selectedOptionId ?? selectedOptions[item.voteId];
     const hasVoted = !!selectedOptionId;
@@ -462,7 +614,7 @@ const StorageScreen: React.FC = () => {
         </View>
       </Animated.View>
     );
-  };
+  }, [isVoteClosed, handleVote, handleToggleLike, handleToggleBookmark, handleCommentPress, handleStatisticsPress]);
 
   const renderTabs = () => (
     <View style={styles.tabContainer}>
@@ -543,14 +695,20 @@ const StorageScreen: React.FC = () => {
       {renderTabs()}
       <FlatList
         data={votes}
-        keyExtractor={(item) => item.voteId.toString()}
+        keyExtractor={keyExtractor}
         renderItem={renderItem}
-        onEndReached={() => loadPosts(page)}
+        onEndReached={() => {
+          if (!loading && !isLast) {
+            loadPosts(page);
+          }
+        }}
         onEndReachedThreshold={0.5}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={onRefresh}
+            onRefresh={() => {
+              onRefresh();
+            }}
             colors={["#1499D9"]}
             tintColor="#1499D9"
             title="새로고침 중..."
@@ -558,24 +716,28 @@ const StorageScreen: React.FC = () => {
           />
         }
         ListFooterComponent={
-          loading && votes.length > 0
-          ? () => (
-              <View style={styles.footerLoading}>
-                <ActivityIndicator size="small" color="#1499D9" />
-                <Text style={styles.loadingText}>불러오는 중...</Text>
-              </View>
-            )
-          : null
+          loading && votes.length > 0 ? (
+            <View style={styles.footerLoading}>
+              <ActivityIndicator size="small" color="#1499D9" />
+              <Text style={styles.loadingText}>불러오는 중...</Text>
+            </View>
+          ) : null
         }
-        ListEmptyComponent={
-          loading 
-          ? () => (
-              <View style={styles.container}>
-                {renderSkeletonList()}
-              </View>
-            )
-          : renderEmptyList
-        }
+        ListEmptyComponent={() => {
+          return loading ? (
+            <View style={styles.container}>
+              {renderSkeletonList()}
+            </View>
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>
+                {storageType === 'voted' ? '아직 참여한 투표가 없습니다.' :
+                 storageType === 'liked' ? '아직 좋아요한 글이 없습니다.' :
+                 '아직 북마크한 글이 없습니다.'}
+              </Text>
+            </View>
+          );
+        }}
         contentContainerStyle={[
           styles.container,
           votes.length === 0 && !loading && styles.emptyListContainer,
