@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -112,11 +112,9 @@ const MyPageScreen: React.FC = () => {
   const [isLast, setIsLast] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({});
-  const [selectedVoteId, setSelectedVoteId] = useState<number | null>(null);
-  const [showCommentModal, setShowCommentModal] = useState(false);
+  const [commentModalVoteId, setCommentModalVoteId] = useState<number | null>(null);
+  const [statisticsModalVoteId, setStatisticsModalVoteId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('posts');
-  const [showStatisticsModal, setShowStatisticsModal] = useState(false);
-  const [selectedVoteForStats, setSelectedVoteForStats] = useState<number | null>(null);
   const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('region');
   const [refreshing, setRefreshing] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -124,13 +122,7 @@ const MyPageScreen: React.FC = () => {
   const isFocused = useIsFocused();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'CommentScreen'>>();
 
-  useEffect(() => {
-    if (isFocused && !hasLoaded) {
-      fetchData(0);
-    }
-  }, [isFocused]);
-
-  const fetchData = async (nextPage: number) => {
+  const fetchData = useCallback(async (nextPage: number) => {
     if (loading && nextPage !== 0) return;
     setLoading(true);
     try {
@@ -149,7 +141,13 @@ const MyPageScreen: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [loading]);
+
+  useEffect(() => {
+    if (isFocused && !hasLoaded) {
+      fetchData(0);
+    }
+  }, [isFocused, hasLoaded, fetchData]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -168,72 +166,65 @@ const MyPageScreen: React.FC = () => {
     }
   }, []);
 
-  const isVoteClosed = (finishTime: string) => {
+  const isVoteClosed = useCallback((finishTime: string) => {
     const finish = new Date(finishTime)
-    const now = new Date() //KST시스템
-
+    const now = new Date()
     return finish.getTime() < now.getTime()
-  }
+  }, []);
   
-  const refreshVote = async (voteId: number) => {
+  const refreshVote = useCallback(async (voteId: number) => {
     try {
       const updated = await getVoteById(voteId);
       setPosts(prev => prev.map(p => (p.voteId === voteId ? updated : p)));
     } catch (err) {
       console.error('투표 새로고침 실패:', err);
     }
-  };
+  }, []);
 
-  const handleVote = async (voteId: number, optionId: number) => {
+  const handleVote = useCallback(async (voteId: number, optionId: number) => {
     try {
       const token = await AsyncStorage.getItem('token');
       if (!token) {
         Alert.alert('인증 오류', '로그인이 필요합니다.');
         return;
       }
-
       await selectVoteOption(voteId, optionId);
       await refreshVote(voteId);
-      setSelectedOptions(prev => ({
-        ...prev,
-        [voteId]: optionId,
-      }));
+      setSelectedOptions(prev => ({ ...prev, [voteId]: optionId }));
     } catch (err) {
       Alert.alert('에러', '투표 중 오류가 발생했습니다.');
     }
-  };
+  }, [refreshVote]);
 
-  const handleToggleLike = async (voteId: number) => {
+  const handleToggleLike = useCallback(async (voteId: number) => {
     try {
       const token = await AsyncStorage.getItem('token');
       if (!token) {
         Alert.alert('인증 오류', '로그인이 필요합니다.');
         return;
       }
-
       await toggleLike(voteId);
       await refreshVote(voteId);
     } catch (err) {
       Alert.alert('에러', '좋아요 처리 중 오류가 발생했습니다.');
     }
-  };
+  }, [refreshVote]);
 
-  const handleToggleBookmark = async (voteId: number) => {
+  const handleToggleBookmark = useCallback(async (voteId: number) => {
     try {
       const token = await AsyncStorage.getItem('token');
       if (!token) {
         Alert.alert('인증 오류', '로그인이 필요합니다.');
         return;
       }
-
       await toggleBookmark(voteId);
       await refreshVote(voteId);
     } catch (err) {
       Alert.alert('에러', '북마크 처리 중 오류가 발생했습니다.');
     }
-  };
+  }, [refreshVote]);
 
-  const handleDeleteVote = async (voteId: number) => {
+  const handleDeleteVote = useCallback(async (voteId: number) => {
     try {
       await deleteVote(voteId);
       setPosts(prev => prev.filter(post => post.voteId !== voteId));
@@ -241,75 +232,46 @@ const MyPageScreen: React.FC = () => {
     } catch (err) {
       Alert.alert('에러', '삭제 중 오류가 발생했습니다.');
     }
-  };
+  }, []);
 
-  const formatCreatedAt = (dateString: string) => {
+  const formatCreatedAt = useCallback((dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
     const diffMinutes = Math.floor(diffTime / (1000 * 60));
     const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    if (diffMinutes < 60) return `${diffMinutes}분 전`;
+    if (diffHours < 24) return `${diffHours}시간 전`;
+    if (diffDays < 7) return `${diffDays}일 전`;
+    return date.toLocaleDateString();
+  }, []);
 
-    if (diffMinutes < 60) {
-      return `${diffMinutes}분 전`;
-    } else if (diffHours < 24) {
-      return `${diffHours}시간 전`;
-    } else if (diffDays < 7) {
-      return `${diffDays}일 전`;
-    } else {
-      return date.toLocaleDateString();
-    }
-  };
+  const handleCommentPress = useCallback((voteId: number) => {
+    setCommentModalVoteId(voteId);
+  }, []);
 
-  const formatFinishTime = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = date.getTime() - now.getTime(); // 미래면 양수, 과거면 음수
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    // 마감일이 미래고, 7일 이내면 "~일 후 마감" 표시
-    if (diffDays > 0 && diffDays <= 7) {
-      return `${diffDays}일 후 마감`;
-    } else {
-      return date.toLocaleDateString();
-    }
-  };
-
-  const handleCommentPress = (voteId: number) => {
-    setSelectedVoteId(voteId);
-    setShowCommentModal(true);
-  };
-
-  const handleTabChange = (value: TabType) => {
+  const handleTabChange = useCallback((value: TabType) => {
     setActiveTab(value);
-    // 탭 변경 시 데이터 초기화 및 새로운 데이터 로드
     if (value === 'posts') {
       setPosts([]);
       setPage(0);
       setIsLast(false);
       fetchData(0);
-    } else if (value === 'followers') {
-      // TODO: 팔로워 목록 로드
-    } else if (value === 'following') {
-      // TODO: 팔로잉 목록 로드
     }
-  };
+  }, [fetchData]);
 
-  const handleStatisticsPress = (voteId: number) => {
+  const handleStatisticsPress = useCallback((voteId: number) => {
     const vote = posts.find(v => v.voteId === voteId);
     const totalCount = vote?.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0) || 0;
-    
     if (totalCount === 0) {
       Alert.alert('알림', '투표 데이터가 없습니다.');
       return;
     }
-    
-    setSelectedVoteForStats(voteId);
-    setShowStatisticsModal(true);
-  };
+    setStatisticsModalVoteId(voteId);
+  }, [posts]);
 
-  const renderPost = ({ item, index }: { item: VoteResponse, index: number }) => {
+  const renderPost = useCallback(({ item, index }: { item: VoteResponse, index: number }) => {
     const closed = isVoteClosed(item.finishTime);
     const selectedOptionId = item.selectedOptionId ?? selectedOptions[item.voteId];
     const hasVoted = !!selectedOptionId;
@@ -319,37 +281,30 @@ const MyPageScreen: React.FC = () => {
 
     const formatDate = (dateString: string) => {
       const finishDate = new Date(dateString)
-      const now = new Date() // 이미 시스템 시간 (KST) 기준
-    
+      const now = new Date()
       const diffTime = finishDate.getTime() - now.getTime()
       const diffMinutes = Math.floor(diffTime / (1000 * 60))
       const diffHours = Math.floor(diffTime / (1000 * 60 * 60))
       const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
-    
       if (diffTime > 0) {
-        if (diffMinutes < 60) {
-          return `${diffMinutes}분 후 마감`
-        } else if (diffHours < 24) {
-          const remainingMinutes = diffMinutes % 60
-          return `${diffHours}시간 ${remainingMinutes}분 후 마감`
-        } else if (diffDays <= 7) {
-          const remainingHours = diffHours % 24
-          return `${diffDays}일 ${remainingHours}시간 후 마감`
-        } else {
-          return finishDate.toLocaleDateString("ko-KR")
+        if (diffMinutes < 60) return `${diffMinutes}분 후 마감`;
+        if (diffHours < 24) {
+          const remainingMinutes = diffMinutes % 60;
+          return `${diffHours}시간 ${remainingMinutes}분 후 마감`;
         }
-      } else {
-        return ''
+        if (diffDays <= 7) {
+          const remainingHours = diffHours % 24;
+          return `${diffDays}일 ${remainingHours}시간 후 마감`;
+        }
+        return finishDate.toLocaleDateString("ko-KR");
       }
-    }
+      return '';
+    };
 
     return (
       <Animated.View 
         entering={FadeIn.duration(400).delay(index * 50)}
-        style={[
-          styles.voteItem, 
-          closed ? styles.closedVoteItem : styles.activeVoteItem
-        ]}
+        style={[styles.voteItem, closed ? styles.closedVoteItem : styles.activeVoteItem]}
       >
         <View style={styles.userInfoRow}>
           <View style={styles.userInfoLeft}>
@@ -550,11 +505,10 @@ const MyPageScreen: React.FC = () => {
         </View>
       </Animated.View>
     );
-  };
+  }, [isVoteClosed, selectedOptions, handleVote, handleToggleLike, handleToggleBookmark, handleDeleteVote, handleCommentPress, handleStatisticsPress, formatCreatedAt, navigation]);
 
-  const renderProfile = () => {
+  const renderProfile = useCallback(() => {
     if (!profile) return null;
-    
     const isDefault = profile.profileImage === 'default.jpg';
 
     const handleLogout = async () => {
@@ -646,7 +600,7 @@ const MyPageScreen: React.FC = () => {
         </View>
       </Animated.View>
     );
-  };
+  }, [profile, activeTab, handleTabChange, navigation]);
 
   const renderContent = () => {
     switch (activeTab) {
@@ -754,6 +708,8 @@ const MyPageScreen: React.FC = () => {
     }
   };
 
+  const keyExtractor = useCallback((item: VoteResponse) => item.voteId.toString(), []);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       {loading && !hasLoaded ? (
@@ -765,7 +721,7 @@ const MyPageScreen: React.FC = () => {
           ListHeaderComponent={renderProfile()}
           data={activeTab === 'posts' ? posts : []}
           renderItem={activeTab === 'posts' ? renderPost : null}
-          keyExtractor={(item) => item.voteId.toString()}
+          keyExtractor={keyExtractor}
           onEndReached={() => activeTab === 'posts' && fetchData(page)}
           onEndReachedThreshold={0.5}
           ListEmptyComponent={null}
@@ -782,28 +738,29 @@ const MyPageScreen: React.FC = () => {
               progressViewOffset={50}
             />
           }
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={5}
+          windowSize={10}
+          initialNumToRender={5}
+          updateCellsBatchingPeriod={50}
         />
       )}
 
-      {showCommentModal && selectedVoteId && (
+      {commentModalVoteId !== null && (
         <Modal
-          visible={showCommentModal}
+          visible={true}
           transparent
           statusBarTranslucent
           animationType="slide"
           onRequestClose={() => {
-            refreshVote(selectedVoteId);
-            setShowCommentModal(false);
-            setSelectedVoteId(null);
+            setCommentModalVoteId(null);
           }}
         >
           <View style={styles.modalOverlay}>
             <Pressable 
               style={styles.modalBackground}
-              onPress={async () => {
-                await refreshVote(selectedVoteId);
-                setShowCommentModal(false);
-                setSelectedVoteId(null);
+              onPress={() => {
+                setCommentModalVoteId(null);
               }}
             >
               <View style={styles.modalBackdrop} />
@@ -812,7 +769,7 @@ const MyPageScreen: React.FC = () => {
               <CommentScreen
                 route={{
                   params: {
-                    voteId: selectedVoteId
+                    voteId: commentModalVoteId
                   }
                 }}
               />
@@ -821,89 +778,70 @@ const MyPageScreen: React.FC = () => {
         </Modal>
       )}
 
-      <Modal
-        visible={showStatisticsModal}
-        transparent
-        statusBarTranslucent
-        animationType="slide"
-        onRequestClose={() => {
-          setShowStatisticsModal(false);
-          setSelectedVoteForStats(null);
-        }}
-      >
-        <View style={styles.modalOverlay}>
-          <Pressable 
-            style={styles.modalBackground}
-            onPress={() => {
-              setShowStatisticsModal(false);
-              setSelectedVoteForStats(null);
-            }}
-          >
-            <View style={styles.modalBackdrop} />
-          </Pressable>
-          <View style={[styles.modalContainer, styles.statisticsModalContainer]}>
-            <View style={styles.statisticsHeader}>
-              <Text style={styles.statisticsTitle}>투표 통계</Text>
-              <TouchableOpacity 
-                onPress={() => {
-                  setShowStatisticsModal(false);
-                  setSelectedVoteForStats(null);
-                }}
-                style={styles.closeButton}
-              >
-                <Feather name="x" size={24} color="#4A5568" />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.statisticsTabContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.statisticsTabButton,
-                  activeStatTab === 'region' && styles.activeStatisticsTab
-                ]}
-                onPress={() => setActiveStatTab('region')}
-              >
-                <Text style={[
-                  styles.statisticsTabText,
-                  activeStatTab === 'region' && styles.activeStatisticsTabText
-                ]}>지역별</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.statisticsTabButton,
-                  activeStatTab === 'age' && styles.activeStatisticsTab
-                ]}
-                onPress={() => setActiveStatTab('age')}
-              >
-                <Text style={[
-                  styles.statisticsTabText,
-                  activeStatTab === 'age' && styles.activeStatisticsTabText
-                ]}>연령별</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.statisticsTabButton,
-                  activeStatTab === 'gender' && styles.activeStatisticsTab
-                ]}
-                onPress={() => setActiveStatTab('gender')}
-              >
-                <Text style={[
-                  styles.statisticsTabText,
-                  activeStatTab === 'gender' && styles.activeStatisticsTabText
-                ]}>성별</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.statisticsContent}>
-              {selectedVoteForStats && (
-                <>
-                  {activeStatTab === 'region' && <RegionStatistics voteId={selectedVoteForStats} />}
-                  {activeStatTab === 'age' && <AgeStatistics voteId={selectedVoteForStats} />}
-                  {activeStatTab === 'gender' && <GenderStatistics voteId={selectedVoteForStats} />}
-                </>
-              )}
+      {statisticsModalVoteId !== null && (
+        <Modal
+          visible={true}
+          transparent
+          statusBarTranslucent
+          animationType="slide"
+          onRequestClose={() => {
+            setStatisticsModalVoteId(null);
+          }}
+        >
+           <View style={styles.modalOverlay}>
+            <Pressable 
+              style={styles.modalBackground}
+              onPress={() => {
+                setStatisticsModalVoteId(null);
+              }}
+            >
+              <View style={styles.modalBackdrop} />
+            </Pressable>
+            <View style={[styles.modalContainer, styles.statisticsModalContainer]}>
+              <View style={styles.statisticsHeader}>
+                <Text style={styles.statisticsTitle}>투표 통계</Text>
+                <TouchableOpacity 
+                  onPress={() => {
+                    setStatisticsModalVoteId(null);
+                  }}
+                  style={styles.closeButton}
+                >
+                  <Feather name="x" size={24} color="#4A5568" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.statisticsTabContainer}>
+                <TouchableOpacity
+                  style={[styles.statisticsTabButton, activeStatTab === 'region' && styles.activeStatisticsTab]}
+                  onPress={() => setActiveStatTab('region')}
+                >
+                  <Text style={[styles.statisticsTabText, activeStatTab === 'region' && styles.activeStatisticsTabText]}>지역별</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.statisticsTabButton, activeStatTab === 'age' && styles.activeStatisticsTab]}
+                  onPress={() => setActiveStatTab('age')}
+                >
+                  <Text style={[styles.statisticsTabText, activeStatTab === 'age' && styles.activeStatisticsTabText]}>연령별</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.statisticsTabButton, activeStatTab === 'gender' && styles.activeStatisticsTab]}
+                  onPress={() => setActiveStatTab('gender')}
+                >
+                  <Text style={[styles.statisticsTabText, activeStatTab === 'gender' && styles.activeStatisticsTabText]}>성별</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.statisticsContent}>
+                {statisticsModalVoteId && (
+                  <>
+                    {activeStatTab === 'region' && <RegionStatistics voteId={statisticsModalVoteId} />}
+                    {activeStatTab === 'age' && <AgeStatistics voteId={statisticsModalVoteId} />}
+                    {activeStatTab === 'gender' && <GenderStatistics voteId={statisticsModalVoteId} />}
+                  </>
+                )}
+              </View>
             </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 };
@@ -1423,7 +1361,6 @@ const styles = StyleSheet.create({
   statisticsContent: {
     flex: 1,
   },
-  // 스켈레톤 UI 스타일
   skeletonContainer: {
     padding: 16,
   },
@@ -1533,4 +1470,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default MyPageScreen;
+export default React.memo(MyPageScreen);

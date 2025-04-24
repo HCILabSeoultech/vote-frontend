@@ -529,15 +529,13 @@ const SinglePageScreen: React.FC = () => {
         statusBarTranslucent
         animationType="slide"
         onRequestClose={() => {
-          fetchVote();
           setShowCommentModal(false);
         }}
       >
         <View style={styles.modalOverlay}>
           <Pressable 
             style={styles.modalBackground}
-            onPress={async () => {
-              await fetchVote();
+            onPress={() => {
               setShowCommentModal(false);
             }}
           >

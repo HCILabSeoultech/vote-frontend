@@ -75,7 +75,6 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
                 value={username} 
                 onChangeText={setUsername}
                 autoCapitalize="none"
-                containerStyle={styles.inputField}
               />
             </View>
             
@@ -85,7 +84,6 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
                 value={password} 
                 onChangeText={setPassword} 
                 secureTextEntry
-                containerStyle={styles.inputField}
               />
             </View>
             
@@ -129,116 +127,107 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    padding: 24,
+    padding: 16,
     justifyContent: 'space-between',
   },
   logoContainer: {
     alignItems: 'center',
-    marginTop: 60,
-    marginBottom: 40,
+    marginTop: 32,
+    marginBottom: 24,
   },
   logoCircle: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: '#F0F4FF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
     shadowColor: '#1499D9',
-    shadowOffset: { width: 0, height: 8 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowRadius: 8,
+    elevation: 4,
   },
   logoInnerCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#1499D9',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 4,
+    elevation: 2,
   },
   title: {
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#1499D9',
-    marginBottom: 8,
+    marginBottom: 4,
     letterSpacing: 1,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 12,
     color: '#718096',
     letterSpacing: 0.5,
   },
   formContainer: {
     width: '100%',
-    marginBottom: 40,
+    marginBottom: 24,
   },
   inputGroup: {
     marginBottom: 12,
   },
-  inputField: {
-    backgroundColor: '#F7FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    height: 56,
-    paddingHorizontal: 20,
-    fontSize: 16,
-  },
   loginButton: {
     backgroundColor: '#1499D9',
-    height: 56,
-    borderRadius: 16,
-    marginTop: 24,
+    height: 40,
+    borderRadius: 10,
+    marginTop: 16,
     shadowColor: '#1499D9',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 4,
+    elevation: 2,
   },
   loginButtonText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#FFFFFF',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   findAccountButton: {
-    marginTop: 20,
+    marginTop: 12,
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   findAccountText: {
     color: '#718096',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
     letterSpacing: 0.5,
   },
   footerContainer: {
-    marginBottom: 24,
+    marginBottom: 16,
     alignItems: 'center',
   },
   footerText: {
     color: '#718096',
-    fontSize: 14,
-    marginBottom: 8,
+    fontSize: 12,
+    marginBottom: 6,
     letterSpacing: 0.5,
   },
   signupButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 20,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
     backgroundColor: '#F0F4FF',
-    borderRadius: 12,
+    borderRadius: 8,
   },
   signupText: {
     color: '#1499D9',
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.5,
   },

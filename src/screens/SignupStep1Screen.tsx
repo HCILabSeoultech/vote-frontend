@@ -143,7 +143,6 @@ const SignupStep1Screen: React.FC<Props> = ({ navigation }) => {
                 </View>
                 <Text style={styles.progressText}>1/3 단계</Text>
               </View>
-              <Text style={styles.title}>계정 만들기</Text>
               <Text style={styles.subtitle}>아이디와 비밀번호를 설정해주세요</Text>
             </View>
             
@@ -158,10 +157,6 @@ const SignupStep1Screen: React.FC<Props> = ({ navigation }) => {
                       onChangeText={setUsername}
                       autoCapitalize="none"
                       autoCorrect={false}
-                      containerStyle={[
-                        styles.inputField, 
-                        isChecked ? styles.checkedInputField : {}
-                      ]}
                     />
                   </View>
                   <TouchableOpacity 
@@ -198,7 +193,6 @@ const SignupStep1Screen: React.FC<Props> = ({ navigation }) => {
                   autoComplete="off"
                   textContentType="oneTimeCode"
                   importantForAutofill="no"
-                  containerStyle={styles.inputField}
                 />
                 
                 {password.length > 0 && (
@@ -244,14 +238,6 @@ const SignupStep1Screen: React.FC<Props> = ({ navigation }) => {
                   autoComplete="off"
                   textContentType="oneTimeCode"
                   importantForAutofill="no"
-                  containerStyle={[
-                    styles.inputField,
-                    passwordConfirm.length > 0 && password === passwordConfirm 
-                      ? styles.matchedInputField 
-                      : passwordConfirm.length > 0 
-                        ? styles.unmatchedInputField 
-                        : {}
-                  ]}
                 />
                 {passwordConfirm.length > 0 && password !== passwordConfirm && (
                   <Text style={styles.hintText}>
@@ -263,7 +249,7 @@ const SignupStep1Screen: React.FC<Props> = ({ navigation }) => {
 
             <View style={styles.buttonContainer}>
               <Button 
-                title="다음 단계로" 
+                title="다음" 
                 onPress={handleNext} 
                 style={styles.nextButton}
                 textStyle={styles.nextButtonText}
@@ -309,9 +295,9 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     width: '80%',
-    height: 6,
+    height: 3,
     backgroundColor: '#F0F4FF',
-    borderRadius: 3,
+    borderRadius: 1.5,
     marginBottom: 8,
     overflow: 'hidden',
   },
@@ -319,30 +305,24 @@ const styles = StyleSheet.create({
     width: '33.33%',
     height: '100%',
     backgroundColor: '#1499D9',
-    borderRadius: 3,
+    borderRadius: 1.5,
   },
   progressText: {
     fontSize: 14,
     color: '#718096',
     letterSpacing: 0.5,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#1499D9',
-    marginBottom: 8,
-    letterSpacing: 1,
-  },
   subtitle: {
     fontSize: 16,
     color: '#718096',
     letterSpacing: 0.5,
+    textAlign: 'center',
   },
   formContainer: {
     marginBottom: 40,
   },
   inputGroup: {
-    marginBottom: 12,
+    marginBottom: 24,
   },
   inputLabel: {
     fontSize: 14,
@@ -351,48 +331,22 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     letterSpacing: 0.5,
   },
-  inputField: {
-    backgroundColor: '#F7FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    height: 56,
-    paddingHorizontal: 20,
-    fontSize: 16,
-  },
-  checkedInputField: {
-    borderColor: '#1499D9',
-    backgroundColor: '#F0F4FF',
-  },
-  matchedInputField: {
-    borderColor: '#1499D9',
-    backgroundColor: '#F0F4FF',
-  },
-  unmatchedInputField: {
-    borderColor: '#FF5252',
-    backgroundColor: '#FFEBEE',
-  },
   usernameContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
   },
   usernameInputWrapper: {
     flex: 1,
   },
   checkButton: {
     backgroundColor: '#1499D9',
-    height: 56,
-    paddingHorizontal: 20,
-    borderRadius: 16,
+    height: 40,
+    paddingHorizontal: 16,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 12,
-    minWidth: 100,
-    shadowColor: '#1499D9',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    minWidth: 80,
   },
   checkedButton: {
     backgroundColor: '#1499D9',

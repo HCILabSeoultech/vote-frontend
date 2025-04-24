@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -86,6 +86,117 @@ interface ApiError {
   };
 }
 
+// 탭 버튼 컴포넌트 분리
+const TabButton = React.memo(({ 
+  label, 
+  count, 
+  isActive, 
+  onPress 
+}: { 
+  label: string;
+  count: number;
+  isActive: boolean;
+  onPress: () => void;
+}) => (
+  <TouchableOpacity
+    style={[styles.tabButton, isActive && styles.activeTab]}
+    onPress={onPress}
+    activeOpacity={0.7}
+  >
+    <Text style={[styles.tabText, isActive && styles.activeTabText]}>
+      {label} ({count})
+    </Text>
+  </TouchableOpacity>
+));
+
+// 빈 상태 컴포넌트 분리
+const EmptyState = React.memo(({ 
+  storageType,
+  loading 
+}: { 
+  storageType: StorageType;
+  loading: boolean;
+}) => {
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        {Array(3).fill(0).map((_, index) => (
+          <SkeletonLoader key={index} />
+        ))}
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.emptyContainer}>
+      <Text style={styles.emptyText}>
+        {storageType === 'voted' ? '아직 참여한 투표가 없습니다.' :
+         storageType === 'liked' ? '아직 좋아요한 글이 없습니다.' :
+         '아직 북마크한 글이 없습니다.'}
+      </Text>
+    </View>
+  );
+});
+
+// 통계 탭 컴포넌트 분리
+const StatisticsTab = React.memo(({ 
+  label, 
+  isActive, 
+  onPress 
+}: { 
+  label: string;
+  isActive: boolean;
+  onPress: () => void;
+}) => (
+  <TouchableOpacity
+    style={[
+      styles.statisticsTabButton,
+      isActive && styles.activeStatisticsTab
+    ]}
+    onPress={onPress}
+  >
+    <Text style={[
+      styles.statisticsTabText,
+      isActive && styles.activeStatisticsTabText
+    ]}>{label}</Text>
+  </TouchableOpacity>
+));
+
+// 리액션 버튼 컴포넌트 분리
+const ReactionButton = React.memo(({ 
+  icon, 
+  count, 
+  isActive, 
+  activeColor, 
+  onPress 
+}: { 
+  icon: 'heart' | 'message-circle' | 'bookmark' | 'bar-chart-2';
+  count?: number;
+  isActive?: boolean;
+  activeColor?: string;
+  onPress: () => void;
+}) => (
+  <TouchableOpacity
+    style={styles.reactionItem}
+    onPress={onPress}
+    activeOpacity={0.7}
+  >
+    <Feather 
+      name={icon} 
+      size={22} 
+      color={isActive ? activeColor : "#718096"} 
+    />
+    {count !== undefined && (
+      <Text style={[
+        styles.reactionText,
+        isActive && { color: activeColor }
+      ]}>
+        {count}
+      </Text>
+    )}
+  </TouchableOpacity>
+));
+
 const StorageScreen: React.FC = () => {
   const [storageType, setStorageType] = useState<StorageType>('voted');
   const [votes, setVotes] = useState<VoteResponse[]>([]);
@@ -140,6 +251,10 @@ const StorageScreen: React.FC = () => {
   });
 
   const [hasInitialLoad, setHasInitialLoad] = useState(false);
+
+  // 모달 상태 통합
+  const [commentModalVoteId, setCommentModalVoteId] = useState<number | null>(null);
+  const [statisticsModalVoteId, setStatisticsModalVoteId] = useState<number | null>(null);
 
   const handleTabChange = (value: StorageType) => {
     setStorageType(value);
@@ -312,54 +427,14 @@ const StorageScreen: React.FC = () => {
     }
   };
 
-  const isVoteClosed = (finishTime: string) => {
-    const finish = new Date(finishTime)
-    const now = new Date() //KST시스템
+  // 유틸리티 함수 메모이제이션
+  const isVoteClosed = useCallback((finishTime: string) => {
+    const finish = new Date(finishTime);
+    const now = new Date();
+    return finish.getTime() < now.getTime();
+  }, []);
 
-    return finish.getTime() < now.getTime()
-  }
-
-  const refreshVote = async (voteId: number) => {
-    try {
-      const updated = await getVoteById(voteId);
-      setVotes((prev) => prev.map((v) => (v.voteId === voteId ? updated : v)));
-    } catch (err) {
-      console.error('투표 새로고침 실패:', err);
-    }
-  };
-
-  const handleToggleLike = async (voteId: number) => {
-    try {
-      await toggleLike(voteId);
-      await refreshVote(voteId);
-    } catch (err) {
-      Alert.alert('에러', '좋아요 처리 중 오류가 발생했습니다.');
-    }
-  };
-
-  const handleToggleBookmark = async (voteId: number) => {
-    try {
-      await toggleBookmark(voteId);
-      await refreshVote(voteId);
-    } catch (err) {
-      Alert.alert('에러', '북마크 처리 중 오류가 발생했습니다.');
-    }
-  };
-
-  const handleVote = async (voteId: number, optionId: number) => {
-    try {
-      await selectVoteOption(voteId, optionId);
-      await refreshVote(voteId);
-      setSelectedOptions((prev) => ({
-        ...prev,
-        [voteId]: optionId,
-      }));
-    } catch (err) {
-      Alert.alert('에러', '투표 중 오류가 발생했습니다.');
-    }
-  };
-
-  const formatCreatedAt = (dateString: string) => {
+  const formatCreatedAt = useCallback((dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
@@ -376,14 +451,40 @@ const StorageScreen: React.FC = () => {
     } else {
       return date.toLocaleDateString();
     }
-  };
+  }, []);
 
-  const handleCommentPress = (voteId: number) => {
-    setSelectedVoteId(voteId);
-    setShowCommentModal(true);
-  };
+  const formatDate = useCallback((dateString: string) => {
+    const finishDate = new Date(dateString);
+    const now = new Date();
+  
+    const diffTime = finishDate.getTime() - now.getTime();
+    const diffMinutes = Math.floor(diffTime / (1000 * 60));
+    const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  
+    if (diffTime > 0) {
+      if (diffMinutes < 60) {
+        return `${diffMinutes}분 후 마감`;
+      } else if (diffHours < 24) {
+        const remainingMinutes = diffMinutes % 60;
+        return `${diffHours}시간 ${remainingMinutes}분 후 마감`;
+      } else if (diffDays <= 7) {
+        const remainingHours = diffHours % 24;
+        return `${diffDays}일 ${remainingHours}시간 후 마감`;
+      } else {
+        return finishDate.toLocaleDateString("ko-KR");
+      }
+    } else {
+      return '';
+    }
+  }, []);
 
-  const handleStatisticsPress = (voteId: number) => {
+  // 핸들러 함수 메모이제이션
+  const handleCommentPress = useCallback((voteId: number) => {
+    setCommentModalVoteId(voteId);
+  }, []);
+
+  const handleStatisticsPress = useCallback((voteId: number) => {
     const vote = votes.find(v => v.voteId === voteId);
     const totalCount = vote?.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0) || 0;
     
@@ -392,13 +493,154 @@ const StorageScreen: React.FC = () => {
       return;
     }
     
-    setSelectedVoteForStats(voteId);
-    setShowStatisticsModal(true);
+    setStatisticsModalVoteId(voteId);
+  }, [votes]);
+
+  const handleVote = useCallback(async (voteId: number, optionId: number) => {
+    try {
+      await selectVoteOption(voteId, optionId);
+      await refreshVote(voteId);
+      setSelectedOptions((prev) => ({
+        ...prev,
+        [voteId]: optionId,
+      }));
+    } catch (err) {
+      Alert.alert('에러', '투표 중 오류가 발생했습니다.');
+    }
+  }, []);
+
+  const handleToggleLike = useCallback(async (voteId: number) => {
+    try {
+      await toggleLike(voteId);
+      await refreshVote(voteId);
+    } catch (err) {
+      Alert.alert('에러', '좋아요 처리 중 오류가 발생했습니다.');
+    }
+  }, []);
+
+  const handleToggleBookmark = useCallback(async (voteId: number) => {
+    try {
+      await toggleBookmark(voteId);
+      await refreshVote(voteId);
+    } catch (err) {
+      Alert.alert('에러', '북마크 처리 중 오류가 발생했습니다.');
+    }
+  }, []);
+
+  const refreshVote = async (voteId: number) => {
+    try {
+      const updated = await getVoteById(voteId);
+      setVotes((prev) => prev.map((v) => (v.voteId === voteId ? updated : v)));
+    } catch (err) {
+      console.error('투표 새로고침 실패:', err);
+    }
   };
 
   const keyExtractor = useCallback((item: VoteResponse) => {
     return item.voteId.toString();
   }, []);
+
+  const VoteOptionItem = useMemo(() => React.memo(({ 
+    option, 
+    isSelected, 
+    showGauge, 
+    percentage, 
+    onPress, 
+    closed 
+  }: { 
+    option: any, 
+    isSelected: boolean, 
+    showGauge: boolean, 
+    percentage: number, 
+    onPress: () => void, 
+    closed: boolean 
+  }) => {
+    return (
+      <View style={[styles.optionWrapper, option.optionImage && styles.imageOptionWrapper]}>
+        {showGauge && (
+          <Animated.View
+            entering={FadeIn.duration(600)}
+            style={[
+              styles.gaugeBar,
+              {
+                width: `${percentage}%`,
+                backgroundColor: isSelected ? '#5E72E4' : '#E2E8F0',
+              },
+            ]}
+          />
+        )}
+        <TouchableOpacity
+          style={[
+            styles.optionButton,
+            closed && styles.closedOptionButton,
+            isSelected && styles.selectedOptionButton,
+            option.optionImage && styles.optionButtonWithImage,
+          ]}
+          onPress={onPress}
+          disabled={closed || isSelected}
+          activeOpacity={0.7}
+        >
+          {option.optionImage ? (
+            <View style={styles.optionContentWithImage}>
+              <Image
+                source={{ uri: `${IMAGE_BASE_URL}${option.optionImage}` }}
+                style={styles.largeOptionImage}
+                resizeMode="cover"
+              />
+              <View style={styles.optionTextContainer}>
+                <Text style={[styles.optionButtonText, isSelected && styles.selectedOptionText]}>
+                  {option.content}
+                </Text>
+                {showGauge && (
+                  <Text style={[styles.percentageText, isSelected && styles.selectedPercentageText]}>
+                    {percentage}%
+                  </Text>
+                )}
+              </View>
+            </View>
+          ) : (
+            <>
+              <Text style={[styles.optionButtonText, isSelected && styles.selectedOptionText]}>
+                {option.content}
+              </Text>
+              {showGauge && (
+                <Text style={[styles.percentageText, isSelected && styles.selectedPercentageText]}>
+                  {percentage}%
+                </Text>
+              )}
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+    );
+  }), []);
+
+  const renderReactions = useCallback((item: VoteResponse) => (
+    <View style={styles.reactionRow}>
+      <ReactionButton
+        icon="heart"
+        count={item.likeCount}
+        isActive={item.isLiked}
+        activeColor="#FF4B6E"
+        onPress={() => handleToggleLike(item.voteId)}
+      />
+      <ReactionButton
+        icon="message-circle"
+        count={item.commentCount}
+        onPress={() => handleCommentPress(item.voteId)}
+      />
+      <ReactionButton
+        icon="bookmark"
+        isActive={item.isBookmarked}
+        activeColor="#1499D9"
+        onPress={() => handleToggleBookmark(item.voteId)}
+      />
+      <ReactionButton
+        icon="bar-chart-2"
+        onPress={() => handleStatisticsPress(item.voteId)}
+      />
+    </View>
+  ), [handleToggleLike, handleCommentPress, handleToggleBookmark, handleStatisticsPress]);
 
   const renderItem = useCallback(({ item, index }: { item: VoteResponse; index: number }) => {
     const closed = isVoteClosed(item.finishTime);
@@ -407,32 +649,6 @@ const StorageScreen: React.FC = () => {
     const showGauge = closed || hasVoted;
     const totalCount = item.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0);
     const hasImageOptions = item.voteOptions.some(opt => opt.optionImage);
-
-    const formatDate = (dateString: string) => {
-      const finishDate = new Date(dateString)
-      const now = new Date() 
-    
-      const diffTime = finishDate.getTime() - now.getTime()
-      const diffMinutes = Math.floor(diffTime / (1000 * 60))
-      const diffHours = Math.floor(diffTime / (1000 * 60 * 60))
-      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
-    
-      if (diffTime > 0) {
-        if (diffMinutes < 60) {
-          return `${diffMinutes}분 후 마감`
-        } else if (diffHours < 24) {
-          const remainingMinutes = diffMinutes % 60
-          return `${diffHours}시간 ${remainingMinutes}분 후 마감`
-        } else if (diffDays <= 7) {
-          const remainingHours = diffHours % 24
-          return `${diffDays}일 ${remainingHours}시간 후 마감`
-        } else {
-          return finishDate.toLocaleDateString("ko-KR")
-        }
-      } else {
-        return ''
-      }
-    }
 
     return (
       <Animated.View
@@ -497,63 +713,17 @@ const StorageScreen: React.FC = () => {
             {item.voteOptions.map((opt) => {
               const isSelected = selectedOptionId === opt.id;
               const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
+              
               return (
-                <View key={opt.id} style={[styles.optionWrapper, opt.optionImage && styles.imageOptionWrapper]}>
-                  {showGauge && (
-                    <Animated.View
-                      entering={FadeIn.duration(600)}
-                      style={[
-                        styles.gaugeBar,
-                        {
-                          width: `${percentage}%`,
-                          backgroundColor: isSelected ? '#5E72E4' : '#E2E8F0',
-                        },
-                      ]}
-                    />
-                  )}
-                  <TouchableOpacity
-                    style={[
-                      styles.optionButton,
-                      closed && styles.closedOptionButton,
-                      isSelected && styles.selectedOptionButton,
-                      opt.optionImage && styles.optionButtonWithImage,
-                    ]}
-                    onPress={() => handleVote(item.voteId, opt.id)}
-                    disabled={closed || isSelected}
-                    activeOpacity={0.7}
-                  >
-                    {opt.optionImage ? (
-                      <View style={styles.optionContentWithImage}>
-                        <Image
-                          source={{ uri: `${IMAGE_BASE_URL}${opt.optionImage}` }}
-                          style={styles.largeOptionImage}
-                          resizeMode="cover"
-                        />
-                        <View style={styles.optionTextContainer}>
-                          <Text style={[styles.optionButtonText, isSelected && styles.selectedOptionText]}>
-                            {opt.content}
-                          </Text>
-                          {showGauge && (
-                            <Text style={[styles.percentageText, isSelected && styles.selectedPercentageText]}>
-                              {percentage}%
-                            </Text>
-                          )}
-                        </View>
-                      </View>
-                    ) : (
-                      <>
-                        <Text style={[styles.optionButtonText, isSelected && styles.selectedOptionText]}>
-                          {opt.content}
-                        </Text>
-                        {showGauge && (
-                          <Text style={[styles.percentageText, isSelected && styles.selectedPercentageText]}>
-                            {percentage}%
-                          </Text>
-                        )}
-                      </>
-                    )}
-                  </TouchableOpacity>
-                </View>
+                <VoteOptionItem
+                  key={opt.id}
+                  option={opt}
+                  isSelected={isSelected}
+                  showGauge={showGauge}
+                  percentage={percentage}
+                  onPress={() => handleVote(item.voteId, opt.id)}
+                  closed={closed}
+                />
               );
             })}
             {showGauge && totalCount > 0 && (
@@ -563,89 +733,43 @@ const StorageScreen: React.FC = () => {
         )}
 
         <View style={styles.divider} />
-
-        <View style={styles.reactionRow}>
-          <TouchableOpacity
-            style={styles.reactionItem}
-            onPress={() => handleToggleLike(item.voteId)}
-            activeOpacity={0.7}
-          >
-            <Feather 
-              name={item.isLiked ? "heart" : "heart"} 
-              size={22} 
-              color={item.isLiked ? "#FF4B6E" : "#718096"} 
-            />
-            <Text style={[
-              styles.reactionText,
-              item.isLiked && styles.activeReactionText
-            ]}>
-              {item.likeCount}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.reactionItem}
-            onPress={() => handleCommentPress(item.voteId)}
-            activeOpacity={0.7}
-          >
-            <Feather name="message-circle" size={22} color="#718096" />
-            <Text style={styles.reactionText}>{item.commentCount}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.reactionItem}
-            onPress={() => handleToggleBookmark(item.voteId)}
-            activeOpacity={0.7}
-          >
-            <Feather 
-              name={item.isBookmarked ? "bookmark" : "bookmark"} 
-              size={22} 
-              color={item.isBookmarked ? "#1499D9" : "#718096"} 
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.reactionItem} 
-            onPress={() => handleStatisticsPress(item.voteId)}
-            activeOpacity={0.7}
-          >
-            <Feather name="bar-chart-2" size={22} color="#718096" />
-          </TouchableOpacity>
-        </View>
+        {renderReactions(item)}
       </Animated.View>
     );
-  }, [isVoteClosed, handleVote, handleToggleLike, handleToggleBookmark, handleCommentPress, handleStatisticsPress]);
+  }, [
+    isVoteClosed,
+    selectedOptions,
+    formatCreatedAt,
+    formatDate,
+    handleVote,
+    handleToggleLike,
+    handleToggleBookmark,
+    handleCommentPress,
+    handleStatisticsPress,
+    navigation
+  ]);
 
-  const renderTabs = () => (
+  const renderTabs = useCallback(() => (
     <View style={styles.tabContainer}>
       <View style={styles.tabRow}>
-        <TouchableOpacity
-          style={[styles.tabButton, storageType === 'voted' && styles.activeTab]}
+        <TabButton
+          label="참여한 투표"
+          count={counts.voted}
+          isActive={storageType === 'voted'}
           onPress={() => handleTabChange('voted')}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.tabText, storageType === 'voted' && styles.activeTabText]}>
-            참여한 투표 ({counts.voted})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabButton, storageType === 'liked' && styles.activeTab]}
+        />
+        <TabButton
+          label="좋아요한 글"
+          count={counts.liked}
+          isActive={storageType === 'liked'}
           onPress={() => handleTabChange('liked')}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.tabText, storageType === 'liked' && styles.activeTabText]}>
-            좋아요한 글 ({counts.liked})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabButton, storageType === 'bookmarked' && styles.activeTab]}
+        />
+        <TabButton
+          label="북마크한 글"
+          count={counts.bookmarked}
+          isActive={storageType === 'bookmarked'}
           onPress={() => handleTabChange('bookmarked')}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.tabText, storageType === 'bookmarked' && styles.activeTabText]}>
-            북마크한 글 ({counts.bookmarked})
-          </Text>
-        </TouchableOpacity>
+        />
       </View>
       <View style={styles.tabIndicator}>
         <Animated.View 
@@ -660,35 +784,27 @@ const StorageScreen: React.FC = () => {
         />
       </View>
     </View>
-  );
+  ), [storageType, counts, handleTabChange]);
 
-  const renderEmptyList = () => {
-    let message = '';
-    switch (storageType) {
-      case 'voted':
-        message = '아직 참여한 투표가 없습니다.';
-        break;
-      case 'liked':
-        message = '아직 좋아요한 글이 없습니다.';
-        break;
-      case 'bookmarked':
-        message = '아직 북마크한 글이 없습니다.';
-        break;
-    }
-
-    return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>{message}</Text>
-      </View>
-    );
-  };
-
-  // 스켈레톤 UI 렌더링 함수
-  const renderSkeletonList = () => {
-    return Array(3).fill(0).map((_, index) => (
-      <SkeletonLoader key={index} />
-    ));
-  };
+  const renderStatisticsTabs = useCallback(() => (
+    <View style={styles.statisticsTabContainer}>
+      <StatisticsTab
+        label="지역별"
+        isActive={activeStatTab === 'region'}
+        onPress={() => setActiveStatTab('region')}
+      />
+      <StatisticsTab
+        label="연령별"
+        isActive={activeStatTab === 'age'}
+        onPress={() => setActiveStatTab('age')}
+      />
+      <StatisticsTab
+        label="성별"
+        isActive={activeStatTab === 'gender'}
+        onPress={() => setActiveStatTab('gender')}
+      />
+    </View>
+  ), [activeStatTab]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -715,6 +831,11 @@ const StorageScreen: React.FC = () => {
             titleColor="#718096"
           />
         }
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        updateCellsBatchingPeriod={100}
+        initialNumToRender={10}
         ListFooterComponent={
           loading && votes.length > 0 ? (
             <View style={styles.footerLoading}>
@@ -723,21 +844,9 @@ const StorageScreen: React.FC = () => {
             </View>
           ) : null
         }
-        ListEmptyComponent={() => {
-          return loading ? (
-            <View style={styles.container}>
-              {renderSkeletonList()}
-            </View>
-          ) : (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>
-                {storageType === 'voted' ? '아직 참여한 투표가 없습니다.' :
-                 storageType === 'liked' ? '아직 좋아요한 글이 없습니다.' :
-                 '아직 북마크한 글이 없습니다.'}
-              </Text>
-            </View>
-          );
-        }}
+        ListEmptyComponent={() => (
+          <EmptyState storageType={storageType} loading={loading} />
+        )}
         contentContainerStyle={[
           styles.container,
           votes.length === 0 && !loading && styles.emptyListContainer,
@@ -745,25 +854,21 @@ const StorageScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
       />
 
-      {showCommentModal && selectedVoteId && (
+      {commentModalVoteId && (
         <Modal
-          visible={showCommentModal}
+          visible={!!commentModalVoteId}
           transparent
           statusBarTranslucent
           animationType="slide"
           onRequestClose={() => {
-            refreshVote(selectedVoteId!);
-            setShowCommentModal(false);
-            setSelectedVoteId(null);
+            setCommentModalVoteId(null);
           }}
         >
           <View style={styles.modalOverlay}>
             <Pressable 
               style={styles.modalBackground}
-              onPress={async () => {
-                await refreshVote(selectedVoteId!);
-                setShowCommentModal(false);
-                setSelectedVoteId(null);
+              onPress={() => {
+                setCommentModalVoteId(null);
               }}
             >
               <View style={styles.modalBackdrop} />
@@ -772,7 +877,7 @@ const StorageScreen: React.FC = () => {
               <CommentScreen
                 route={{
                   params: {
-                    voteId: selectedVoteId
+                    voteId: commentModalVoteId
                   }
                 }}
               />
@@ -782,21 +887,19 @@ const StorageScreen: React.FC = () => {
       )}
 
       <Modal
-        visible={showStatisticsModal}
+        visible={!!statisticsModalVoteId}
         transparent
         statusBarTranslucent
         animationType="slide"
         onRequestClose={() => {
-          setShowStatisticsModal(false);
-          setSelectedVoteForStats(null);
+          setStatisticsModalVoteId(null);
         }}
       >
         <View style={styles.modalOverlay}>
           <Pressable 
             style={styles.modalBackground}
             onPress={() => {
-              setShowStatisticsModal(false);
-              setSelectedVoteForStats(null);
+              setStatisticsModalVoteId(null);
             }}
           >
             <View style={styles.modalBackdrop} />
@@ -806,52 +909,14 @@ const StorageScreen: React.FC = () => {
               <Text style={styles.statisticsTitle}>투표 통계</Text>
               <TouchableOpacity 
                 onPress={() => {
-                  setShowStatisticsModal(false);
-                  setSelectedVoteForStats(null);
+                  setStatisticsModalVoteId(null);
                 }}
                 style={styles.closeButton}
               >
                 <Feather name="x" size={24} color="#4A5568" />
               </TouchableOpacity>
             </View>
-            <View style={styles.statisticsTabContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.statisticsTabButton,
-                  activeStatTab === 'region' && styles.activeStatisticsTab
-                ]}
-                onPress={() => setActiveStatTab('region')}
-              >
-                <Text style={[
-                  styles.statisticsTabText,
-                  activeStatTab === 'region' && styles.activeStatisticsTabText
-                ]}>지역별</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.statisticsTabButton,
-                  activeStatTab === 'age' && styles.activeStatisticsTab
-                ]}
-                onPress={() => setActiveStatTab('age')}
-              >
-                <Text style={[
-                  styles.statisticsTabText,
-                  activeStatTab === 'age' && styles.activeStatisticsTabText
-                ]}>연령별</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.statisticsTabButton,
-                  activeStatTab === 'gender' && styles.activeStatisticsTab
-                ]}
-                onPress={() => setActiveStatTab('gender')}
-              >
-                <Text style={[
-                  styles.statisticsTabText,
-                  activeStatTab === 'gender' && styles.activeStatisticsTabText
-                ]}>성별</Text>
-              </TouchableOpacity>
-            </View>
+            {renderStatisticsTabs()}
             <View style={styles.statisticsContent}>
               {selectedVoteForStats && (
                 <>
@@ -868,7 +933,6 @@ const StorageScreen: React.FC = () => {
   );
 };
 
-
 const styles = StyleSheet.create({
   safeArea: { 
     flex: 1, 
@@ -884,7 +948,8 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingBottom: 0,
     marginHorizontal: 12,
-    marginTop: 18,
+    marginTop: 8,
+    marginBottom: -8,
     borderRadius: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -899,7 +964,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
   },
   tabButton: {
-    paddingVertical: 10,
+    paddingVertical: 14,
     flex: 1,
     alignItems: 'center',
   },
@@ -952,7 +1017,7 @@ const styles = StyleSheet.create({
   },
   voteItem: {
     position: 'relative',
-    marginBottom: 16,
+    marginBottom: 12,
     padding: 16,
     borderRadius: 16,
     elevation: 2,
@@ -1286,4 +1351,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default StorageScreen;
+export default React.memo(StorageScreen);

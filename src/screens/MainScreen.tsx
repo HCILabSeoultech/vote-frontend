@@ -538,7 +538,6 @@ const MainScreen: React.FC = () => {
           statusBarTranslucent
           animationType="slide"
           onRequestClose={() => {
-            refreshVote(selectedVoteId)
             setShowCommentModal(false)
             setSelectedVoteId(null)
           }}
@@ -546,8 +545,7 @@ const MainScreen: React.FC = () => {
           <View style={styles.modalOverlay}>
             <Pressable 
               style={styles.modalBackground}
-              onPress={async () => {
-                await refreshVote(selectedVoteId)
+              onPress={() => {
                 setShowCommentModal(false)
                 setSelectedVoteId(null)
               }}

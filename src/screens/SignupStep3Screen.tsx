@@ -96,7 +96,6 @@ const SignupStep3Screen: React.FC<Props> = ({ navigation, route }) => {
               </View>
               <Text style={styles.progressText}>3/3 단계</Text>
             </View>
-            <Text style={styles.title}>마지막 단계</Text>
             <Text style={styles.subtitle}>회원님의 추가 정보를 입력해주세요</Text>
           </View>
 
@@ -108,7 +107,6 @@ const SignupStep3Screen: React.FC<Props> = ({ navigation, route }) => {
                 value={phone}
                 onChangeText={setPhone}
                 keyboardType="phone-pad"
-                containerStyle={styles.inputField}
               />
               <Text style={styles.helperText}>
                 010으로 시작하는 11자리 숫자를 입력해주세요
@@ -123,8 +121,16 @@ const SignupStep3Screen: React.FC<Props> = ({ navigation, route }) => {
                 onChangeText={setIntroduction}
                 multiline={true}
                 numberOfLines={4}
-                containerStyle={styles.textAreaField}
                 textAlignVertical="top"
+                style={{
+                  paddingTop: 12,
+                  minHeight: 100,
+                  backgroundColor: '#F7FAFC',
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  borderRadius: 8,
+                  paddingHorizontal: 12
+                }}
               />
             </View>
 
@@ -199,9 +205,9 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     width: '80%',
-    height: 6,
+    height: 3,
     backgroundColor: '#F0F4FF',
-    borderRadius: 3,
+    borderRadius: 1.5,
     marginBottom: 8,
     overflow: 'hidden',
   },
@@ -209,30 +215,24 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     backgroundColor: '#1499D9',
-    borderRadius: 3,
+    borderRadius: 1.5,
   },
   progressText: {
     fontSize: 14,
     color: '#718096',
     letterSpacing: 0.5,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#1499D9',
-    marginBottom: 8,
-    letterSpacing: 1,
-  },
   subtitle: {
     fontSize: 16,
     color: '#718096',
     letterSpacing: 0.5,
+    textAlign: 'center',
   },
   formContainer: {
-    marginBottom: 40,
+    marginBottom: 32,
   },
   inputGroup: {
-    marginBottom: 12,
+    marginBottom: 16,
   },
   inputLabel: {
     fontSize: 14,
@@ -240,25 +240,6 @@ const styles = StyleSheet.create({
     color: '#1A202C',
     marginBottom: 8,
     letterSpacing: 0.5,
-  },
-  inputField: {
-    backgroundColor: '#F7FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    height: 56,
-    paddingHorizontal: 20,
-    fontSize: 16,
-  },
-  textAreaField: {
-    backgroundColor: '#F7FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    minHeight: 100,
-    paddingTop: 12,
-    paddingHorizontal: 20,
-    fontSize: 16,
   },
   helperText: {
     fontSize: 12,
@@ -270,24 +251,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginTop: 8,
+    gap: 8,
   },
   categoryButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    margin: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 16,
+    borderRadius: 8,
     backgroundColor: '#F7FAFC',
   },
   selectedCategory: {
     backgroundColor: '#1499D9',
     borderColor: '#1499D9',
-    shadowColor: '#1499D9',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
   },
   categoryText: {
     color: '#718096',
@@ -303,18 +279,18 @@ const styles = StyleSheet.create({
   },
   signupButton: {
     backgroundColor: '#1499D9',
-    height: 56,
-    borderRadius: 16,
+    height: 10,
+    borderRadius: 8,
     shadowColor: '#1499D9',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 4,
+    elevation: 2,
   },
   signupButtonText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   backButton: {
     paddingVertical: 12,

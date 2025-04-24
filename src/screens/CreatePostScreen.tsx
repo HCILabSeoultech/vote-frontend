@@ -20,7 +20,6 @@ import { TabParamList } from '../types/TabParam';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SERVER_URL } from '../constant/config';
 import { Feather } from '@expo/vector-icons';
-import Animated, { FadeIn, FadeInRight } from 'react-native-reanimated';
 
 const { width } = Dimensions.get('window');
 
@@ -256,10 +255,7 @@ const CreatePostScreen: React.FC = () => {
   );
 
   const renderStep1 = () => (
-    <Animated.View 
-      entering={FadeIn.duration(300)}
-      style={styles.stepContainer}
-    >
+    <View style={styles.stepContainer}>
       <View style={styles.inputGroup}>
         <Text style={styles.label}>제목</Text>
         <TextInput 
@@ -336,14 +332,11 @@ const CreatePostScreen: React.FC = () => {
         <Text style={styles.nextButtonText}>다음</Text>
         <Feather name="arrow-right" size={20} color="#FFFFFF" />
       </TouchableOpacity>
-    </Animated.View>
+    </View>
   );
 
   const renderStep2 = () => (
-    <Animated.View 
-      entering={FadeInRight.duration(300)}
-      style={styles.stepContainer}
-    >
+    <View style={styles.stepContainer}>
       <View style={styles.inputGroup}>
         <Text style={styles.label}>옵션 타입 선택</Text>
         <View style={styles.optionTypeContainer}>
@@ -499,7 +492,7 @@ const CreatePostScreen: React.FC = () => {
           <Feather name="check" size={20} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
-    </Animated.View>
+    </View>
   );
 
   return (
@@ -536,114 +529,123 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: '#F0F0F0',
   },
   backButton: {
-    padding: 8,
+    padding: 6,
+    borderRadius: 16,
+    backgroundColor: '#F5F5F5',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#2D3748',
+    color: '#1A1A1A',
   },
   headerRight: {
-    width: 40,
+    width: 36,
   },
   stepIndicatorContainer: {
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 8,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
   },
   progressBar: {
-    height: 3,
-    backgroundColor: '#E2E8F0',
-    borderRadius: 1.5,
+    height: 2,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 1,
     overflow: 'hidden',
     marginBottom: 8,
   },
   progressFill: {
     height: '100%',
     backgroundColor: '#1499D9',
-    borderRadius: 1.5,
+    borderRadius: 1,
   },
   stepTextContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 40,
+    gap: 32,
   },
   stepText: {
     fontSize: 12,
-    color: '#718096',
-    fontWeight: '600',
+    color: '#A0A0A0',
+    fontWeight: '500',
   },
   activeStepText: {
     color: '#1499D9',
   },
   container: {
     padding: 16,
+    paddingTop: 12,
   },
   stepContainer: {
     flex: 1,
   },
   inputGroup: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   label: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    marginBottom: 8,
-    color: '#2D3748',
+    marginBottom: 6,
+    color: '#1A1A1A',
   },
   input: {
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E0E0E0',
     borderRadius: 8,
-    padding: 12,
-    fontSize: 15,
-    backgroundColor: '#F7FAFC',
-    color: '#2D3748',
+    padding: 10,
+    fontSize: 13,
+    backgroundColor: '#FFFFFF',
+    color: '#1A1A1A',
   },
   contentInput: {
-    height: 60,
+    height: 80,
     textAlignVertical: 'top',
   },
   optionTypeContainer: {
     flexDirection: 'row',
     gap: 8,
+    marginBottom: 12,
   },
   optionTypeButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 10,
+    padding: 8,
     borderRadius: 8,
-    backgroundColor: '#F7FAFC',
+    backgroundColor: '#F5F5F5',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    gap: 6,
+    borderColor: '#E0E0E0',
+    gap: 4,
   },
   optionTypeButtonSelected: {
     backgroundColor: '#1499D9',
     borderColor: '#1499D9',
   },
   optionTypeText: {
-    fontSize: 14,
-    color: '#4A5568',
+    fontSize: 12,
+    color: '#4A4A4A',
+    fontWeight: '500',
   },
   optionTypeTextSelected: {
     color: '#FFFFFF',
     fontWeight: '600',
   },
   optionContainer: {
-    marginBottom: 12,
-    backgroundColor: '#F7FAFC',
+    marginBottom: 10,
+    backgroundColor: '#FFFFFF',
     borderRadius: 8,
-    padding: 12,
+    padding: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E0E0E0',
   },
   optionHeader: {
     flexDirection: 'row',
@@ -652,43 +654,45 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   optionNumber: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#4A5568',
+    color: '#4A4A4A',
   },
   removeButton: {
-    padding: 4,
+    padding: 6,
+    borderRadius: 16,
+    backgroundColor: '#FFF5F5',
   },
   optionInput: {
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E0E0E0',
     borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
+    padding: 10,
+    fontSize: 13,
     backgroundColor: '#FFFFFF',
-    color: '#2D3748',
+    color: '#1A1A1A',
   },
   imageOptionContainer: {
-    marginTop: 8,
-    gap: 8,
+    marginTop: 10,
+    gap: 10,
   },
   imageUploadButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#1499D9',
-    padding: 10,
+    padding: 8,
     borderRadius: 8,
-    gap: 6,
+    gap: 4,
   },
   imageUploadText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
   },
   optionImage: {
     width: '100%',
-    height: 320,
+    height: 140,
     borderRadius: 8,
     resizeMode: 'cover',
   },
@@ -696,16 +700,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F7FAFC',
-    padding: 10,
+    backgroundColor: '#F5F5F5',
+    padding: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    gap: 6,
+    borderColor: '#E0E0E0',
+    gap: 4,
   },
   addOptionText: {
-    color: '#4A5568',
-    fontSize: 14,
+    color: '#4A4A4A',
+    fontSize: 12,
     fontWeight: '600',
   },
   categoryContainer: {
@@ -714,20 +718,21 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   categoryButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#F7FAFC',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: '#F5F5F5',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E0E0E0',
   },
   selectedCategoryButton: {
     backgroundColor: '#1499D9',
     borderColor: '#1499D9',
   },
   categoryButtonText: {
-    color: '#4A5568',
-    fontSize: 13,
+    color: '#4A4A4A',
+    fontSize: 12,
+    fontWeight: '500',
   },
   selectedCategoryButtonText: {
     color: '#FFFFFF',
@@ -737,45 +742,45 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F7FAFC',
-    padding: 10,
+    backgroundColor: '#F5F5F5',
+    padding: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    gap: 6,
+    borderColor: '#E0E0E0',
+    gap: 4,
   },
   dateButtonText: {
-    color: '#4A5568',
-    fontSize: 14,
+    color: '#4A4A4A',
+    fontSize: 12,
     fontWeight: '600',
   },
   dateText: {
     textAlign: 'center',
-    color: '#4A5568',
-    marginTop: 6,
-    fontSize: 13,
+    color: '#4A4A4A',
+    marginTop: 4,
+    fontSize: 12,
   },
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 8,
-    gap: 8,
+    marginTop: 10,
+    gap: 6,
   },
   prevButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F7FAFC',
+    backgroundColor: '#F5F5F5',
     padding: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    gap: 6,
+    borderColor: '#E0E0E0',
+    gap: 4,
   },
   prevButtonText: {
-    color: '#4A5568',
-    fontSize: 14,
+    color: '#4A4A4A',
+    fontSize: 13,
     fontWeight: '600',
   },
   nextButton: {
@@ -785,11 +790,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#1499D9',
     padding: 10,
     borderRadius: 8,
-    gap: 6,
+    gap: 4,
   },
   nextButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
   },
   submitButton: {
@@ -800,19 +805,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#1499D9',
     padding: 10,
     borderRadius: 8,
-    gap: 6,
+    gap: 4,
   },
   submitText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
   },
   imageUploadContainer: {
-    gap: 8,
+    gap: 10,
   },
   postImage: {
     width: '100%',
-    height: 320,
+    height: 140,
     borderRadius: 8,
     resizeMode: 'cover',
   },

@@ -174,7 +174,6 @@ const SignupStep2Screen: React.FC<Props> = ({ navigation, route }) => {
               </View>
               <Text style={styles.progressText}>2/3 단계</Text>
             </View>
-            <Text style={styles.title}>프로필 입력</Text>
             <Text style={styles.subtitle}>회원님의 기본 정보를 입력해주세요</Text>
           </View>
 
@@ -206,7 +205,6 @@ const SignupStep2Screen: React.FC<Props> = ({ navigation, route }) => {
                 placeholder="이름을 입력해주세요" 
                 value={name} 
                 onChangeText={setName}
-                containerStyle={styles.inputField}
               />
             </View>
 
@@ -358,9 +356,9 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     width: '80%',
-    height: 6,
+    height: 3,
     backgroundColor: '#F0F4FF',
-    borderRadius: 3,
+    borderRadius: 1.5,
     marginBottom: 8,
     overflow: 'hidden',
   },
@@ -368,48 +366,42 @@ const styles = StyleSheet.create({
     width: '66.66%',
     height: '100%',
     backgroundColor: '#1499D9',
-    borderRadius: 3,
+    borderRadius: 1.5,
   },
   progressText: {
     fontSize: 14,
     color: '#718096',
     letterSpacing: 0.5,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#1499D9',
-    marginBottom: 8,
-    letterSpacing: 1,
-  },
   subtitle: {
     fontSize: 16,
     color: '#718096',
     letterSpacing: 0.5,
+    textAlign: 'center',
   },
   formContainer: {
-    marginBottom: 40,
+    marginBottom: 32,
   },
   imageContainer: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 24,
   },
   image: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 4,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 3,
     borderColor: '#FFFFFF',
     shadowColor: '#1499D9',
-    shadowOffset: { width: 0, height: 8 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowRadius: 8,
+    elevation: 4,
   },
   placeholder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     backgroundColor: '#F7FAFC',
     justifyContent: 'center',
     alignItems: 'center',
@@ -419,34 +411,29 @@ const styles = StyleSheet.create({
   },
   placeholderText: {
     color: '#718096',
-    fontSize: 12,
+    fontSize: 10,
     textAlign: 'center',
     paddingHorizontal: 10,
     letterSpacing: 0.5,
   },
   removeButton: {
     position: 'absolute',
-    top: -5,
-    right: -5,
+    top: -4,
+    right: -4,
     backgroundColor: '#FF5252',
-    borderRadius: 12,
-    width: 24,
-    height: 24,
+    borderRadius: 10,
+    width: 20,
+    height: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#FF5252',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
   },
   removeText: {
     color: 'white',
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: 'bold',
   },
   inputGroup: {
-    marginBottom: 12,
+    marginBottom: 16,
   },
   inputLabel: {
     fontSize: 14,
@@ -455,15 +442,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     letterSpacing: 0.5,
   },
-  inputField: {
-    backgroundColor: '#F7FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    height: 56,
-    paddingHorizontal: 20,
-    fontSize: 16,
-  },
   genderContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -471,22 +449,17 @@ const styles = StyleSheet.create({
   },
   genderButton: {
     flex: 1,
-    height: 56,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 16,
+    borderRadius: 8,
     backgroundColor: '#F7FAFC',
   },
   genderButtonSelected: {
     backgroundColor: '#1499D9',
     borderColor: '#1499D9',
-    shadowColor: '#1499D9',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
   },
   genderText: {
     color: '#718096',
@@ -498,31 +471,31 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   datePickerButton: {
-    height: 56,
+    height: 40,
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     backgroundColor: '#F7FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 16,
+    borderRadius: 8,
   },
   datePickerText: {
     color: '#1A202C',
-    fontSize: 16,
+    fontSize: 14,
     letterSpacing: 0.5,
   },
   addressPickerButton: {
-    height: 56,
+    height: 40,
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     backgroundColor: '#F7FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 16,
+    borderRadius: 8,
   },
   addressPickerText: {
     color: '#1A202C',
-    fontSize: 16,
+    fontSize: 14,
     letterSpacing: 0.5,
   },
   buttonContainer: {
@@ -530,18 +503,18 @@ const styles = StyleSheet.create({
   },
   nextButton: {
     backgroundColor: '#1499D9',
-    height: 56,
-    borderRadius: 16,
+    height: 40,
+    borderRadius: 8,
     shadowColor: '#1499D9',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 4,
+    elevation: 2,
   },
   nextButtonText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   backButton: {
     paddingVertical: 12,

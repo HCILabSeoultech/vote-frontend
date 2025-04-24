@@ -1,7 +1,6 @@
 "use client"
 
-import type React from "react"
-import { useEffect, useState, useCallback } from "react"
+import React, { useEffect, useState, useCallback, useMemo } from "react"
 import { Ionicons, Feather } from "@expo/vector-icons"
 import {
   View,
@@ -146,6 +145,27 @@ const SearchScreen: React.FC = () => {
 
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, "CommentScreen">>()
 
+  const fetchVotes = useCallback(async () => {
+    try {
+      const res = await getTopLikedVotes(30)
+      setVotes(res)
+      setHasLoaded(true)
+    } catch (err) {
+      console.error("인기 투표 불러오기 실패:", err)
+    }
+  }, [])
+
+  const fetchCategoryVotes = useCallback(async (categoryId: number) => {
+    try {
+      const res = await getVotesByCategory(categoryId, 0, 30)
+      if (res && res.content) {
+        setVotes(res.content)
+      }
+    } catch (error) {
+      console.error("카테고리별 인기글 불러오기 실패:", error)
+    }
+  }, [])
+
   const resetScreen = useCallback(() => {
     setSearchKeyword("")
     setUserResults([])
@@ -157,57 +177,36 @@ const SearchScreen: React.FC = () => {
     if (!hasLoaded) {
       fetchVotes()
     }
-  }, [hasLoaded])
+  }, [hasLoaded, fetchVotes])
 
   useEffect(() => {
     if (!hasLoaded) {
-    fetchVotes()
+      fetchVotes()
     }
-  }, [hasLoaded])
+  }, [hasLoaded, fetchVotes])
 
   useEffect(() => {
     if (searchKeyword.trim() === "") {
       if (selectedCategory === 0) {
         if (!hasLoaded) {
-        fetchVotes()
+          fetchVotes()
         }
       } else {
         fetchCategoryVotes(selectedCategory)
       }
     }
-  }, [selectedCategory, hasLoaded])
+  }, [selectedCategory, hasLoaded, searchKeyword, fetchVotes, fetchCategoryVotes])
 
-  const fetchVotes = async () => {
-    try {
-      const res = await getTopLikedVotes(30)
-      setVotes(res)
-      setHasLoaded(true)
-    } catch (err) {
-      console.error("인기 투표 불러오기 실패:", err)
-    }
-  }
-
-  const fetchCategoryVotes = async (categoryId: number) => {
-    try {
-      const res = await getVotesByCategory(categoryId, 0, 30)
-      if (res && res.content) {
-        setVotes(res.content)
-      }
-    } catch (error) {
-      console.error("카테고리별 인기글 불러오기 실패:", error)
-    }
-  }
-
-  const refreshVote = async (voteId: number) => {
+  const refreshVote = useCallback(async (voteId: number) => {
     try {
       const updated = await getVoteById(voteId)
       setVotes((prev) => prev.map((vote) => (vote.voteId === voteId ? updated : vote)))
     } catch (err) {
       console.error("투표 새로고침 실패:", err)
     }
-  }
+  }, [])
 
-  const handleVote = async (voteId: number, optionId: number) => {
+  const handleVote = useCallback(async (voteId: number, optionId: number) => {
     try {
       const token = await AsyncStorage.getItem("token")
       if (!token) return Alert.alert("인증 오류", "로그인이 필요합니다.")
@@ -218,27 +217,27 @@ const SearchScreen: React.FC = () => {
     } catch (error) {
       console.error("투표 실패:", error)
     }
-  }
+  }, [refreshVote])
 
-  const handleToggleLike = async (voteId: number) => {
+  const handleToggleLike = useCallback(async (voteId: number) => {
     try {
       await toggleLike(voteId)
       await refreshVote(voteId)
     } catch (err) {
       console.error("좋아요 실패:", err)
     }
-  }
+  }, [refreshVote])
 
-  const handleToggleBookmark = async (voteId: number) => {
+  const handleToggleBookmark = useCallback(async (voteId: number) => {
     try {
       await toggleBookmark(voteId)
       await refreshVote(voteId)
     } catch (err) {
       console.error("북마크 실패:", err)
     }
-  }
+  }, [refreshVote])
 
-  const handleSearch = async (text: string) => {
+  const handleSearch = useCallback(async (text: string) => {
     setSearchKeyword(text)
     if (text.trim() === "") {
       setUserResults([])
@@ -261,9 +260,9 @@ const SearchScreen: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [searchType])
 
-  const handleCategorySelect = async (categoryId: number) => {
+  const handleCategorySelect = useCallback(async (categoryId: number) => {
     setLoading(true)
     setSelectedCategory(categoryId)
     try {
@@ -277,9 +276,9 @@ const SearchScreen: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [fetchVotes, fetchCategoryVotes])
 
-  const handleSortOptionSelect = async (option: 'likes' | 'comments' | 'participants') => {
+  const handleSortOptionSelect = useCallback(async (option: 'likes' | 'comments' | 'participants') => {
     setLoading(true)
     setSortOption(option)
     try {
@@ -293,9 +292,9 @@ const SearchScreen: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedCategory, fetchVotes, fetchCategoryVotes])
 
-  const handleVoteStatusChange = async (newStatus: "ongoing" | "closed" | "all") => {
+  const handleVoteStatusChange = useCallback(async (newStatus: "ongoing" | "closed" | "all") => {
     setLoading(true)
     setVoteStatus(newStatus)
     try {
@@ -309,18 +308,16 @@ const SearchScreen: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedCategory, fetchVotes, fetchCategoryVotes])
 
-  const isVoteClosed = (finishTime: string) => {
+  const isVoteClosed = useCallback((finishTime: string) => {
     const finish = new Date(finishTime)
     const now = new Date() //KST시스템
 
     return finish.getTime() < now.getTime()
-  }
+  }, [])
 
-  
-
-  const formatCreatedAt = (dateString: string) => {
+  const formatCreatedAt = useCallback((dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
@@ -337,9 +334,9 @@ const SearchScreen: React.FC = () => {
     } else {
       return date.toLocaleDateString();
     }
-  };
+  }, [])
 
-  const formatDate = (dateString: string) => {
+  const formatDate = useCallback((dateString: string) => {
     const finishDate = new Date(dateString)
     const now = new Date() 
   
@@ -363,18 +360,18 @@ const SearchScreen: React.FC = () => {
     } else {
       return ''
     }
-  }
+  }, [])
 
-  const getFilteredVotes = () => {
+  const getFilteredVotes = useMemo(() => {
     if (voteStatus === "all") return votes;
     return votes.filter(vote => {
       const closed = isVoteClosed(vote.finishTime);
       return voteStatus === "closed" ? closed : !closed;
     });
-  };
+  }, [votes, voteStatus, isVoteClosed]);
 
-  const getSortedVotes = (votes: VoteResponse[]) => {
-    return [...votes].sort((a, b) => {
+  const getSortedVotes = useMemo(() => {
+    return [...getFilteredVotes].sort((a, b) => {
       switch (sortOption) {
         case 'likes':
           return b.likeCount - a.likeCount;
@@ -388,19 +385,19 @@ const SearchScreen: React.FC = () => {
           return 0;
       }
     });
-  };
+  }, [getFilteredVotes, sortOption]);
 
-  const getSelectedCategoryName = () => {
+  const getSelectedCategoryName = useMemo(() => {
     const category = categories.find(c => c.id === selectedCategory);
     return category ? category.name : '전체';
-  };
+  }, [selectedCategory]);
 
-  const getSelectedSortName = () => {
+  const getSelectedSortName = useMemo(() => {
     const option = sortOptions.find(o => o.id === sortOption);
     return option ? option.name : '좋아요순';
-  };
+  }, [sortOption]);
 
-  const renderSearchResultItem = ({ item, index }: { item: SearchVoteResponse; index: number }) => {
+  const renderSearchResultItem = useCallback(({ item, index }: { item: SearchVoteResponse; index: number }) => {
     return (
       <Animated.View 
         entering={FadeIn.duration(300).delay(index * 50)}
@@ -427,9 +424,9 @@ const SearchScreen: React.FC = () => {
         </TouchableOpacity>
       </Animated.View>
     );
-  };
+  }, [navigation]);
 
-  const renderVoteItem = ({ item, index }: { item: VoteResponse; index: number }) => {
+  const renderVoteItem = useCallback(({ item, index }: { item: VoteResponse; index: number }) => {
     return (
       <Animated.View 
         entering={FadeIn.duration(300).delay(index * 50)}
@@ -500,9 +497,9 @@ const SearchScreen: React.FC = () => {
         </TouchableOpacity>
       </Animated.View>
     );
-  };
+  }, [navigation, formatCreatedAt, formatDate, isVoteClosed]);
 
-  const renderEmptyResults = () => {
+  const renderEmptyResults = useCallback(() => {
     if (loading) return null
 
     return (
@@ -513,7 +510,7 @@ const SearchScreen: React.FC = () => {
         <Text style={styles.emptySubText}>다른 검색어를 입력해보세요.</Text>
       </View>
     )
-  }
+  }, [loading, searchType])
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -540,7 +537,12 @@ const SearchScreen: React.FC = () => {
       setRefreshing(false);
       setLoading(false);
     }
-  }, [searchKeyword, selectedCategory, searchType]);
+  }, [searchKeyword, selectedCategory, searchType, fetchVotes, fetchCategoryVotes]);
+
+  const keyExtractor = useCallback((item: VoteResponse | SearchVoteResponse | UserDocument) => {
+    if ('voteId' in item) return item.voteId.toString();
+    return item.id.toString();
+  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -606,7 +608,7 @@ const SearchScreen: React.FC = () => {
                 onPress={() => setShowCategoryModal(true)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.dropdownButtonText}>{getSelectedCategoryName()}</Text>
+                <Text style={styles.dropdownButtonText}>{getSelectedCategoryName}</Text>
                 <Feather name="chevron-down" size={16} color="#4A5568" />
               </TouchableOpacity>
 
@@ -615,7 +617,7 @@ const SearchScreen: React.FC = () => {
                 onPress={() => setShowSortModal(true)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.dropdownButtonText}>{getSelectedSortName()}</Text>
+                <Text style={styles.dropdownButtonText}>{getSelectedSortName}</Text>
                 <Feather name="chevron-down" size={16} color="#4A5568" />
               </TouchableOpacity>
             </View>
@@ -638,7 +640,6 @@ const SearchScreen: React.FC = () => {
         )}
       </View>
 
-      {/* Category Modal */}
       <Modal
         visible={showCategoryModal}
         transparent={true}
@@ -676,7 +677,6 @@ const SearchScreen: React.FC = () => {
         </TouchableOpacity>
       </Modal>
 
-      {/* Sort Modal */}
       <Modal
         visible={showSortModal}
         transparent={true}
@@ -721,21 +721,19 @@ const SearchScreen: React.FC = () => {
           renderItem={() => searchType === "user" ? <SkeletonUserLoader /> : <SkeletonLoader />}
           contentContainerStyle={styles.container}
           showsVerticalScrollIndicator={false}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={5}
+          windowSize={10}
+          initialNumToRender={5}
+          updateCellsBatchingPeriod={50}
           refreshing={refreshing}
           onRefresh={onRefresh}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor="#1499D9"
-              colors={["#1499D9"]}
-            />
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1499D9" colors={["#1499D9"]}/>}
         />
       ) : searchType === "user" ? (
         <FlatList
           data={userResults}
-          keyExtractor={(item) => item.id.toString()}
+          keyExtractor={keyExtractor}
           renderItem={({ item, index }) => (
             <Animated.View 
               entering={FadeIn.duration(300).delay(index * 50)}
@@ -763,54 +761,48 @@ const SearchScreen: React.FC = () => {
           contentContainerStyle={[styles.container, userResults.length === 0 && styles.emptyListContainer]}
           ListEmptyComponent={renderEmptyResults}
           showsVerticalScrollIndicator={false}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={5}
+          windowSize={10}
+          initialNumToRender={5}
+          updateCellsBatchingPeriod={50}
           refreshing={refreshing}
           onRefresh={onRefresh}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor="#1499D9"
-              colors={["#1499D9"]}
-            />
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1499D9" colors={["#1499D9"]}/>}
         />
       ) : searchKeyword.trim() !== "" ? (
         <FlatList
           data={searchResults}
-          keyExtractor={(item) => item.id.toString()}
+          keyExtractor={keyExtractor}
           renderItem={renderSearchResultItem}
           contentContainerStyle={[styles.container, searchResults.length === 0 && styles.emptyListContainer]}
           ListEmptyComponent={renderEmptyResults}
           showsVerticalScrollIndicator={false}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={5}
+          windowSize={10}
+          initialNumToRender={5}
+          updateCellsBatchingPeriod={50}
           refreshing={refreshing}
           onRefresh={onRefresh}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor="#1499D9"
-              colors={["#1499D9"]}
-            />
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1499D9" colors={["#1499D9"]}/>}
         />
       ) : (
         <FlatList
-          data={getSortedVotes(getFilteredVotes())}
-          keyExtractor={(item) => item.voteId.toString()}
+          data={getSortedVotes}
+          keyExtractor={keyExtractor}
           renderItem={renderVoteItem}
           contentContainerStyle={[styles.container, votes.length === 0 && styles.emptyListContainer]}
           ListEmptyComponent={renderEmptyResults}
           showsVerticalScrollIndicator={false}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={5}
+          windowSize={10}
+          initialNumToRender={5}
+          updateCellsBatchingPeriod={50}
           refreshing={refreshing}
           onRefresh={onRefresh}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor="#1499D9"
-              colors={["#1499D9"]}
-            />
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1499D9" colors={["#1499D9"]}/>}
         />
       )}
     </SafeAreaView>
@@ -1580,4 +1572,4 @@ const styles = StyleSheet.create({
   },
 })
 
-export default SearchScreen
+export default React.memo(SearchScreen)
