@@ -161,7 +161,7 @@ const GenderStatistics = ({ voteId }: Props) => {
   }
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.container}>
       <Animated.View entering={FadeIn.duration(600)} style={styles.headerContainer}>
         <Text style={styles.title}>성별 투표 분포</Text>
         <Text style={styles.totalParticipants}>총 참여자 {totalParticipants}명</Text>
@@ -214,6 +214,7 @@ const GenderStatistics = ({ voteId }: Props) => {
       </Animated.View>
       
       <View style={styles.statsContainer}>
+        <Text style={styles.statsTitle}>상세 통계</Text>
         {datasets.map(({ gender, total, details }, index) => (
           <Animated.View
             key={gender}
@@ -279,15 +280,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   title: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#2D3748',
-  },
-  totalParticipants: {
-    fontSize: 16,
-    color: '#4A5568',
-    marginTop: 8,
-    fontWeight: '500',
+    marginBottom: 20,
+    textAlign: 'center',
+    marginTop: 16,
   },
   chartContainer: {
     margin: 10,
@@ -323,10 +320,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: '#F7FAFC',
   },
-  selectedQuickStatItem: {
-    backgroundColor: '#EBF8FF',
-    borderColor: '#4299E1',
-    borderWidth: 1,
+  colorIndicator: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   quickStatText: {
     fontSize: 14,
@@ -334,16 +331,16 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontWeight: '500',
   },
-  colorIndicator: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
   statsContainer: {
     margin: 16,
     padding: 16,
     backgroundColor: '#F7FAFC',
     borderRadius: 16,
+  },
+  statsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 12,
   },
   genderSection: {
     marginBottom: 12,
@@ -358,11 +355,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 3,
-  },
-  selectedGenderSection: {
-    borderColor: '#4299E1',
-    borderWidth: 2,
-    backgroundColor: '#F7FAFC',
   },
   genderHeader: {
     flexDirection: 'row',
@@ -408,22 +400,12 @@ const styles = StyleSheet.create({
   },
   aiAnalysis: {
     margin: 16,
-    padding: 20,
-    backgroundColor: '#EBF8FF',
-    borderRadius: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: '#4299E1',
-  },
-  aiAnalysisTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2C5282',
-    marginBottom: 8,
-  },
-  aiAnalysisContent: {
+    padding: 16,
+    backgroundColor: '#e3f2fd',
+    borderRadius: 8,
     fontSize: 14,
-    lineHeight: 22,
-    color: '#2D3748',
+    lineHeight: 20,
+    color: '#333',
   },
   skeletonChartTitle: {
     height: 20,
@@ -477,6 +459,33 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 10,
     alignItems: 'center',
+  },
+  totalParticipants: {
+    fontSize: 16,
+    color: '#4A5568',
+    marginTop: 8,
+    fontWeight: '500',
+  },
+  selectedQuickStatItem: {
+    backgroundColor: '#EBF8FF',
+    borderColor: '#4299E1',
+    borderWidth: 1,
+  },
+  selectedGenderSection: {
+    borderColor: '#4299E1',
+    borderWidth: 2,
+    backgroundColor: '#F7FAFC',
+  },
+  aiAnalysisTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2C5282',
+    marginBottom: 8,
+  },
+  aiAnalysisContent: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: '#2D3748',
   },
 });
 

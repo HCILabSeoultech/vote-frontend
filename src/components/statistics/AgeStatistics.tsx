@@ -385,6 +385,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
+    marginLeft: 6,
   },
   statsContainer: {
     margin: 16,
