@@ -92,6 +92,7 @@ const MainScreen: React.FC = () => {
   const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('region')
   const [isLoading, setIsLoading] = useState(true)
   const [hasLoaded, setHasLoaded] = useState(false)
+  const [animatedWidths, setAnimatedWidths] = useState<Record<string, number>>({})
 
   useEffect(() => {
     const fetchUserFromToken = async () => {
@@ -178,15 +179,34 @@ const MainScreen: React.FC = () => {
         return
       }
 
-      await selectVoteOption(voteId, optionId)
-      await refreshVote(voteId)
       setSelectedOptions((prev) => ({
         ...prev,
         [voteId]: optionId,
       }))
+      
+      await selectVoteOption(voteId, optionId)
+      const updatedVote = await getVoteById(voteId)
+      
+      // 투표 결과에 따른 퍼센테이지 계산
+      const totalCount = updatedVote.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0)
+      const newAnimatedWidths: Record<string, number> = {}
+      
+      updatedVote.voteOptions.forEach((opt) => {
+        const percentage = totalCount > 0 ? (opt.voteCount / totalCount) * 100 : 0
+        const animationKey = `${voteId}-${opt.id}`
+        newAnimatedWidths[animationKey] = percentage
+      })
+      
+      setAnimatedWidths(newAnimatedWidths)
+      setVotes((prev) => prev.map((vote) => (vote.voteId === voteId ? updatedVote : vote)))
     } catch (error) {
       console.error("투표 실패:", error)
       Alert.alert("에러", "투표 중 오류가 발생했습니다.")
+      setSelectedOptions((prev) => {
+        const newState = { ...prev }
+        delete newState[voteId]
+        return newState
+      })
     }
   }
 
@@ -363,21 +383,11 @@ const MainScreen: React.FC = () => {
             {item.voteOptions.map((opt) => {
               const isSelected = selectedOptionId === opt.id
               const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0
+              const animationKey = `${item.voteId}-${opt.id}`
+              const animatedWidth = animatedWidths[animationKey] || percentage
 
               return (
                 <View key={opt.id} style={[styles.optionWrapper, opt.optionImage && styles.imageOptionWrapper]}>
-                  {showGauge && (
-                    <Animated.View
-                      entering={FadeInLeft.duration(600)}
-                      style={[
-                        styles.gaugeBar,
-                        {
-                          width: `${percentage}%`,
-                          backgroundColor: isSelected ? "#5E72E4" : "#E2E8F0",
-                        },
-                      ]}
-                    />
-                  )}
                   <TouchableOpacity
                     style={[
                       styles.optionButton,
@@ -389,6 +399,18 @@ const MainScreen: React.FC = () => {
                     disabled={closed || isSelected}
                     activeOpacity={0.7}
                   >
+                    {showGauge && (
+                      <View style={{
+                        position: 'absolute',
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: `${animatedWidth * (opt.optionImage ? 1.25 : 1.11)}%`,
+                        backgroundColor: isSelected ? "#4299E1" : "#E2E8F0",
+                        opacity: 0.3,
+                        borderRadius: 12,
+                      }} />
+                    )}
                     {opt.optionImage ? (
                       <View style={styles.optionContentWithImage}>
                         <Image
@@ -397,27 +419,41 @@ const MainScreen: React.FC = () => {
                           resizeMode="cover"
                         />
                         <View style={styles.optionTextContainer}>
-                          <Text style={[styles.optionButtonText, isSelected && styles.selectedOptionText]}>
+                          <Text style={[
+                            styles.optionButtonText,
+                            isSelected && styles.selectedOptionText,
+                            showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
+                          ]}>
                             {opt.content}
                           </Text>
                           {showGauge && (
-                            <Text style={[styles.percentageText, isSelected && styles.selectedPercentageText]}>
+                            <Text style={[
+                              styles.percentageText,
+                              isSelected && styles.selectedPercentageText
+                            ]}>
                               {percentage}%
                             </Text>
                           )}
                         </View>
                       </View>
                     ) : (
-                      <>
-                        <Text style={[styles.optionButtonText, isSelected && styles.selectedOptionText]}>
+                      <View style={styles.optionTextContainer}>
+                        <Text style={[
+                          styles.optionButtonText,
+                          isSelected && styles.selectedOptionText,
+                          showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
+                        ]}>
                           {opt.content}
                         </Text>
                         {showGauge && (
-                          <Text style={[styles.percentageText, isSelected && styles.selectedPercentageText]}>
+                          <Text style={[
+                            styles.percentageText,
+                            isSelected && styles.selectedPercentageText
+                          ]}>
                             {percentage}%
                           </Text>
                         )}
-                      </>
+                      </View>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -790,6 +826,8 @@ const styles = StyleSheet.create({
   optionWrapper: {
     position: "relative",
     marginVertical: 6,
+    borderRadius: 12,
+    width: '100%',
   },
   imageOptionWrapper: {
     width: '48%',
@@ -798,7 +836,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     top: 0,
-    bottom: 0,
+    height: '100%',
     borderRadius: 12,
     zIndex: -1,
   },
@@ -813,6 +851,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     minHeight: 54,
+    width: '100%',
+    position: 'relative',
   },
   optionButtonWithImage: {
     paddingVertical: 16,
@@ -834,14 +874,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    position: 'relative',
+    zIndex: 1,
   },
   closedOptionButton: {
     backgroundColor: "#F7FAFC",
     borderColor: "#E2E8F0",
   },
   selectedOptionButton: {
-    borderColor: "#1499D9",
+    borderColor: "#4299E1",
     borderWidth: 1.5,
+    backgroundColor: '#EBF8FF',
   },
   optionButtonText: {
     fontSize: 15,
@@ -850,7 +893,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   selectedOptionText: {
-    color: "#1499D9",
+    color: "#2C5282",
     fontWeight: "600",
   },
   percentageText: {
@@ -860,10 +903,10 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   selectedPercentageText: {
-    color: "#1499D9",
+    color: "#2C5282",
   },
   responseCountText: {
-    marginTop: 8,
+    marginTop: 12,
     fontSize: 13,
     color: "#718096",
     textAlign: "right",

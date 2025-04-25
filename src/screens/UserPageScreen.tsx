@@ -385,18 +385,6 @@ const UserPageScreen: React.FC = () => {
 
               return (
                 <View key={opt.id} style={[styles.optionWrapper, opt.optionImage && styles.imageOptionWrapper]}>
-                  {showGauge && (
-                    <Animated.View
-                      entering={FadeInLeft.duration(600)}
-                      style={[
-                        styles.gaugeBar,
-                        {
-                          width: `${percentage}%`,
-                          backgroundColor: isSelected ? '#5E72E4' : '#E2E8F0',
-                        },
-                      ]}
-                    />
-                  )}
                   <TouchableOpacity
                     style={[
                       styles.optionButton,
@@ -408,6 +396,18 @@ const UserPageScreen: React.FC = () => {
                     disabled={closed || isSelected}
                     activeOpacity={0.7}
                   >
+                    {showGauge && (
+                      <View style={{
+                        position: 'absolute',
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: `${percentage * (opt.optionImage ? 1.25 : 1.11)}%`,
+                        backgroundColor: isSelected ? "#4299E1" : "#E2E8F0",
+                        opacity: 0.3,
+                        borderRadius: 12,
+                      }} />
+                    )}
                     {opt.optionImage ? (
                       <View style={styles.optionContentWithImage}>
                         <Image
@@ -416,27 +416,41 @@ const UserPageScreen: React.FC = () => {
                           resizeMode="cover"
                         />
                         <View style={styles.optionTextContainer}>
-                          <Text style={[styles.optionButtonText, isSelected && styles.selectedOptionText]}>
+                          <Text style={[
+                            styles.optionButtonText,
+                            isSelected && styles.selectedOptionText,
+                            showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
+                          ]}>
                             {opt.content}
                           </Text>
                           {showGauge && (
-                            <Text style={[styles.percentageText, isSelected && styles.selectedPercentageText]}>
+                            <Text style={[
+                              styles.percentageText,
+                              isSelected && styles.selectedPercentageText
+                            ]}>
                               {percentage}%
                             </Text>
                           )}
                         </View>
                       </View>
                     ) : (
-                      <>
-                        <Text style={[styles.optionButtonText, isSelected && styles.selectedOptionText]}>
+                      <View style={styles.optionTextContainer}>
+                        <Text style={[
+                          styles.optionButtonText,
+                          isSelected && styles.selectedOptionText,
+                          showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
+                        ]}>
                           {opt.content}
                         </Text>
                         {showGauge && (
-                          <Text style={[styles.percentageText, isSelected && styles.selectedPercentageText]}>
+                          <Text style={[
+                            styles.percentageText,
+                            isSelected && styles.selectedPercentageText
+                          ]}>
                             {percentage}%
                           </Text>
                         )}
-                      </>
+                      </View>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -1011,7 +1025,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   selectedPercentageText: {
-    color: '#1499D9',
+    color: '#4A5568',
   },
   responseCountText: {
     marginTop: 8,

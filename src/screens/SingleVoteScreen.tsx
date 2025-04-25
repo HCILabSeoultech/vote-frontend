@@ -155,10 +155,6 @@ const SinglePageScreen: React.FC = () => {
   const handleToggleLike = async () => {
     if (isLiking) return;
     setIsLiking(true);
-    likeScale.value = withSequence(
-      withSpring(1.2),
-      withSpring(1)
-    );
     try {
       await toggleLike(voteId);
       await fetchVote();
@@ -172,10 +168,6 @@ const SinglePageScreen: React.FC = () => {
   const handleToggleBookmark = async () => {
     if (isBookmarking) return;
     setIsBookmarking(true);
-    bookmarkScale.value = withSequence(
-      withSpring(1.2),
-      withSpring(1)
-    );
     try {
       await toggleBookmark(voteId);
       await fetchVote();
@@ -415,37 +407,37 @@ const SinglePageScreen: React.FC = () => {
               const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
 
               return (
-                <Animated.View
+                <View
                   key={opt.id}
-                  entering={FadeInLeft.duration(300).delay(index * 100)}
                   style={styles.optionWrapper}
                 >
-                  {showGauge && (
-                    <Animated.View
-                      entering={FadeInLeft.duration(600)}
-                      style={[
-                        styles.gaugeBar,
-                        {
-                          width: `${percentage}%`,
-                          backgroundColor: isSelected ? "#5E72E4" : "#E2E8F0",
-                        },
-                      ]}
-                    />
-                  )}
                   <TouchableOpacity
                     style={[
                       styles.optionButton,
                       closed && styles.closedOptionButton,
-                      isSelected && styles.selectedOptionButton,
+                      !closed && isSelected && styles.selectedOptionButton,
                     ]}
                     onPress={() => handleVote(opt.id)}
-                    disabled={closed}
+                    disabled={closed || isSelected}
                     activeOpacity={0.7}
                   >
+                    {showGauge && (
+                      <View style={{
+                        position: 'absolute',
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: `${percentage * 1.11}%`,
+                        backgroundColor: isSelected ? "#4299E1" : "#E2E8F0",
+                        opacity: 0.3,
+                        borderRadius: 12,
+                      }} />
+                    )}
                     <View style={styles.optionContent}>
                       <Text style={[
                         styles.optionButtonText,
-                        isSelected && styles.selectedOptionText
+                        isSelected && styles.selectedOptionText,
+                        showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
                       ]}>
                         {opt.content}
                       </Text>
@@ -459,7 +451,7 @@ const SinglePageScreen: React.FC = () => {
                       )}
                     </View>
                   </TouchableOpacity>
-                </Animated.View>
+                </View>
               );
             })}
             {showGauge && totalCount > 0 && <Text style={styles.responseCountText}>{totalCount}명 참여</Text>}
@@ -468,22 +460,20 @@ const SinglePageScreen: React.FC = () => {
           <View style={styles.divider} />
 
           <View style={styles.reactionRow}>
-            <Animated.View style={likeAnimatedStyle}>
-              <TouchableOpacity 
-                style={styles.statItem}
-                onPress={handleToggleLike}
-                activeOpacity={0.7}
-              >
-                <Ionicons 
-                  name="heart-outline" 
-                  size={20} 
-                  color={vote.isLiked ? "#F56565" : "#718096"} 
-                />
-                <Text style={[styles.statText, vote.isLiked && styles.likedText]}>
-                  {vote.likeCount}
-                </Text>
-              </TouchableOpacity>
-            </Animated.View>
+            <TouchableOpacity 
+              style={styles.statItem}
+              onPress={handleToggleLike}
+              activeOpacity={0.7}
+            >
+              <Ionicons 
+                name="heart-outline" 
+                size={20} 
+                color={vote.isLiked ? "#F56565" : "#718096"} 
+              />
+              <Text style={[styles.statText, vote.isLiked && styles.likedText]}>
+                {vote.likeCount}
+              </Text>
+            </TouchableOpacity>
             <TouchableOpacity 
               style={styles.statItem}
               onPress={() => setShowCommentModal(true)}
@@ -492,19 +482,17 @@ const SinglePageScreen: React.FC = () => {
               <Ionicons name="chatbubble-outline" size={20} color="#718096" />
               <Text style={styles.statText}>{vote.commentCount}</Text>
             </TouchableOpacity>
-            <Animated.View style={bookmarkAnimatedStyle}>
-              <TouchableOpacity 
-                style={styles.statItem}
-                onPress={handleToggleBookmark}
-                activeOpacity={0.7}
-              >
-                <Ionicons 
-                  name="bookmark-outline" 
-                  size={20} 
-                  color={vote.isBookmarked ? "#1499D9" : "#718096"} 
-                />
-              </TouchableOpacity>
-            </Animated.View>
+            <TouchableOpacity 
+              style={styles.statItem}
+              onPress={handleToggleBookmark}
+              activeOpacity={0.7}
+            >
+              <Ionicons 
+                name="bookmark-outline" 
+                size={20} 
+                color={vote.isBookmarked ? "#1499D9" : "#718096"} 
+              />
+            </TouchableOpacity>
             <TouchableOpacity 
               style={styles.statItem}
               onPress={() => {
@@ -838,7 +826,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   selectedPercentageText: {
-    color: "#1499D9",
+    color: "#4A5568",
   },
   responseCountText: {
     marginTop: 8,

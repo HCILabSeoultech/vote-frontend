@@ -557,18 +557,6 @@ const StorageScreen: React.FC = () => {
   }) => {
     return (
       <View style={[styles.optionWrapper, option.optionImage && styles.imageOptionWrapper]}>
-        {showGauge && (
-          <Animated.View
-            entering={FadeIn.duration(600)}
-            style={[
-              styles.gaugeBar,
-              {
-                width: `${percentage}%`,
-                backgroundColor: isSelected ? '#5E72E4' : '#E2E8F0',
-              },
-            ]}
-          />
-        )}
         <TouchableOpacity
           style={[
             styles.optionButton,
@@ -580,6 +568,18 @@ const StorageScreen: React.FC = () => {
           disabled={closed || isSelected}
           activeOpacity={0.7}
         >
+          {showGauge && (
+            <View style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: `${percentage * (option.optionImage ? 1.25 : 1.11)}%`,
+              backgroundColor: isSelected ? "#4299E1" : "#E2E8F0",
+              opacity: 0.3,
+              borderRadius: 12,
+            }} />
+          )}
           {option.optionImage ? (
             <View style={styles.optionContentWithImage}>
               <Image
@@ -588,27 +588,41 @@ const StorageScreen: React.FC = () => {
                 resizeMode="cover"
               />
               <View style={styles.optionTextContainer}>
-                <Text style={[styles.optionButtonText, isSelected && styles.selectedOptionText]}>
+                <Text style={[
+                  styles.optionButtonText,
+                  isSelected && styles.selectedOptionText,
+                  showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
+                ]}>
                   {option.content}
                 </Text>
                 {showGauge && (
-                  <Text style={[styles.percentageText, isSelected && styles.selectedPercentageText]}>
+                  <Text style={[
+                    styles.percentageText,
+                    isSelected && styles.selectedPercentageText
+                  ]}>
                     {percentage}%
                   </Text>
                 )}
               </View>
             </View>
           ) : (
-            <>
-              <Text style={[styles.optionButtonText, isSelected && styles.selectedOptionText]}>
+            <View style={styles.optionTextContainer}>
+              <Text style={[
+                styles.optionButtonText,
+                isSelected && styles.selectedOptionText,
+                showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
+              ]}>
                 {option.content}
               </Text>
               {showGauge && (
-                <Text style={[styles.percentageText, isSelected && styles.selectedPercentageText]}>
+                <Text style={[
+                  styles.percentageText,
+                  isSelected && styles.selectedPercentageText
+                ]}>
                   {percentage}%
                 </Text>
               )}
-            </>
+            </View>
           )}
         </TouchableOpacity>
       </View>
@@ -1122,31 +1136,27 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   optionWrapper: {
-    position: 'relative',
+    position: "relative",
     marginVertical: 6,
+    borderRadius: 12,
+    width: '100%',
   },
   imageOptionWrapper: {
     width: '48%',
   },
   optionButton: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#E2E8F0',
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E2E8F0",
     borderWidth: 1.5,
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 16,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
     minHeight: 54,
-  },
-  closedOptionButton: {
-    backgroundColor: '#F7FAFC',
-    borderColor: '#E2E8F0',
-  },
-  selectedOptionButton: {
-    borderColor: '#1499D9',
-    borderWidth: 1.5,
+    width: '100%',
+    position: 'relative',
   },
   optionButtonWithImage: {
     paddingVertical: 16,
@@ -1168,33 +1178,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    position: 'relative',
+    zIndex: 1,
   },
-  gaugeBar: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    borderRadius: 12,
-    zIndex: -1,
+  closedOptionButton: {
+    backgroundColor: "#F7FAFC",
+    borderColor: "#E2E8F0",
   },
-  optionButtonText: { 
-    fontSize: 15, 
-    color: '#2D3748',
-    fontWeight: '500',
+  selectedOptionButton: {
+    borderColor: "#4299E1",
+    borderWidth: 1.5,
+    backgroundColor: '#EBF8FF',
+  },
+  optionButtonText: {
+    fontSize: 15,
+    color: "#2D3748",
+    fontWeight: "500",
     flex: 1,
   },
   selectedOptionText: {
-    color: '#1499D9',
-    fontWeight: '600',
+    color: "#2C5282",
+    fontWeight: "600",
   },
-  percentageText: { 
-    fontSize: 15, 
-    fontWeight: '600', 
-    color: '#4A5568',
+  percentageText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#4A5568",
     marginLeft: 8,
   },
   selectedPercentageText: {
-    color: '#1499D9',
+    color: "#2C5282",
   },
   responseCountText: {
     marginTop: 8,

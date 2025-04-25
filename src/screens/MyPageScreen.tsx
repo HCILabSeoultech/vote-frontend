@@ -118,6 +118,7 @@ const MyPageScreen: React.FC = () => {
   const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('region');
   const [refreshing, setRefreshing] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [animatedWidths, setAnimatedWidths] = useState<Record<string, number>>({});
 
   const isFocused = useIsFocused();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'CommentScreen'>>();
@@ -188,10 +189,18 @@ const MyPageScreen: React.FC = () => {
         Alert.alert('인증 오류', '로그인이 필요합니다.');
         return;
       }
+      setSelectedOptions(prev => ({
+        ...prev,
+        [voteId]: optionId,
+      }));
       await selectVoteOption(voteId, optionId);
       await refreshVote(voteId);
-      setSelectedOptions(prev => ({ ...prev, [voteId]: optionId }));
     } catch (err) {
+      setSelectedOptions(prev => {
+        const newState = { ...prev };
+        delete newState[voteId];
+        return newState;
+      });
       Alert.alert('에러', '투표 중 오류가 발생했습니다.');
     }
   }, [refreshVote]);
@@ -302,8 +311,7 @@ const MyPageScreen: React.FC = () => {
     };
 
     return (
-      <Animated.View 
-        entering={FadeIn.duration(400).delay(index * 50)}
+      <View 
         style={[styles.voteItem, closed ? styles.closedVoteItem : styles.activeVoteItem]}
       >
         <View style={styles.userInfoRow}>
@@ -390,18 +398,6 @@ const MyPageScreen: React.FC = () => {
 
               return (
                 <View key={opt.id} style={[styles.optionWrapper, opt.optionImage && styles.imageOptionWrapper]}>
-                  {showGauge && (
-                    <Animated.View
-                      entering={FadeInLeft.duration(600)}
-                      style={[
-                        styles.gaugeBar,
-                        {
-                          width: `${percentage}%`,
-                          backgroundColor: isSelected ? '#5E72E4' : '#E2E8F0',
-                        },
-                      ]}
-                    />
-                  )}
                   <TouchableOpacity
                     style={[
                       styles.optionButton,
@@ -413,6 +409,18 @@ const MyPageScreen: React.FC = () => {
                     disabled={closed || isSelected}
                     activeOpacity={0.7}
                   >
+                    {showGauge && (
+                      <View style={{
+                        position: 'absolute',
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: `${percentage * (opt.optionImage ? 1.25 : 1.11)}%`,
+                        backgroundColor: isSelected ? "#4299E1" : "#E2E8F0",
+                        opacity: 0.3,
+                        borderRadius: 12,
+                      }} />
+                    )}
                     {opt.optionImage ? (
                       <View style={styles.optionContentWithImage}>
                         <Image
@@ -421,27 +429,41 @@ const MyPageScreen: React.FC = () => {
                           resizeMode="cover"
                         />
                         <View style={styles.optionTextContainer}>
-                          <Text style={[styles.optionButtonText, isSelected && styles.selectedOptionText]}>
+                          <Text style={[
+                            styles.optionButtonText,
+                            isSelected && styles.selectedOptionText,
+                            showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
+                          ]}>
                             {opt.content}
                           </Text>
                           {showGauge && (
-                            <Text style={[styles.percentageText, isSelected && styles.selectedPercentageText]}>
+                            <Text style={[
+                              styles.percentageText,
+                              isSelected && styles.selectedPercentageText
+                            ]}>
                               {percentage}%
                             </Text>
                           )}
                         </View>
                       </View>
                     ) : (
-                      <>
-                        <Text style={[styles.optionButtonText, isSelected && styles.selectedOptionText]}>
+                      <View style={styles.optionTextContainer}>
+                        <Text style={[
+                          styles.optionButtonText,
+                          isSelected && styles.selectedOptionText,
+                          showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
+                        ]}>
                           {opt.content}
                         </Text>
                         {showGauge && (
-                          <Text style={[styles.percentageText, isSelected && styles.selectedPercentageText]}>
+                          <Text style={[
+                            styles.percentageText,
+                            isSelected && styles.selectedPercentageText
+                          ]}>
                             {percentage}%
                           </Text>
                         )}
-                      </>
+                      </View>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -503,7 +525,7 @@ const MyPageScreen: React.FC = () => {
             <Feather name="bar-chart-2" size={20} color="#718096" />
           </TouchableOpacity>
         </View>
-      </Animated.View>
+      </View>
     );
   }, [isVoteClosed, selectedOptions, handleVote, handleToggleLike, handleToggleBookmark, handleDeleteVote, handleCommentPress, handleStatisticsPress, formatCreatedAt, navigation]);
 
@@ -1186,7 +1208,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   selectedPercentageText: {
-    color: '#1499D9',
+    color: '#4A5568',
   },
   responseCountText: {
     marginTop: 8,
