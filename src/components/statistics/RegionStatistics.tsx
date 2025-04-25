@@ -1,9 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { PieChart } from 'react-native-chart-kit';
 import { Dimensions } from 'react-native';
 import { getVoteStatisticsByRegion } from '../../api/post';
 import { RegionStatistics as RegionStatsType, StatOption } from '../../types/Vote';
+import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+
+const CHART_COLORS = [
+  '#FF6B6B', // 빨간색
+  '#4ECDC4', // 청록색
+  '#45B7D1', // 하늘색
+  '#96CEB4', // 민트색
+  '#FFEEAD', // 연한 노란색
+  '#D4A5A5', // 분홍색
+  '#9B59B6', // 보라색
+  '#3498DB', // 파란색
+  '#2ECC71', // 초록색
+  '#F1C40F', // 노란색
+];
 
 interface Props {
   voteId: number;
@@ -17,46 +31,127 @@ type RegionData = {
   };
 };
 
+const SkeletonLoader = () => {
+  const opacity = useSharedValue(0.3);
+  
+  useEffect(() => {
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.7, { duration: 1000 }),
+        withTiming(0.3, { duration: 1000 })
+      ),
+      -1,
+      true
+    );
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
+  return (
+    <ScrollView style={styles.container}>
+      <Text style={styles.title}>지역별 투표 분포</Text>
+      
+      <Animated.View style={[styles.chartContainer, animatedStyle]}>
+        <View style={styles.skeletonChartTitle} />
+        <View style={styles.skeletonChart} />
+      </Animated.View>
+      
+      <View style={styles.statsContainer}>
+        <View style={styles.skeletonStatsTitle} />
+        {[1, 2, 3, 4, 5].map((index) => (
+          <Animated.View key={index} style={[styles.regionSection, animatedStyle]}>
+            <View style={styles.regionHeader}>
+              <View style={styles.skeletonLabel} />
+              <View style={styles.skeletonValue} />
+            </View>
+            <View style={styles.optionsList}>
+              {[1, 2].map((optionIndex) => (
+                <View key={optionIndex} style={styles.optionRow}>
+                  <View style={styles.skeletonOptionLabel} />
+                  <View style={styles.skeletonOptionValue} />
+                </View>
+              ))}
+            </View>
+          </Animated.View>
+        ))}
+      </View>
+
+      <Animated.View style={[styles.aiAnalysis, animatedStyle]}>
+        <View style={styles.skeletonAnalysis} />
+      </Animated.View>
+    </ScrollView>
+  );
+};
+
 const RegionStatistics = ({ voteId }: Props) => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<RegionData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const response = await getVoteStatisticsByRegion(voteId);
-        console.log('[DEBUG] API 원본 응답:', response);
-        
-        // API 응답을 RegionData 타입으로 캐스팅
-        const typedResponse = response as RegionData;
-        
-        // 새로운 객체를 생성하여 키 이름 정리
-        const cleanedResponse: RegionData = {};
-        Object.keys(typedResponse).forEach(key => {
-          const cleanedKey = key.replace(/^\d+\s+/, '').trim();
-          cleanedResponse[cleanedKey] = typedResponse[key];
-        });
-        
-        console.log('[DEBUG] 정제된 응답:', cleanedResponse);
-        setStats(cleanedResponse);
-      } catch (err) {
-        console.error('Region Stats Error:', err);
-        setError('통계 데이터를 불러오는데 실패했습니다.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchStats();
+  const fetchStats = useCallback(async () => {
+    try {
+      const response = await getVoteStatisticsByRegion(voteId);
+      
+      const typedResponse = response as RegionData;
+      const cleanedResponse: RegionData = {};
+      Object.keys(typedResponse).forEach(key => {
+        const cleanedKey = key.replace(/^\d+\s+/, '').trim();
+        cleanedResponse[cleanedKey] = typedResponse[key];
+      });
+      
+      setStats(cleanedResponse);
+    } catch (err) {
+      console.error('Region Stats Error:', err);
+      setError('통계 데이터를 불러오는데 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
   }, [voteId]);
 
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
+
+  const datasets = useMemo(() => {
+    if (!stats) return [];
+    
+    const data = Object.entries(stats).map(([region, data]) => {
+      const total = Object.values(data.stat).reduce<number>((sum, count) => sum + Number(count), 0);
+      return {
+        region,
+        total,
+        details: data.stat
+      };
+    });
+
+    return data.sort((a, b) => b.total - a.total);
+  }, [stats]);
+
+  const totalParticipants = useMemo(() => 
+    datasets.reduce((sum, { total }) => sum + total, 0),
+    [datasets]
+  );
+
+  const chartData = useMemo(() => 
+    datasets.map(({ region, total }, index) => ({
+      name: `${region}`,
+      population: total,
+      color: CHART_COLORS[index % CHART_COLORS.length],
+      legendFontColor: '#7F7F7F',
+      legendFontSize: 15,
+    })),
+    [datasets]
+  );
+
+  const maxParticipationRegion = useMemo(() => 
+    datasets[0],
+    [datasets]
+  );
+
   if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0000ff" />
-      </View>
-    );
+    return <SkeletonLoader />;
   }
 
   if (error || !stats) {
@@ -68,46 +163,6 @@ const RegionStatistics = ({ voteId }: Props) => {
   }
 
   console.log('[DEBUG] stats 데이터:', stats);
-
-  const datasets = Object.entries(stats).map(([region, data]) => {
-    const total = Object.values(data.stat).reduce<number>((sum, count) => sum + Number(count), 0);
-    return {
-      region,  // 이미 정제된 지역명 사용
-      total,
-      details: data.stat
-    };
-  });
-
-  // 참여자 수로만 정렬
-  datasets.sort((a, b) => b.total - a.total);
-
-  const colors = [
-    '#FF6B6B', // 빨간색
-    '#4ECDC4', // 청록색
-    '#45B7D1', // 하늘색
-    '#96CEB4', // 민트색
-    '#FFEEAD', // 연한 노란색
-    '#D4A5A5', // 분홍색
-    '#9B59B6', // 보라색
-    '#3498DB', // 파란색
-    '#2ECC71', // 초록색
-    '#F1C40F', // 노란색
-  ];
-
-  const chartData = datasets.map(({ region, total }, index) => {
-    const chartItem = {
-      name: `${region}`,  // 지역명만 표시
-      population: total,
-      color: colors[index % colors.length],
-      legendFontColor: '#7F7F7F',
-      legendFontSize: 15,
-    };
-    return chartItem;
-  });
-
-
-  const maxParticipationRegion = datasets[0];
-  const totalParticipants = datasets.reduce((sum, { total }) => sum + total, 0);
 
   return (
     <ScrollView style={styles.container}>
@@ -173,13 +228,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   errorContainer: {
-    flex: 1,
+    padding: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -281,6 +331,54 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: '#333',
+  },
+  skeletonChartTitle: {
+    height: 20,
+    width: '40%',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+    marginBottom: 16,
+  },
+  skeletonChart: {
+    height: 220,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 8,
+  },
+  skeletonStatsTitle: {
+    height: 24,
+    width: '30%',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+    marginBottom: 16,
+  },
+  skeletonLabel: {
+    height: 20,
+    width: '30%',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+  },
+  skeletonValue: {
+    height: 20,
+    width: '20%',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+  },
+  skeletonOptionLabel: {
+    height: 16,
+    width: '40%',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+  },
+  skeletonOptionValue: {
+    height: 16,
+    width: '15%',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+  },
+  skeletonAnalysis: {
+    height: 48,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
   },
 });
 

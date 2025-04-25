@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { PieChart } from 'react-native-chart-kit';
 import { Dimensions } from 'react-native';
 import { getVoteStatisticsByGender } from '../../api/post';
 import { GenderStatistics as GenderStatsType } from '../../types/Vote';
+import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 
 interface Props {
   voteId: number;
@@ -19,78 +20,136 @@ const GENDER_LABELS = {
   FEMALE: '여성',
 };
 
+const SkeletonLoader = () => {
+  const opacity = useSharedValue(0.3);
+  
+  useEffect(() => {
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.7, { duration: 1000 }),
+        withTiming(0.3, { duration: 1000 })
+      ),
+      -1,
+      true
+    );
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
+  return (
+    <ScrollView style={styles.container}>
+      <Text style={styles.title}>성별 투표 분포</Text>
+      
+      <Animated.View style={[styles.chartContainer, animatedStyle]}>
+        <View style={styles.skeletonChartTitle} />
+        <View style={styles.skeletonChart} />
+      </Animated.View>
+      
+      <View style={styles.statsContainer}>
+        <View style={styles.skeletonStatsTitle} />
+        {[1, 2].map((index) => (
+          <Animated.View key={index} style={[styles.genderSection, animatedStyle]}>
+            <View style={styles.genderHeader}>
+              <View style={styles.skeletonLabel} />
+              <View style={styles.skeletonValue} />
+            </View>
+            <View style={styles.optionsList}>
+              {[1, 2, 3].map((optionIndex) => (
+                <View key={optionIndex} style={styles.optionRow}>
+                  <View style={styles.skeletonOptionLabel} />
+                  <View style={styles.skeletonOptionValue} />
+                </View>
+              ))}
+            </View>
+          </Animated.View>
+        ))}
+      </View>
+
+      <Animated.View style={[styles.aiAnalysis, animatedStyle]}>
+        <View style={styles.skeletonAnalysis} />
+      </Animated.View>
+    </ScrollView>
+  );
+};
+
 const GenderStatistics = ({ voteId }: Props) => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<GenderStatsType | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const response = await getVoteStatisticsByGender(voteId);
-        console.log('Gender Stats Response:', response);
-        setStats(response);
-      } catch (err) {
-        console.error('Gender Stats Error:', err);
-        setError('통계 데이터를 불러오는데 실패했습니다.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchStats();
+  const fetchStats = useCallback(async () => {
+    try {
+      const response = await getVoteStatisticsByGender(voteId);
+      setStats(response);
+    } catch (err) {
+      console.error('Gender Stats Error:', err);
+      setError('통계 데이터를 불러오는데 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
   }, [voteId]);
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0000ff" />
-      </View>
-    );
-  }
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
 
-  if (error || !stats) {
-    return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{error || '데이터를 불러올 수 없습니다.'}</Text>
-      </View>
-    );
-  }
+  const datasets = useMemo(() => {
+    if (!stats) return [];
+    
+    return Object.entries(stats).map(([gender, data]) => {
+      const total = Object.values(data.stat).reduce((sum, count) => sum + count, 0);
+      return {
+        gender,
+        total,
+        details: data.stat
+      };
+    });
+  }, [stats]);
 
-  const datasets = Object.entries(stats).map(([gender, data]) => {
-    const total = Object.values(data.stat).reduce((sum, count) => sum + count, 0);
-    return {
-      gender,
-      total,
-      details: data.stat
-    };
-  });
-
-  if (datasets.length === 0) {
-    return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>투표 데이터가 없습니다.</Text>
-      </View>
-    );
-  }
-
-  const totalParticipants = datasets.reduce((sum, { total }) => sum + total, 0);
-
-  const chartData = datasets.map(({ gender, total }, index) => ({
-    name: GENDER_LABELS[gender as keyof typeof GENDER_LABELS] || gender,
-    population: total,
-    color: GENDER_COLORS[gender as keyof typeof GENDER_COLORS] || '#A0AEC0',
-    legendFontColor: '#7F7F7F',
-    legendFontSize: 15,
-  }));
-
-  const maxParticipationGender = datasets.reduce((max, current) => 
-    current.total > max.total ? current : max
+  const totalParticipants = useMemo(() => 
+    datasets.reduce((sum, { total }) => sum + total, 0),
+    [datasets]
   );
 
-  const genderDiff = datasets.length >= 2 ? 
-    Math.abs(datasets[0].total - datasets[1].total) : 
-    0;
+  const chartData = useMemo(() => 
+    datasets.map(({ gender, total }) => ({
+      name: GENDER_LABELS[gender as keyof typeof GENDER_LABELS] || gender,
+      population: total,
+      color: GENDER_COLORS[gender as keyof typeof GENDER_COLORS] || '#A0AEC0',
+      legendFontColor: '#7F7F7F',
+      legendFontSize: 15,
+    })),
+    [datasets]
+  );
+
+  const { maxParticipationGender, genderDiff } = useMemo(() => {
+    const maxParticipationGender = datasets.reduce((max, current) => 
+      current.total > max.total ? current : max,
+      datasets[0]
+    );
+
+    const genderDiff = datasets.length >= 2 ? 
+      Math.abs(datasets[0].total - datasets[1].total) : 
+      0;
+
+    return { maxParticipationGender, genderDiff };
+  }, [datasets]);
+
+  if (loading) {
+    return <SkeletonLoader />;
+  }
+
+  if (error || !stats || datasets.length === 0) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>
+          {error || '데이터를 불러올 수 없습니다.'}
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container}>
@@ -157,13 +216,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   errorContainer: {
-    flex: 1,
+    padding: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -265,6 +319,54 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: '#333',
+  },
+  skeletonChartTitle: {
+    height: 20,
+    width: '40%',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+    marginBottom: 16,
+  },
+  skeletonChart: {
+    height: 220,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 8,
+  },
+  skeletonStatsTitle: {
+    height: 24,
+    width: '30%',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+    marginBottom: 16,
+  },
+  skeletonLabel: {
+    height: 20,
+    width: '30%',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+  },
+  skeletonValue: {
+    height: 20,
+    width: '20%',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+  },
+  skeletonOptionLabel: {
+    height: 16,
+    width: '40%',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+  },
+  skeletonOptionValue: {
+    height: 16,
+    width: '15%',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+  },
+  skeletonAnalysis: {
+    height: 48,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
   },
 });
 

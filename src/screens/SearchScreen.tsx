@@ -181,7 +181,7 @@ const SearchScreen: React.FC = () => {
 
   useEffect(() => {
     if (!hasLoaded) {
-      fetchVotes()
+    fetchVotes()
     }
   }, [hasLoaded, fetchVotes])
 
@@ -189,7 +189,7 @@ const SearchScreen: React.FC = () => {
     if (searchKeyword.trim() === "") {
       if (selectedCategory === 0) {
         if (!hasLoaded) {
-          fetchVotes()
+        fetchVotes()
         }
       } else {
         fetchCategoryVotes(selectedCategory)
@@ -426,10 +426,10 @@ const SearchScreen: React.FC = () => {
     );
   }, [navigation]);
 
-  const renderVoteItem = useCallback(({ item, index }: { item: VoteResponse; index: number }) => {
+  const renderVoteItem = useCallback(({ item }: { item: VoteResponse }) => {
     return (
       <Animated.View 
-        entering={FadeIn.duration(300).delay(index * 50)}
+        entering={FadeIn.duration(300).delay(0)}
         style={styles.itemShadow}
       >
         <TouchableOpacity
@@ -498,6 +498,33 @@ const SearchScreen: React.FC = () => {
       </Animated.View>
     );
   }, [navigation, formatCreatedAt, formatDate, isVoteClosed]);
+
+  const renderUserItem = useCallback(({ item }: { item: UserDocument }) => {
+    return (
+      <Animated.View 
+        entering={FadeIn.duration(300).delay(0)}
+        style={styles.itemShadow}
+      >
+        <TouchableOpacity
+          style={styles.userItem}
+          onPress={() => navigation.navigate("UserPageScreen", { userId: item.id })}
+          activeOpacity={0.7}
+        >
+          <Image
+            source={{
+              uri:
+                item.profileImage === "default.jpg"
+                  ? `${IMAGE_BASE_URL}/images/default.jpg`
+                  : `${IMAGE_BASE_URL}${item.profileImage}`,
+            }}
+            style={styles.userProfileImage}
+          />
+          <Text style={styles.userName}>{item.username}</Text>
+          <Feather name="chevron-right" size={20} color="#A0AEC0" />
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  }, [navigation]);
 
   const renderEmptyResults = useCallback(() => {
     if (loading) return null
@@ -734,30 +761,7 @@ const SearchScreen: React.FC = () => {
         <FlatList
           data={userResults}
           keyExtractor={keyExtractor}
-          renderItem={({ item, index }) => (
-            <Animated.View 
-              entering={FadeIn.duration(300).delay(index * 50)}
-              style={styles.itemShadow}
-            >
-              <TouchableOpacity
-                style={styles.userItem}
-                onPress={() => navigation.navigate("UserPageScreen", { userId: item.id })}
-                activeOpacity={0.7}
-              >
-                <Image
-                  source={{
-                    uri:
-                      item.profileImage === "default.jpg"
-                        ? `${IMAGE_BASE_URL}/images/default.jpg`
-                        : `${IMAGE_BASE_URL}${item.profileImage}`,
-                  }}
-                  style={styles.userProfileImage}
-                />
-                <Text style={styles.userName}>{item.username}</Text>
-                <Feather name="chevron-right" size={20} color="#A0AEC0" />
-              </TouchableOpacity>
-            </Animated.View>
-          )}
+          renderItem={renderUserItem}
           contentContainerStyle={[styles.container, userResults.length === 0 && styles.emptyListContainer]}
           ListEmptyComponent={renderEmptyResults}
           showsVerticalScrollIndicator={false}

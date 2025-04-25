@@ -244,7 +244,7 @@ const MyPageScreen: React.FC = () => {
     if (diffMinutes < 60) return `${diffMinutes}분 전`;
     if (diffHours < 24) return `${diffHours}시간 전`;
     if (diffDays < 7) return `${diffDays}일 전`;
-    return date.toLocaleDateString();
+      return date.toLocaleDateString();
   }, []);
 
   const handleCommentPress = useCallback((voteId: number) => {
@@ -297,7 +297,7 @@ const MyPageScreen: React.FC = () => {
           return `${diffDays}일 ${remainingHours}시간 후 마감`;
         }
         return finishDate.toLocaleDateString("ko-KR");
-      }
+        }
       return '';
     };
 
@@ -779,68 +779,68 @@ const MyPageScreen: React.FC = () => {
       )}
 
       {statisticsModalVoteId !== null && (
-        <Modal
+      <Modal
           visible={true}
-          transparent
-          statusBarTranslucent
-          animationType="slide"
-          onRequestClose={() => {
+        transparent
+        statusBarTranslucent
+        animationType="slide"
+        onRequestClose={() => {
             setStatisticsModalVoteId(null);
-          }}
-        >
-           <View style={styles.modalOverlay}>
-            <Pressable 
-              style={styles.modalBackground}
-              onPress={() => {
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable 
+            style={styles.modalBackground}
+            onPress={() => {
                 setStatisticsModalVoteId(null);
-              }}
-            >
-              <View style={styles.modalBackdrop} />
-            </Pressable>
-            <View style={[styles.modalContainer, styles.statisticsModalContainer]}>
-              <View style={styles.statisticsHeader}>
-                <Text style={styles.statisticsTitle}>투표 통계</Text>
-                <TouchableOpacity 
-                  onPress={() => {
+            }}
+          >
+            <View style={styles.modalBackdrop} />
+          </Pressable>
+          <View style={[styles.modalContainer, styles.statisticsModalContainer]}>
+            <View style={styles.statisticsHeader}>
+              <Text style={styles.statisticsTitle}>투표 통계</Text>
+              <TouchableOpacity 
+                onPress={() => {
                     setStatisticsModalVoteId(null);
-                  }}
-                  style={styles.closeButton}
-                >
-                  <Feather name="x" size={24} color="#4A5568" />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.statisticsTabContainer}>
-                <TouchableOpacity
+                }}
+                style={styles.closeButton}
+              >
+                <Feather name="x" size={24} color="#4A5568" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.statisticsTabContainer}>
+              <TouchableOpacity
                   style={[styles.statisticsTabButton, activeStatTab === 'region' && styles.activeStatisticsTab]}
-                  onPress={() => setActiveStatTab('region')}
-                >
+                onPress={() => setActiveStatTab('region')}
+              >
                   <Text style={[styles.statisticsTabText, activeStatTab === 'region' && styles.activeStatisticsTabText]}>지역별</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
+              </TouchableOpacity>
+              <TouchableOpacity
                   style={[styles.statisticsTabButton, activeStatTab === 'age' && styles.activeStatisticsTab]}
-                  onPress={() => setActiveStatTab('age')}
-                >
+                onPress={() => setActiveStatTab('age')}
+              >
                   <Text style={[styles.statisticsTabText, activeStatTab === 'age' && styles.activeStatisticsTabText]}>연령별</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
+              </TouchableOpacity>
+              <TouchableOpacity
                   style={[styles.statisticsTabButton, activeStatTab === 'gender' && styles.activeStatisticsTab]}
-                  onPress={() => setActiveStatTab('gender')}
-                >
+                onPress={() => setActiveStatTab('gender')}
+              >
                   <Text style={[styles.statisticsTabText, activeStatTab === 'gender' && styles.activeStatisticsTabText]}>성별</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.statisticsContent}>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.statisticsContent}>
                 {statisticsModalVoteId && (
-                  <>
+                <>
                     {activeStatTab === 'region' && <RegionStatistics voteId={statisticsModalVoteId} />}
                     {activeStatTab === 'age' && <AgeStatistics voteId={statisticsModalVoteId} />}
                     {activeStatTab === 'gender' && <GenderStatistics voteId={statisticsModalVoteId} />}
-                  </>
-                )}
-              </View>
+                </>
+              )}
             </View>
           </View>
-        </Modal>
+        </View>
+      </Modal>
       )}
     </SafeAreaView>
   );
