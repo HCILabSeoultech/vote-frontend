@@ -427,6 +427,23 @@ const SearchScreen: React.FC = () => {
   }, [navigation]);
 
   const renderVoteItem = useCallback(({ item }: { item: VoteResponse }) => {
+    const closed = isVoteClosed(item.finishTime);
+    const selectedOptionId = item.selectedOptionId;
+    const hasVoted = !!selectedOptionId;
+    const showGauge = closed || hasVoted;
+
+    const totalVotes = item.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0);
+
+    const optionsWithPercentages = item.voteOptions.map(opt => ({
+      ...opt,
+      percentage: totalVotes > 0 ? Math.round((opt.voteCount / totalVotes) * 100) : 0
+    }));
+
+    const hasImageOptions = item.voteOptions.some(opt => opt.optionImage);
+
+    const formattedDate = formatDate(item.finishTime);
+    const formattedCreationTime = formatCreatedAt(item.createdAt);
+
     return (
       <Animated.View 
         entering={FadeIn.duration(300).delay(0)}
@@ -459,24 +476,22 @@ const SearchScreen: React.FC = () => {
               <View style={styles.authorInfo}>
                 <Text style={styles.authorName}>{item.username}</Text>
                 <Text style={styles.dotSeparator}>•</Text>
-                <Text style={styles.createdAt}>{formatCreatedAt(item.createdAt)}</Text>
+                <Text style={styles.createdAt}>{formattedCreationTime}</Text>
               </View>
               <View style={styles.simpleMetaRow}>
-                {isVoteClosed(item.finishTime) ? (
+                {closed ? (
                   <View style={styles.closedBadge}>
                     <Text style={styles.closedBadgeText}>마감됨</Text>
                   </View>
                 ) : (
                   <Text style={styles.remainingTimeText}>
-                    {formatDate(item.finishTime)}
+                    {formattedDate}
                   </Text>
                 )}
                 <View style={styles.statsContainer}>
                   <View style={styles.statItem}>
                     <Feather name="users" size={14} color="#718096" />
-                    <Text style={styles.statText}>
-                      {item.voteOptions?.reduce((sum: number, opt: VoteOption) => sum + (opt.voteCount || 0), 0) || 0}
-                    </Text>
+                    <Text style={styles.statText}>{totalVotes}</Text>
                   </View>
                   <View style={styles.statItem}>
                     <Feather name="heart" size={14} color={item.isLiked ? "#F56565" : "#718096"} />

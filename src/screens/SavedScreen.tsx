@@ -841,8 +841,6 @@ const StorageScreen: React.FC = () => {
             }}
             colors={["#1499D9"]}
             tintColor="#1499D9"
-            title="새로고침 중..."
-            titleColor="#718096"
           />
         }
         removeClippedSubviews={true}

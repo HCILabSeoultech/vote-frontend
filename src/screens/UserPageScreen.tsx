@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  RefreshControl,
 } from 'react-native';
 import Animated, { FadeInLeft, FadeIn, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { getVoteById, selectVoteOption } from '../api/post';
@@ -110,6 +111,7 @@ const UserPageScreen: React.FC = () => {
   const [selectedVoteId, setSelectedVoteId] = useState<number | null>(null);
   const [showStatisticsModal, setShowStatisticsModal] = useState(false);
   const [selectedVoteForStats, setSelectedVoteForStats] = useState<number | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const isFocused = useIsFocused();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'CommentScreen'>>();
@@ -285,6 +287,20 @@ const UserPageScreen: React.FC = () => {
     setSelectedVoteForStats(voteId);
     setShowStatisticsModal(true);
   };
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      setVotes([]);
+      setPage(0);
+      setIsLast(false);
+      await fetchUserData(0);
+    } finally {
+      setTimeout(() => {
+        setIsRefreshing(false);
+      }, 500);
+    }
+  }, [fetchUserData]);
 
   const renderItem = ({ item, index }: { item: VoteResponse, index: number }) => {
     const closed = isVoteClosed(item.finishTime);
@@ -643,6 +659,7 @@ const UserPageScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <FlatList
+        style={styles.flatList}
         data={activeTab === 'posts' ? votes : []}
         keyExtractor={(item) => item.voteId.toString()}
         renderItem={activeTab === 'posts' ? renderItem : null}
@@ -650,6 +667,15 @@ const UserPageScreen: React.FC = () => {
         onEndReached={() => activeTab === 'posts' && fetchUserData(page)}
         onEndReachedThreshold={0.5}
         ListHeaderComponent={renderHeader}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            colors={["#1499D9"]}
+            tintColor="#1499D9"
+            progressViewOffset={0}
+          />
+        }
         ListFooterComponent={
           loading && activeTab === 'posts' ? (
             <View style={styles.skeletonContainer}>
@@ -725,10 +751,13 @@ const UserPageScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: { 
     flex: 1, 
-    backgroundColor: '#F7FAFC' 
+    backgroundColor: '#F7FAFC',
+  },
+  flatList: {
+    flex: 1,
   },
   container: { 
-    padding: 16,
+    paddingHorizontal: 16,
     paddingBottom: 24,
   },
   loadingProfileContainer: {
@@ -743,6 +772,7 @@ const styles = StyleSheet.create({
   },
   profileContainer: { 
     marginBottom: 24,
+    paddingTop: 16,
   },
   profileHeader: {
     flexDirection: 'row',

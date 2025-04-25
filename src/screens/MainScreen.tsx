@@ -1,5 +1,4 @@
-import type React from "react"
-import { useEffect, useState } from "react"
+import React, { useEffect, useState, useCallback } from "react"
 import {
   View,
   Text,
@@ -15,16 +14,17 @@ import {
   Pressable,
   RefreshControl,
 } from "react-native"
-import { Feather} from '@expo/vector-icons'
+import { Feather } from '@expo/vector-icons'
 import Animated, { FadeInLeft, FadeIn, useAnimatedStyle, withRepeat, withSequence, withTiming, useSharedValue } from "react-native-reanimated"
 import AsyncStorage from "@react-native-async-storage/async-storage"
-import { getMainPageVotes, getVoteById, selectVoteOption } from "../api/post"
+import { selectVoteOption } from "../api/post"
 import { toggleLike, toggleBookmark } from "../api/reaction"
 import type { VoteResponse } from "../types/Vote"
 import { useIsFocused, useNavigation } from "@react-navigation/native"
 import type { StackNavigationProp } from "@react-navigation/stack"
 import type { RootStackParamList } from "../navigation/AppNavigator"
 import { jwtDecode } from "jwt-decode"
+import { useVoteList } from "../hooks/useVoteList"
 import CommentScreen from "../screens/CommentScreen"
 import RegionStatistics from "../components/statistics/RegionStatistics"
 import AgeStatistics from "../components/statistics/AgeStatistics"
@@ -39,7 +39,7 @@ interface JwtPayload {
   sub: string
 }
 
-const SkeletonLoader = () => {
+const SkeletonLoader = React.memo(() => {
   const opacity = useSharedValue(0.3)
   
   useEffect(() => {
@@ -73,26 +73,443 @@ const SkeletonLoader = () => {
       </View>
     </Animated.View>
   )
+})
+
+const formatDate = (dateString: string) => {
+  const finishDate = new Date(dateString)
+  const now = new Date() 
+
+  const diffTime = finishDate.getTime() - now.getTime()
+  const diffMinutes = Math.floor(diffTime / (1000 * 60))
+  const diffHours = Math.floor(diffTime / (1000 * 60 * 60))
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+
+  if (diffTime > 0) {
+    if (diffMinutes < 60) {
+      return `${diffMinutes}분 후 마감`
+    } else if (diffHours < 24) {
+      const remainingMinutes = diffMinutes % 60
+      return `${diffHours}시간 ${remainingMinutes}분 후 마감`
+    } else if (diffDays <= 7) {
+      const remainingHours = diffHours % 24
+      return `${diffDays}일 ${remainingHours}시간 후 마감`
+    } else {
+      return finishDate.toLocaleDateString("ko-KR")
+    }
+  } else {
+    return ''
+  }
 }
 
+const formatCreationTime = (dateString: string) => {
+  const date = new Date(dateString)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffSec = Math.floor(diffMs / 1000)
+  const diffMin = Math.floor(diffSec / 60)
+  const diffHour = Math.floor(diffMin / 60)
+  const diffDay = Math.floor(diffHour / 24)
+
+  if (diffSec < 60) {
+    return "방금 전"
+  } else if (diffMin < 60) {
+    return `${diffMin}분 전`
+  } else if (diffHour < 24) {
+    return `${diffHour}시간 전`
+  } else if (diffDay < 7) {
+    return `${diffDay}일 전`
+  } else {
+    return date.toLocaleDateString()
+  }
+}
+
+const isVoteClosed = (finishTime: string) => {
+  const finish = new Date(finishTime)
+  const now = new Date()
+  return finish.getTime() < now.getTime()
+}
+
+const VoteItem = React.memo(({ 
+  item, 
+  currentUsername, 
+  onVote, 
+  onToggleLike, 
+  onToggleBookmark,
+  onCommentPress,
+  onStatisticsPress,
+  animatedWidths
+}: {
+  item: VoteResponse;
+  currentUsername: string | null;
+  onVote: (voteId: number, optionId: number) => void;
+  onToggleLike: (voteId: number) => void;
+  onToggleBookmark: (voteId: number) => void;
+  onCommentPress: (voteId: number) => void;
+  onStatisticsPress: (vote: VoteResponse) => void;
+  animatedWidths: Record<string, number>;
+}) => {
+  const closed = isVoteClosed(item.finishTime)
+  const selectedOptionId = item.selectedOptionId
+  const hasVoted = !!selectedOptionId
+  const showGauge = closed || hasVoted
+  const totalCount = item.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0)
+  const hasImageOptions = item.voteOptions.some(opt => opt.optionImage)
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>()
+
+  return (
+    <Animated.View
+      entering={FadeIn.duration(400).delay((item.voteId % 10) * 50)}
+      style={[styles.voteItem, closed ? styles.closedVoteItem : styles.activeVoteItem]}
+    >
+      <View style={styles.userInfoRow}>
+        <View style={styles.userInfoLeft}>
+          <Image
+            source={{
+              uri:
+                item.profileImage === "default.jpg"
+                  ? `${IMAGE_BASE_URL}/images/default.jpg`
+                  : `${IMAGE_BASE_URL}${item.profileImage}`,
+            }}
+            style={styles.profileImage}
+          />
+          <View>
+            <TouchableOpacity
+              onPress={() => navigation.navigate("UserPageScreen", { userId: item.userId })}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.nickname}>{item.username}</Text>
+            </TouchableOpacity>
+            <Text style={styles.creationTime}>{formatCreationTime(item.createdAt)}</Text>
+          </View>
+        </View>
+
+        {closed && (
+          <View style={styles.closedBadge}>
+            <Text style={styles.closedBadgeText}>마감됨</Text>
+          </View>
+        )}
+      </View>
+
+      <Text style={styles.title}>{item.title}</Text>
+
+      <View style={styles.metaContainer}>
+        <View style={styles.categoryBadge}>
+          <Text style={styles.categoryText}>{item.categoryName}</Text>
+        </View>
+        <Text style={styles.dateText}>{formatDate(item.finishTime)}</Text>
+      </View>
+
+      {item.content && (
+        <Text numberOfLines={2} style={styles.content}>
+          {item.content}
+        </Text>
+      )}
+
+      {item.images.length > 0 && (
+        <View style={styles.imageContainer}>
+          {item.images.map((img) => (
+            <Image
+              key={img.id}
+              source={{ uri: `${IMAGE_BASE_URL}${img.imageUrl}` }}
+              style={styles.image}
+              resizeMode="cover"
+            />
+          ))}
+        </View>
+      )}
+
+      {item.voteOptions.length > 0 && (
+        <View style={[styles.optionContainer, hasImageOptions && styles.imageOptionContainer]}>
+          {item.voteOptions.map((opt) => {
+            const isSelected = selectedOptionId === opt.id
+            const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0
+            const animationKey = `${item.voteId}-${opt.id}`
+            const animatedWidth = animatedWidths[animationKey] || percentage
+
+            return (
+              <View key={opt.id} style={[styles.optionWrapper, opt.optionImage && styles.imageOptionWrapper]}>
+                <TouchableOpacity
+                  style={[
+                    styles.optionButton,
+                    closed && styles.closedOptionButton,
+                    isSelected && styles.selectedOptionButton,
+                    opt.optionImage && styles.optionButtonWithImage,
+                  ]}
+                  onPress={() => onVote(item.voteId, opt.id)}
+                  disabled={closed || isSelected}
+                  activeOpacity={0.7}
+                >
+                  {showGauge && (
+                    <View style={{
+                      position: 'absolute',
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      width: `${animatedWidth * (opt.optionImage ? 1.25 : 1.11)}%`,
+                      backgroundColor: isSelected ? "#4299E1" : "#E2E8F0",
+                      opacity: 0.3,
+                      borderRadius: 12,
+                    }} />
+                  )}
+                  {opt.optionImage ? (
+                    <View style={styles.optionContentWithImage}>
+                      <Image
+                        source={{ uri: `${IMAGE_BASE_URL}${opt.optionImage}` }}
+                        style={styles.largeOptionImage}
+                        resizeMode="cover"
+                      />
+                      <View style={styles.optionTextContainer}>
+                        <Text style={[
+                          styles.optionButtonText,
+                          isSelected && styles.selectedOptionText,
+                          showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
+                        ]}>
+                          {opt.content}
+                        </Text>
+                        {showGauge && (
+                          <Text style={[
+                            styles.percentageText,
+                            isSelected && styles.selectedPercentageText
+                          ]}>
+                            {percentage}%
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.optionTextContainer}>
+                      <Text style={[
+                        styles.optionButtonText,
+                        isSelected && styles.selectedOptionText,
+                        showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
+                      ]}>
+                        {opt.content}
+                      </Text>
+                      {showGauge && (
+                        <Text style={[
+                          styles.percentageText,
+                          isSelected && styles.selectedPercentageText
+                        ]}>
+                          {percentage}%
+                        </Text>
+                      )}
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )
+          })}
+          {showGauge && totalCount > 0 && <Text style={styles.responseCountText}>{totalCount}명 참여</Text>}
+        </View>
+      )}
+
+      <View style={styles.divider} />
+
+      <View style={styles.reactionRow}>
+        <TouchableOpacity
+          style={styles.reactionItem}
+          onPress={() => onToggleLike(item.voteId)}
+          activeOpacity={0.7}
+        >
+          <Feather 
+            name={item.isLiked ? "heart" : "heart"} 
+            size={22} 
+            color={item.isLiked ? "#FF4B6E" : "#718096"} 
+          />
+          <Text style={[
+            styles.reactionText,
+            item.isLiked && styles.activeReactionText
+          ]}>
+            {item.likeCount}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.reactionItem}
+          onPress={() => onCommentPress(item.voteId)}
+          activeOpacity={0.7}
+        >
+          <Feather name="message-circle" size={22} color="#718096" />
+          <Text style={styles.reactionText}>{item.commentCount}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.reactionItem}
+          onPress={() => onToggleBookmark(item.voteId)}
+          activeOpacity={0.7}
+        >
+          <Feather 
+            name={item.isBookmarked ? "bookmark" : "bookmark"} 
+            size={22} 
+            color={item.isBookmarked ? "#1499D9" : "#718096"} 
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.reactionItem}
+          onPress={() => onStatisticsPress(item)}
+          activeOpacity={0.7}
+        >
+          <Feather name="bar-chart-2" size={20} color="#718096" />
+        </TouchableOpacity>
+      </View>
+    </Animated.View>
+  )
+})
+
+const CommentModal = React.memo(({ 
+  visible, 
+  voteId, 
+  onClose 
+}: { 
+  visible: boolean; 
+  voteId: number; 
+  onClose: () => void;
+}) => {
+  if (!visible) return null;
+  
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      statusBarTranslucent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <Pressable 
+          style={styles.modalBackground}
+          onPress={onClose}
+        >
+          <View style={styles.modalBackdrop} />
+        </Pressable>
+        <View style={styles.modalContainer}>
+          <CommentScreen
+            route={{
+              params: {
+                voteId
+              }
+            }}
+          />
+        </View>
+      </View>
+    </Modal>
+  );
+});
+
+const StatisticsModal = React.memo(({ 
+  visible, 
+  voteId, 
+  activeTab,
+  onClose,
+  onTabChange
+}: { 
+  visible: boolean; 
+  voteId: number | null;
+  activeTab: 'region' | 'age' | 'gender';
+  onClose: () => void;
+  onTabChange: (tab: 'region' | 'age' | 'gender') => void;
+}) => {
+  if (!visible || !voteId) return null;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      statusBarTranslucent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <Pressable 
+          style={styles.modalBackground}
+          onPress={onClose}
+        >
+          <View style={styles.modalBackdrop} />
+        </Pressable>
+        <View style={[styles.modalContainer, styles.statisticsModalContainer]}>
+          <View style={styles.statisticsHeader}>
+            <Text style={styles.statisticsTitle}>투표 통계</Text>
+            <TouchableOpacity 
+              onPress={onClose}
+              style={styles.closeButton}
+            >
+              <Feather name="x" size={24} color="#4A5568" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.statisticsTabContainer}>
+            <TouchableOpacity
+              style={[
+                styles.statisticsTabButton,
+                activeTab === 'region' && styles.activeStatisticsTab
+              ]}
+              onPress={() => onTabChange('region')}
+            >
+              <Text style={[
+                styles.statisticsTabText,
+                activeTab === 'region' && styles.activeStatisticsTabText
+              ]}>지역별</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.statisticsTabButton,
+                activeTab === 'age' && styles.activeStatisticsTab
+              ]}
+              onPress={() => onTabChange('age')}
+            >
+              <Text style={[
+                styles.statisticsTabText,
+                activeTab === 'age' && styles.activeStatisticsTabText
+              ]}>연령별</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.statisticsTabButton,
+                activeTab === 'gender' && styles.activeStatisticsTab
+              ]}
+              onPress={() => onTabChange('gender')}
+            >
+              <Text style={[
+                styles.statisticsTabText,
+                activeTab === 'gender' && styles.activeStatisticsTabText
+              ]}>성별</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.statisticsContent}>
+            {activeTab === 'region' && <RegionStatistics voteId={voteId} />}
+            {activeTab === 'age' && <AgeStatistics voteId={voteId} />}
+            {activeTab === 'gender' && <GenderStatistics voteId={voteId} />}
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+});
+
 const MainScreen: React.FC = () => {
-  const [votes, setVotes] = useState<VoteResponse[]>([])
-  const [page, setPage] = useState(0)
-  const [isLast, setIsLast] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const {
+    votes,
+    isLoading,
+    isLoadingMore,
+    refreshing,
+    hasMore,
+    fetchInitialVotes,
+    fetchNextPage,
+    refreshVotes,
+    updateVoteById
+  } = useVoteList()
+  
   const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({})
   const [currentUsername, setCurrentUsername] = useState<string | null>(null)
-  const isFocused = useIsFocused()
-  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>()
   const [selectedVoteId, setSelectedVoteId] = useState<number | null>(null)
   const [showCommentModal, setShowCommentModal] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
   const [showStatisticsModal, setShowStatisticsModal] = useState(false)
   const [selectedVoteForStats, setSelectedVoteForStats] = useState<number | null>(null)
   const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('region')
-  const [isLoading, setIsLoading] = useState(true)
-  const [hasLoaded, setHasLoaded] = useState(false)
   const [animatedWidths, setAnimatedWidths] = useState<Record<string, number>>({})
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const isFocused = useIsFocused()
 
   useEffect(() => {
     const fetchUserFromToken = async () => {
@@ -111,67 +528,12 @@ const MainScreen: React.FC = () => {
   }, [])
 
   useEffect(() => {
-    const fetchInitialVotes = async () => {
-      if (hasLoaded) return;
-      
-      setIsLoading(true)
-      try {
-        const res = await getMainPageVotes(0)
-        setVotes(res.content)
-        setPage(res.number + 1)
-        setIsLast(res.last)
-        setHasLoaded(true)
-      } catch (err) {
-        console.error("초기 투표 불러오기 실패:", err)
-      } finally {
-        setIsLoading(false)
-      }
+    if (isFocused) {
+      fetchInitialVotes()
     }
+  }, [isFocused, fetchInitialVotes])
 
-    fetchInitialVotes()
-  }, [hasLoaded])
-
-  const renderHeader = () => (
-    <View style={styles.header}>
-      <Text style={styles.headerTitle}>VOTY</Text>
-      <TouchableOpacity onPress={() => Alert.alert("알림", "알림 기능 준비 중입니다.")}>
-      <Feather name="bell" size={24} color="#2D3748" />
-      </TouchableOpacity>
-    </View>
-  )
-
-  const fetchVotes = async (nextPage: number) => {
-    if (loading || isLast) return
-    setLoading(true)
-    try {
-      const res = await getMainPageVotes(nextPage)
-      setVotes((prev) => [...prev, ...res.content])
-      setPage(res.number + 1)
-      setIsLast(res.last)
-    } catch (err) {
-      console.error("투표 불러오기 실패:", err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const refreshVote = async (voteId: number) => {
-    try {
-      const updated = await getVoteById(voteId)
-      setVotes((prev) => prev.map((vote) => (vote.voteId === voteId ? updated : vote)))
-    } catch (err) {
-      console.error("투표 새로고침 실패:", err)
-    }
-  }
-
-  const isVoteClosed = (finishTime: string) => {
-    const finish = new Date(finishTime)
-    const now = new Date() //KST시스템
-
-    return finish.getTime() < now.getTime()
-  }
-
-  const handleVote = async (voteId: number, optionId: number) => {
+  const handleVote = useCallback(async (voteId: number, optionId: number) => {
     try {
       const token = await AsyncStorage.getItem("token")
       if (!token) {
@@ -185,20 +547,8 @@ const MainScreen: React.FC = () => {
       }))
       
       await selectVoteOption(voteId, optionId)
-      const updatedVote = await getVoteById(voteId)
+      await updateVoteById(voteId)
       
-      // 투표 결과에 따른 퍼센테이지 계산
-      const totalCount = updatedVote.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0)
-      const newAnimatedWidths: Record<string, number> = {}
-      
-      updatedVote.voteOptions.forEach((opt) => {
-        const percentage = totalCount > 0 ? (opt.voteCount / totalCount) * 100 : 0
-        const animationKey = `${voteId}-${opt.id}`
-        newAnimatedWidths[animationKey] = percentage
-      })
-      
-      setAnimatedWidths(newAnimatedWidths)
-      setVotes((prev) => prev.map((vote) => (vote.voteId === voteId ? updatedVote : vote)))
     } catch (error) {
       console.error("투표 실패:", error)
       Alert.alert("에러", "투표 중 오류가 발생했습니다.")
@@ -208,9 +558,9 @@ const MainScreen: React.FC = () => {
         return newState
       })
     }
-  }
+  }, [updateVoteById])
 
-  const handleToggleLike = async (voteId: number) => {
+  const handleToggleLike = useCallback(async (voteId: number) => {
     try {
       const token = await AsyncStorage.getItem("token")
       if (!token) {
@@ -219,14 +569,14 @@ const MainScreen: React.FC = () => {
       }
 
       await toggleLike(voteId)
-      await refreshVote(voteId)
+      await updateVoteById(voteId)
     } catch (err) {
       console.error("좋아요 실패:", err)
       Alert.alert("에러", "좋아요 처리 중 오류가 발생했습니다.")
     }
-  }
+  }, [updateVoteById])
 
-  const handleToggleBookmark = async (voteId: number) => {
+  const handleToggleBookmark = useCallback(async (voteId: number) => {
     try {
       const token = await AsyncStorage.getItem("token")
       if (!token) {
@@ -235,19 +585,19 @@ const MainScreen: React.FC = () => {
       }
 
       await toggleBookmark(voteId)
-      await refreshVote(voteId)
+      await updateVoteById(voteId)
     } catch (err) {
       console.error("북마크 실패:", err)
       Alert.alert("에러", "북마크 처리 중 오류가 발생했습니다.")
     }
-  }
+  }, [updateVoteById])
 
-  const handleCommentPress = (voteId: number) => {
+  const handleCommentPress = useCallback((voteId: number) => {
     setSelectedVoteId(voteId)
     setShowCommentModal(true)
-  }
+  }, [])
 
-  const handleStatisticsPress = (vote: VoteResponse) => {
+  const handleStatisticsPress = useCallback((vote: VoteResponse) => {
     const totalVotes = vote.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0)
     if (totalVotes === 0) {
       Alert.alert('알림', '아직 투표 데이터가 없습니다.')
@@ -255,435 +605,118 @@ const MainScreen: React.FC = () => {
     }
     setSelectedVoteForStats(vote.voteId)
     setShowStatisticsModal(true)
-  }
+  }, [])
 
-  const renderItem = ({ item }: { item: VoteResponse }) => {
-    const closed = isVoteClosed(item.finishTime)
-    const selectedOptionId = item.selectedOptionId ?? selectedOptions[item.voteId]
-    const hasVoted = !!selectedOptionId
-    const showGauge = closed || hasVoted
-    const totalCount = item.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0)
-    const hasImageOptions = item.voteOptions.some(opt => opt.optionImage)
+  const renderHeader = useCallback(() => (
+    <View style={styles.header}>
+      <Text style={styles.headerTitle}>VOTY</Text>
+      <TouchableOpacity onPress={() => Alert.alert("알림", "알림 기능 준비 중입니다.")}>
+        <Feather name="bell" size={24} color="#2D3748" />
+      </TouchableOpacity>
+    </View>
+  ), [])
 
-    const isMyPost = currentUsername !== null && item.username === currentUsername
+  const renderItem = useCallback(({ item }: { item: VoteResponse }) => (
+    <VoteItem
+      item={item}
+      currentUsername={currentUsername}
+      onVote={handleVote}
+      onToggleLike={handleToggleLike}
+      onToggleBookmark={handleToggleBookmark}
+      onCommentPress={handleCommentPress}
+      onStatisticsPress={handleStatisticsPress}
+      animatedWidths={animatedWidths}
+    />
+  ), [currentUsername, handleVote, handleToggleLike, handleToggleBookmark, handleCommentPress, handleStatisticsPress, animatedWidths])
 
-    const formatDate = (dateString: string) => {
-      const finishDate = new Date(dateString)
-      const now = new Date() 
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
     
-      const diffTime = finishDate.getTime() - now.getTime()
-      const diffMinutes = Math.floor(diffTime / (1000 * 60))
-      const diffHours = Math.floor(diffTime / (1000 * 60 * 60))
-      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
-    
-      if (diffTime > 0) {
-        if (diffMinutes < 60) {
-          return `${diffMinutes}분 후 마감`
-        } else if (diffHours < 24) {
-          const remainingMinutes = diffMinutes % 60
-          return `${diffHours}시간 ${remainingMinutes}분 후 마감`
-        } else if (diffDays <= 7) {
-          const remainingHours = diffHours % 24
-          return `${diffDays}일 ${remainingHours}시간 후 마감`
-        } else {
-          return finishDate.toLocaleDateString("ko-KR")
-        }
-      } else {
-        return ''
-      }
-    }
-
-    // Format creation time to show how long ago the post was created
-    const formatCreationTime = (dateString: string) => {
-      const date = new Date(dateString)
-      const now = new Date()
-      const diffMs = now.getTime() - date.getTime()
-      const diffSec = Math.floor(diffMs / 1000)
-      const diffMin = Math.floor(diffSec / 60)
-      const diffHour = Math.floor(diffMin / 60)
-      const diffDay = Math.floor(diffHour / 24)
-
-      if (diffSec < 60) {
-        return "방금 전"
-      } else if (diffMin < 60) {
-        return `${diffMin}분 전`
-      } else if (diffHour < 24) {
-        return `${diffHour}시간 전`
-      } else if (diffDay < 7) {
-        return `${diffDay}일 전`
-      } else {
-        return date.toLocaleDateString()
-      }
-    }
-
-    return (
-      <Animated.View
-        entering={FadeIn.duration(400).delay((item.voteId % 10) * 50)}
-        style={[styles.voteItem, closed ? styles.closedVoteItem : styles.activeVoteItem]}
-      >
-        <View style={styles.userInfoRow}>
-          <View style={styles.userInfoLeft}>
-            <Image
-              source={{
-                uri:
-                  item.profileImage === "default.jpg"
-                    ? `${IMAGE_BASE_URL}/images/default.jpg`
-                    : `${IMAGE_BASE_URL}${item.profileImage}`,
-              }}
-              style={styles.profileImage}
-            />
-            <View>
-              <TouchableOpacity
-                onPress={() => navigation.navigate("UserPageScreen", { userId: item.userId })}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.nickname}>{item.username}</Text>
-              </TouchableOpacity>
-              <Text style={styles.creationTime}>{formatCreationTime(item.createdAt)}</Text>
-            </View>
-          </View>
-
-          {closed && (
-            <View style={styles.closedBadge}>
-              <Text style={styles.closedBadgeText}>마감됨</Text>
-            </View>
-          )}
-        </View>
-
-        <Text style={styles.title}>{item.title}</Text>
-
-        <View style={styles.metaContainer}>
-          <View style={styles.categoryBadge}>
-            <Text style={styles.categoryText}>{item.categoryName}</Text>
-          </View>
-          <Text style={styles.dateText}>{formatDate(item.finishTime)}</Text>
-        </View>
-
-        {item.content && (
-          <Text numberOfLines={2} style={styles.content}>
-            {item.content}
-          </Text>
-        )}
-
-        {item.images.length > 0 && (
-          <View style={styles.imageContainer}>
-            {item.images.map((img) => (
-              <Image
-                key={img.id}
-                source={{ uri: `${IMAGE_BASE_URL}${img.imageUrl}` }}
-                style={styles.image}
-                resizeMode="cover"
-              />
-            ))}
-          </View>
-        )}
-
-        {item.voteOptions.length > 0 && (
-          <View style={[styles.optionContainer, hasImageOptions && styles.imageOptionContainer]}>
-            {item.voteOptions.map((opt) => {
-              const isSelected = selectedOptionId === opt.id
-              const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0
-              const animationKey = `${item.voteId}-${opt.id}`
-              const animatedWidth = animatedWidths[animationKey] || percentage
-
-              return (
-                <View key={opt.id} style={[styles.optionWrapper, opt.optionImage && styles.imageOptionWrapper]}>
-                  <TouchableOpacity
-                    style={[
-                      styles.optionButton,
-                      closed && styles.closedOptionButton,
-                      isSelected && styles.selectedOptionButton,
-                      opt.optionImage && styles.optionButtonWithImage,
-                    ]}
-                    onPress={() => handleVote(item.voteId, opt.id)}
-                    disabled={closed || isSelected}
-                    activeOpacity={0.7}
-                  >
-                    {showGauge && (
-                      <View style={{
-                        position: 'absolute',
-                        left: 0,
-                        top: 0,
-                        bottom: 0,
-                        width: `${animatedWidth * (opt.optionImage ? 1.25 : 1.11)}%`,
-                        backgroundColor: isSelected ? "#4299E1" : "#E2E8F0",
-                        opacity: 0.3,
-                        borderRadius: 12,
-                      }} />
-                    )}
-                    {opt.optionImage ? (
-                      <View style={styles.optionContentWithImage}>
-                        <Image
-                          source={{ uri: `${IMAGE_BASE_URL}${opt.optionImage}` }}
-                          style={styles.largeOptionImage}
-                          resizeMode="cover"
-                        />
-                        <View style={styles.optionTextContainer}>
-                          <Text style={[
-                            styles.optionButtonText,
-                            isSelected && styles.selectedOptionText,
-                            showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
-                          ]}>
-                            {opt.content}
-                          </Text>
-                          {showGauge && (
-                            <Text style={[
-                              styles.percentageText,
-                              isSelected && styles.selectedPercentageText
-                            ]}>
-                              {percentage}%
-                            </Text>
-                          )}
-                        </View>
-                      </View>
-                    ) : (
-                      <View style={styles.optionTextContainer}>
-                        <Text style={[
-                          styles.optionButtonText,
-                          isSelected && styles.selectedOptionText,
-                          showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
-                        ]}>
-                          {opt.content}
-                        </Text>
-                        {showGauge && (
-                          <Text style={[
-                            styles.percentageText,
-                            isSelected && styles.selectedPercentageText
-                          ]}>
-                            {percentage}%
-                          </Text>
-                        )}
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              )
-            })}
-            {showGauge && totalCount > 0 && <Text style={styles.responseCountText}>{totalCount}명 참여</Text>}
-          </View>
-        )}
-
-        <View style={styles.divider} />
-
-        <View style={styles.reactionRow}>
-          <TouchableOpacity
-            style={styles.reactionItem}
-            onPress={() => handleToggleLike(item.voteId)}
-            activeOpacity={0.7}
-          >
-            <Feather 
-              name={item.isLiked ? "heart" : "heart"} 
-              size={22} 
-              color={item.isLiked ? "#FF4B6E" : "#718096"} 
-            />
-            <Text style={[
-              styles.reactionText,
-              item.isLiked && styles.activeReactionText
-            ]}>
-              {item.likeCount}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.reactionItem}
-            onPress={() => handleCommentPress(item.voteId)}
-            activeOpacity={0.7}
-          >
-            <Feather name="message-circle" size={22} color="#718096" />
-            <Text style={styles.reactionText}>{item.commentCount}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.reactionItem}
-            onPress={() => handleToggleBookmark(item.voteId)}
-            activeOpacity={0.7}
-          >
-            <Feather 
-              name={item.isBookmarked ? "bookmark" : "bookmark"} 
-              size={22} 
-              color={item.isBookmarked ? "#1499D9" : "#718096"} 
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.reactionItem}
-            onPress={() => handleStatisticsPress(item)}
-            activeOpacity={0.7}
-          >
-            <Feather name="bar-chart-2" size={20} color="#718096" />
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
-    )
-  }
-
-  const onRefresh = async () => {
-    setRefreshing(true)
-    setIsLoading(true)
     try {
-      const res = await getMainPageVotes(0)
-      setVotes(res.content)
-      setPage(res.number + 1)
-      setIsLast(res.last)
-    } catch (err) {
-      console.error("새로고침 실패:", err)
+      await refreshVotes();
     } finally {
-      setRefreshing(false)
-      setIsLoading(false)
+      setTimeout(() => {
+        setIsRefreshing(false);
+      }, 500);
     }
-  }
+  }, [refreshVotes]);
+
+  const handleLoadMore = useCallback(() => {
+    if (!isLoadingMore && hasMore) {
+      fetchNextPage()
+    }
+  }, [isLoadingMore, hasMore, fetchNextPage])
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <FlatList
-        data={isLoading ? Array(5).fill({}) : votes}
+        data={votes}
         keyExtractor={(item, index) => item.voteId?.toString() || `skeleton-${index}`}
-        renderItem={({ item, index }) => 
-          isLoading ? (
-            <SkeletonLoader />
-          ) : (
-            renderItem({ item })
-          )
-        }
+        renderItem={renderItem}
         contentContainerStyle={styles.container}
         ListHeaderComponent={renderHeader}
-        onEndReached={() => fetchVotes(page)}
+        onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={onRefresh}
+            onRefresh={handleRefresh}
             colors={["#1499D9"]}
             tintColor="#1499D9"
+            progressViewOffset={10}
           />
         }
+        ListEmptyComponent={
+          isLoading ? (
+            <View style={styles.loadingContainer}>
+              {Array(5).fill(null).map((_, index) => (
+                <SkeletonLoader key={index} />
+              ))}
+            </View>
+          ) : null
+        }
         ListFooterComponent={
-          loading && !isLoading ? (
-            <View style={styles.loaderContainer}>
+          isLoadingMore ? (
+            <View style={styles.footerLoadingContainer}>
               <ActivityIndicator size="small" color="#1499D9" />
+              <Text style={styles.footerLoadingText}>
+                더 많은 투표 불러오는 중...
+              </Text>
+            </View>
+          ) : !hasMore && votes.length > 0 ? (
+            <View style={styles.noMoreContainer}>
+              <Text style={styles.noMoreText}>모든 투표를 불러왔습니다</Text>
             </View>
           ) : null
         }
         showsVerticalScrollIndicator={false}
+        maintainVisibleContentPosition={{
+          minIndexForVisible: 0,
+        }}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={5}
+        windowSize={5}
       />
 
-      {showCommentModal && selectedVoteId && (
-        <Modal
-          visible={showCommentModal}
-          transparent
-          statusBarTranslucent
-          animationType="slide"
-          onRequestClose={() => {
-            setShowCommentModal(false)
-            setSelectedVoteId(null)
-          }}
-        >
-          <View style={styles.modalOverlay}>
-            <Pressable 
-              style={styles.modalBackground}
-              onPress={() => {
-                setShowCommentModal(false)
-                setSelectedVoteId(null)
-              }}
-            >
-              <View style={styles.modalBackdrop} />
-            </Pressable>
-            <View style={styles.modalContainer}>
-              <CommentScreen
-                route={{
-                  params: {
-                    voteId: selectedVoteId
-                  }
-                }}
-              />
-            </View>
-          </View>
-        </Modal>
-      )}
-
-      <Modal
-        visible={showStatisticsModal}
-        transparent
-        statusBarTranslucent
-        animationType="slide"
-        onRequestClose={() => {
-          setShowStatisticsModal(false)
-          setSelectedVoteForStats(null)
+      <CommentModal
+        visible={showCommentModal}
+        voteId={selectedVoteId!}
+        onClose={() => {
+          setShowCommentModal(false);
+          setSelectedVoteId(null);
         }}
-      >
-        <View style={styles.modalOverlay}>
-          <Pressable 
-            style={styles.modalBackground}
-            onPress={() => {
-              setShowStatisticsModal(false)
-              setSelectedVoteForStats(null)
-            }}
-          >
-            <View style={styles.modalBackdrop} />
-          </Pressable>
-          <View style={[styles.modalContainer, styles.statisticsModalContainer]}>
-            <View style={styles.statisticsHeader}>
-              <Text style={styles.statisticsTitle}>투표 통계</Text>
-              <TouchableOpacity 
-                onPress={() => {
-                  setShowStatisticsModal(false)
-                  setSelectedVoteForStats(null)
-                }}
-                style={styles.closeButton}
-              >
-                <Feather name="x" size={24} color="#4A5568" />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.statisticsTabContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.statisticsTabButton,
-                  activeStatTab === 'region' && styles.activeStatisticsTab
-                ]}
-                onPress={() => setActiveStatTab('region')}
-              >
-                <Text style={[
-                  styles.statisticsTabText,
-                  activeStatTab === 'region' && styles.activeStatisticsTabText
-                ]}>지역별</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.statisticsTabButton,
-                  activeStatTab === 'age' && styles.activeStatisticsTab
-                ]}
-                onPress={() => setActiveStatTab('age')}
-              >
-                <Text style={[
-                  styles.statisticsTabText,
-                  activeStatTab === 'age' && styles.activeStatisticsTabText
-                ]}>연령별</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.statisticsTabButton,
-                  activeStatTab === 'gender' && styles.activeStatisticsTab
-                ]}
-                onPress={() => setActiveStatTab('gender')}
-              >
-                <Text style={[
-                  styles.statisticsTabText,
-                  activeStatTab === 'gender' && styles.activeStatisticsTabText
-                ]}>성별</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.statisticsContent}>
-              {selectedVoteForStats && (
-                <>
-                  {activeStatTab === 'region' && <RegionStatistics voteId={selectedVoteForStats} />}
-                  {activeStatTab === 'age' && <AgeStatistics voteId={selectedVoteForStats} />}
-                  {activeStatTab === 'gender' && <GenderStatistics voteId={selectedVoteForStats} />}
-                </>
-              )}
-            </View>
-          </View>
-        </View>
-      </Modal>
+      />
+
+      <StatisticsModal
+        visible={showStatisticsModal}
+        voteId={selectedVoteForStats}
+        activeTab={activeStatTab}
+        onClose={() => {
+          setShowStatisticsModal(false);
+          setSelectedVoteForStats(null);
+        }}
+        onTabChange={setActiveStatTab}
+      />
     </SafeAreaView>
   )
 }
@@ -1054,6 +1087,35 @@ const styles = StyleSheet.create({
     height: 54,
     backgroundColor: '#E2E8F0',
     borderRadius: 12,
+  },
+  footerLoadingContainer: {
+    paddingVertical: 20,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginTop: 8,
+  },
+  footerLoadingText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#718096',
+    fontWeight: '500',
+  },
+  loadingContainer: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  noMoreContainer: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  noMoreText: {
+    fontSize: 14,
+    color: '#718096',
+    fontWeight: '500',
   },
 })
 
