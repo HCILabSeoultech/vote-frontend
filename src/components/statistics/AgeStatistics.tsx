@@ -1,21 +1,29 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, Dimensions, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, ScrollView, Animated as RNAnimated, TouchableOpacity } from 'react-native';
 import { PieChart } from 'react-native-chart-kit';
 import { getVoteStatisticsByAge } from '../../api/post';
 import { AgeStatistics as AgeStatsType } from '../../types/Vote';
-import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { 
+  useAnimatedStyle, 
+  useSharedValue, 
+  withRepeat, 
+  withSequence, 
+  withTiming,
+  FadeIn,
+  SlideInRight
+} from 'react-native-reanimated';
 
 const CHART_COLORS = [
-  '#FF6B6B', // 빨간색
-  '#4ECDC4', // 청록색
-  '#45B7D1', // 하늘색
-  '#96CEB4', // 민트색
-  '#FFEEAD', // 연한 노란색
-  '#D4A5A5', // 분홍색
-  '#9B59B6', // 보라색
-  '#3498DB', // 파란색
-  '#2ECC71', // 초록색
-  '#F1C40F', // 노란색
+  '#4C51BF', // 인디고
+  '#48BB78', // 그린
+  '#4299E1', // 블루
+  '#ED64A6', // 핑크
+  '#ECC94B', // 옐로우
+  '#9F7AEA', // 퍼플
+  '#F56565', // 레드
+  '#38B2AC', // 틸
+  '#667EEA', // 라이트 인디고
+  '#ED8936', // 오렌지
 ];
 
 // 테스트용 목업 데이터
@@ -107,6 +115,7 @@ const AgeStatistics: React.FC<AgeStatisticsProps> = ({ voteId }) => {
   const [loading, setLoading] = useState(true);
   const [statistics, setStatistics] = useState<AgeStatsType | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedAge, setSelectedAge] = useState<string | null>(null);
 
   const fetchStatistics = useCallback(async () => {
     try {
@@ -168,6 +177,18 @@ const AgeStatistics: React.FC<AgeStatisticsProps> = ({ voteId }) => {
     [datasets]
   );
 
+  const chartAnimation = new RNAnimated.Value(0);
+  
+  useEffect(() => {
+    if (!loading && statistics) {
+      RNAnimated.timing(chartAnimation, {
+        toValue: 1,
+        duration: 1000,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [loading, statistics]);
+
   if (loading) {
     return <SkeletonLoader />;
   }
@@ -181,34 +202,73 @@ const AgeStatistics: React.FC<AgeStatisticsProps> = ({ voteId }) => {
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>연령별 투표 분포</Text>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <Animated.View entering={FadeIn.duration(600)} style={styles.headerContainer}>
+        <Text style={styles.title}>연령별 투표 분포</Text>
+        <Text style={styles.totalParticipants}>총 참여자 {totalParticipants}명</Text>
+      </Animated.View>
       
-      <View style={styles.chartContainer}>
-        <Text style={styles.chartTitle}>참여자 현황</Text>
-        <PieChart
-          data={chartData}
-          width={Dimensions.get('window').width - 32}
-          height={220}
-          chartConfig={{
-            backgroundColor: '#ffffff',
-            backgroundGradientFrom: '#ffffff',
-            backgroundGradientTo: '#ffffff',
-            decimalPlaces: 1,
-            color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-          }}
-          accessor="population"
-          backgroundColor="transparent"
-          paddingLeft="0"
-          absolute
-        />
-      </View>
+      <Animated.View 
+        entering={FadeIn.delay(300).duration(800)}
+        style={styles.chartContainer}
+      >
+        <View style={styles.chartWrapper}>
+          <View style={styles.chartSection}>
+            <PieChart
+              data={chartData}
+              width={240}
+              height={200}
+              chartConfig={{
+                backgroundColor: '#ffffff',
+                backgroundGradientFrom: '#ffffff',
+                backgroundGradientTo: '#ffffff',
+                decimalPlaces: 1,
+                color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+              }}
+              accessor="population"
+              backgroundColor="transparent"
+              paddingLeft="20"
+              absolute
+              hasLegend={false}
+              center={[20, 0]}
+            />
+          </View>
+
+          <View style={styles.quickStatsContainer}>
+            {datasets.map(({ age, total }, index) => (
+              <TouchableOpacity
+                key={age}
+                style={[
+                  styles.quickStatItem,
+                  selectedAge === age && styles.selectedQuickStatItem
+                ]}
+                onPress={() => setSelectedAge(age === selectedAge ? null : age)}
+              >
+                <View style={[styles.colorIndicator, { backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }]} />
+                <Text style={styles.quickStatText}>
+                  {age}대 ({total}명)
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Animated.View>
 
       <View style={styles.statsContainer}>
-        {datasets.map(({ age, total, details }) => (
-          <View key={age} style={styles.ageSection}>
+        {datasets.map(({ age, total, details }, index) => (
+          <Animated.View
+            key={age}
+            entering={SlideInRight.delay(index * 100).springify()}
+            style={[
+              styles.ageSection,
+              selectedAge === age && styles.selectedAgeSection
+            ]}
+          >
             <View style={styles.ageHeader}>
-              <Text style={styles.label}>{age}대</Text>
+              <View style={styles.ageLabelContainer}>
+                <Text style={styles.label}>{age}대</Text>
+                <View style={[styles.colorIndicator, { backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }]} />
+              </View>
               <Text style={styles.value}>
                 {total}명 ({((total / totalParticipants) * 100).toFixed(1)}%)
               </Text>
@@ -223,19 +283,23 @@ const AgeStatistics: React.FC<AgeStatisticsProps> = ({ voteId }) => {
                 </View>
               ))}
             </View>
-          </View>
+          </Animated.View>
         ))}
       </View>
 
-      <Text style={styles.aiAnalysis}>
-        AI 분석 결과: {'\n\n'}
-        {datasets.length === 1 ? (
-          `현재 ${datasets[0].age}대만 투표에 참여했으며, 총 ${totalParticipants}명이 참여했습니다. 다른 연령대의 참여를 유도하면 더 다양한 의견을 수렴할 수 있을 것으로 예상됩니다.`
-        ) : (
-          `총 ${datasets.length}개 연령대가 참여했으며, 전체 ${totalParticipants}명이 투표했습니다. 
-          ${datasets[0].age}대의 참여율이 가장 높았습니다(${((datasets[0].total / totalParticipants) * 100).toFixed(1)}%).`
-        )}
-      </Text>
+      <Animated.View
+        entering={FadeIn.delay(600).duration(800)}
+        style={styles.aiAnalysis}
+      >
+        <Text style={styles.aiAnalysisTitle}>AI 분석 결과</Text>
+        <Text style={styles.aiAnalysisContent}>
+          {datasets.length === 1 ? (
+            `현재 ${datasets[0].age}대만 투표에 참여했으며, 총 ${totalParticipants}명이 참여했습니다. 다른 연령대의 참여를 유도하면 더 다양한 의견을 수렴할 수 있을 것으로 예상됩니다.`
+          ) : (
+            `총 ${datasets.length}개 연령대가 참여했으며, 전체 ${totalParticipants}명이 투표했습니다.\n${datasets[0].age}대의 참여율이 가장 높았습니다(${((datasets[0].total / totalParticipants) * 100).toFixed(1)}%).`
+          )}
+        </Text>
+      </Animated.View>
     </ScrollView>
   );
 };
@@ -245,78 +309,125 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
+  headerContainer: {
+    marginTop: 10,
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  headerLine: {
+    width: 40,
+    height: 3,
+    backgroundColor: '#4299E1',
+    marginTop: 8,
+    borderRadius: 2,
+  },
   errorContainer: {
     padding: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
   errorText: {
-    color: 'red',
+    color: '#E53E3E',
     fontSize: 16,
+    textAlign: 'center',
   },
   title: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
-    marginTop: 16,
+    color: '#2D3748',
   },
   chartContainer: {
-    marginBottom: 24,
-    padding: 16,
+    margin: 10,
+    padding: 8,
     backgroundColor: '#fff',
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    borderRadius: 16,
+    minHeight: 220,
   },
-  chartTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
+  chartWrapper: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  chartSection: {
+    flex: 1,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    paddingLeft: 0,
+    marginLeft: 10,
+  },
+  quickStatsContainer: {
+    width: 130,
+    paddingRight: 16,
+    justifyContent: 'center',
+  },
+  quickStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    marginVertical: 3,
+    borderRadius: 8,
+    backgroundColor: '#F7FAFC',
+  },
+  selectedQuickStatItem: {
+    backgroundColor: '#EBF8FF',
+    borderColor: '#4299E1',
+    borderWidth: 1,
+  },
+  quickStatText: {
+    fontSize: 14,
     color: '#2D3748',
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  colorIndicator: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   statsContainer: {
     margin: 16,
     padding: 16,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
+    backgroundColor: '#F7FAFC',
+    borderRadius: 16,
   },
   ageSection: {
-    marginBottom: 16,
-    padding: 12,
+    marginBottom: 12,
+    padding: 16,
     backgroundColor: '#ffffff',
-    borderRadius: 8,
+    borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 1,
     },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.41,
-    elevation: 2,
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 3,
   },
   ageHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
-    paddingBottom: 4,
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: '#EDF2F7',
+  },
+  ageLabelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   label: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
     color: '#2D3748',
   },
   value: {
     fontSize: 16,
-    color: '#2D3748',
+    color: '#4A5568',
+    fontWeight: '500',
   },
   optionsList: {
     marginTop: 8,
@@ -324,24 +435,36 @@ const styles = StyleSheet.create({
   optionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: 8,
+    paddingHorizontal: 4,
   },
   optionLabel: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#4A5568',
   },
   optionValue: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#4A5568',
+    fontWeight: '500',
   },
   aiAnalysis: {
     margin: 16,
-    padding: 16,
-    backgroundColor: '#e3f2fd',
-    borderRadius: 8,
+    padding: 20,
+    backgroundColor: '#EBF8FF',
+    borderRadius: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4299E1',
+  },
+  aiAnalysisTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2C5282',
+    marginBottom: 8,
+  },
+  aiAnalysisContent: {
     fontSize: 14,
-    lineHeight: 20,
-    color: '#333',
+    lineHeight: 22,
+    color: '#2D3748',
   },
   skeletonChartTitle: {
     height: 20,
@@ -384,6 +507,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#E2E8F0',
     borderRadius: 4,
   },
+  totalParticipants: {
+    fontSize: 16,
+    color: '#4A5568',
+    marginTop: 8,
+    fontWeight: '500',
+  },
+  selectedAgeSection: {
+    borderColor: '#4299E1',
+    borderWidth: 2,
+    backgroundColor: '#F7FAFC',
+  },
 });
 
-export default AgeStatistics; 
+export default React.memo(AgeStatistics); 

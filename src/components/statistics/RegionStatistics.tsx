@@ -1,10 +1,18 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { PieChart } from 'react-native-chart-kit';
 import { Dimensions } from 'react-native';
 import { getVoteStatisticsByRegion } from '../../api/post';
 import { RegionStatistics as RegionStatsType, StatOption } from '../../types/Vote';
-import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { 
+  FadeIn, 
+  SlideInRight,
+  useAnimatedStyle, 
+  useSharedValue, 
+  withRepeat, 
+  withSequence, 
+  withTiming 
+} from 'react-native-reanimated';
 
 const CHART_COLORS = [
   '#FF6B6B', // 빨간색
@@ -89,6 +97,7 @@ const RegionStatistics = ({ voteId }: Props) => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<RegionData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -165,40 +174,77 @@ const RegionStatistics = ({ voteId }: Props) => {
   console.log('[DEBUG] stats 데이터:', stats);
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>지역별 투표 분포</Text>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <Animated.View entering={FadeIn.duration(600)} style={styles.headerContainer}>
+        <Text style={styles.title}>지역별 투표 분포</Text>
+        <Text style={styles.totalParticipants}>총 참여자 {totalParticipants}명</Text>
+      </Animated.View>
       
-      <View style={styles.chartContainer}>
-        <Text style={styles.chartTitle}>참여자 현황</Text>
-        <PieChart
-          data={chartData}
-          width={Dimensions.get('window').width - 32}
-          height={220}
-          chartConfig={{
-            backgroundColor: '#ffffff',
-            backgroundGradientFrom: '#ffffff',
-            backgroundGradientTo: '#ffffff',
-            decimalPlaces: 1,
-            color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-          }}
-          accessor="population"
-          backgroundColor="transparent"
-          paddingLeft="0"
-          absolute
-          hasLegend={true}
-          center={[10, 10]}
-          avoidFalseZero
-        />
-      </View>
+      <Animated.View 
+        entering={FadeIn.delay(300).duration(800)}
+        style={styles.chartContainer}
+      >
+        <View style={styles.chartWrapper}>
+          <View style={styles.chartSection}>
+            <PieChart
+              data={chartData}
+              width={240}
+              height={200}
+              chartConfig={{
+                backgroundColor: '#ffffff',
+                backgroundGradientFrom: '#ffffff',
+                backgroundGradientTo: '#ffffff',
+                decimalPlaces: 1,
+                color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+              }}
+              accessor="population"
+              backgroundColor="transparent"
+              paddingLeft="20"
+              absolute
+              hasLegend={false}
+              center={[20, 0]}
+              avoidFalseZero
+            />
+          </View>
 
+          <View style={styles.quickStatsContainer}>
+            {datasets.map(({ region, total }, index) => (
+              <TouchableOpacity
+                key={region}
+                style={[
+                  styles.quickStatItem,
+                  selectedRegion === region && styles.selectedQuickStatItem
+                ]}
+                onPress={() => setSelectedRegion(region === selectedRegion ? null : region)}
+              >
+                <View style={[styles.colorIndicator, { backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }]} />
+                <Text style={styles.quickStatText}>
+                  {region} ({total}명)
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Animated.View>
+      
       <View style={styles.statsContainer}>
         <Text style={styles.statsTitle}>상세 통계</Text>
-        {datasets.map(({ region, total, details }) => (
-          <View key={region} style={styles.regionSection}>
+        {datasets.map(({ region, total, details }, index) => (
+          <Animated.View
+            key={region}
+            entering={SlideInRight.delay(index * 100).springify()}
+            style={[
+              styles.regionSection,
+              selectedRegion === region && styles.selectedRegionSection
+            ]}
+          >
             <View style={styles.regionHeader}>
-              <Text style={styles.label}>{region}</Text>
+              <View style={styles.regionLabelContainer}>
+                <Text style={styles.label}>{region}</Text>
+                <View style={[styles.colorIndicator, { backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }]} />
+              </View>
               <Text style={styles.value}>
-                총 {total}명 ({((total / totalParticipants) * 100).toFixed(1)}%)
+                {total}명 ({((total / totalParticipants) * 100).toFixed(1)}%)
               </Text>
             </View>
             <View style={styles.optionsList}>
@@ -211,14 +257,20 @@ const RegionStatistics = ({ voteId }: Props) => {
                 </View>
               ))}
             </View>
-          </View>
+          </Animated.View>
         ))}
       </View>
 
-      <Text style={styles.aiAnalysis}>
-        AI 분석 결과: {maxParticipationRegion.region}에서 가장 높은 참여율({((maxParticipationRegion.total / totalParticipants) * 100).toFixed(1)}%)을 보였으며, 
-        이는 해당 지역의 관심도가 특히 높았음을 나타냅니다.
-      </Text>
+      <Animated.View
+        entering={FadeIn.delay(600).duration(800)}
+        style={styles.aiAnalysis}
+      >
+        <Text style={styles.aiAnalysisTitle}>AI 분석 결과</Text>
+        <Text style={styles.aiAnalysisContent}>
+          {maxParticipationRegion.region}에서 가장 높은 참여율({((maxParticipationRegion.total / totalParticipants) * 100).toFixed(1)}%)을 보였으며, 
+          이는 해당 지역의 관심도가 특히 높았음을 나타냅니다.
+        </Text>
+      </Animated.View>
     </ScrollView>
   );
 };
@@ -238,37 +290,71 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   title: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
-    marginTop: 16,
+    color: '#2D3748',
+  },
+  totalParticipants: {
+    fontSize: 16,
+    color: '#4A5568',
+    marginTop: 8,
+    fontWeight: '500',
   },
   chartContainer: {
-    marginBottom: 24,
-    padding: 16,
+    margin: 10,
+    padding: 8,
     backgroundColor: '#fff',
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    borderRadius: 16,
+    minHeight: 220,
   },
-  chartTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
+  chartWrapper: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  chartSection: {
+    flex: 1,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    paddingLeft: 0,
+    marginLeft: 10,
+  },
+  quickStatsContainer: {
+    width: 160,
+    paddingRight: 0,
+    justifyContent: 'center',
+  },
+  quickStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    marginVertical: 3,
+    borderRadius: 8,
+    backgroundColor: '#F7FAFC',
+  },
+  selectedQuickStatItem: {
+    backgroundColor: '#EBF8FF',
+    borderColor: '#4299E1',
+    borderWidth: 1,
+  },
+  quickStatText: {
+    fontSize: 14,
     color: '#2D3748',
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  colorIndicator: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   statsContainer: {
     margin: 16,
     padding: 16,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
+    backgroundColor: '#F7FAFC',
+    borderRadius: 16,
   },
   statsTitle: {
     fontSize: 18,
@@ -276,61 +362,84 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   regionSection: {
-    marginBottom: 16,
-    padding: 12,
+    marginBottom: 12,
+    padding: 16,
     backgroundColor: '#ffffff',
-    borderRadius: 8,
+    borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 1,
     },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.41,
-    elevation: 2,
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  selectedRegionSection: {
+    borderColor: '#4299E1',
+    borderWidth: 2,
+    backgroundColor: '#F7FAFC',
   },
   regionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
-    paddingBottom: 4,
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: '#EDF2F7',
+  },
+  regionLabelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  label: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#2D3748',
+    marginRight: 8,
+  },
+  value: {
+    fontSize: 16,
+    color: '#4A5568',
+    fontWeight: '500',
   },
   optionsList: {
-    paddingLeft: 16,
+    marginTop: 8,
   },
   optionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2D3748',
-  },
-  value: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#2D3748',
+    marginBottom: 8,
+    paddingHorizontal: 4,
   },
   optionLabel: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#4A5568',
   },
   optionValue: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#4A5568',
+    fontWeight: '500',
   },
   aiAnalysis: {
     margin: 16,
-    padding: 16,
-    backgroundColor: '#e3f2fd',
-    borderRadius: 8,
+    padding: 20,
+    backgroundColor: '#EBF8FF',
+    borderRadius: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4299E1',
+  },
+  aiAnalysisTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2C5282',
+    marginBottom: 8,
+  },
+  aiAnalysisContent: {
     fontSize: 14,
-    lineHeight: 20,
-    color: '#333',
+    lineHeight: 22,
+    color: '#2D3748',
   },
   skeletonChartTitle: {
     height: 20,
@@ -379,6 +488,11 @@ const styles = StyleSheet.create({
     height: 48,
     backgroundColor: '#E2E8F0',
     borderRadius: 4,
+  },
+  headerContainer: {
+    marginTop: 10,
+    marginBottom: 10,
+    alignItems: 'center',
   },
 });
 
