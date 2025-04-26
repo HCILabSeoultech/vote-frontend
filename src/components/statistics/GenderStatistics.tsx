@@ -161,7 +161,7 @@ const GenderStatistics = ({ voteId }: Props) => {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <Animated.View entering={FadeIn.duration(600)} style={styles.headerContainer}>
         <Text style={styles.title}>성별 투표 분포</Text>
         <Text style={styles.totalParticipants}>총 참여자 {totalParticipants}명</Text>
@@ -280,11 +280,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   title: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
-    marginTop: 16,
+    color: '#2D3748',
   },
   chartContainer: {
     margin: 10,

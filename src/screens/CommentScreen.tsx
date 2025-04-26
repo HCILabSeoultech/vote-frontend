@@ -1,26 +1,24 @@
-import React, { useEffect, useState, useRef } from "react"
+import React, { useEffect, useState, useRef, useCallback, useMemo } from "react"
 import { jwtDecode } from "jwt-decode"
-import { Alert } from "react-native"
+import { Alert, Platform } from "react-native"
 import { Feather } from "@expo/vector-icons"
 import { useNavigation, useRoute } from "@react-navigation/native"
 import type { StackNavigationProp } from "@react-navigation/stack"
 import type { RootStackParamList } from "../navigation/AppNavigator"
-
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   KeyboardAvoidingView,
-  Platform,
   StyleSheet,
   Image,
   SafeAreaView,
   ScrollView,
   ActivityIndicator,
   Dimensions,
-  Modal,
   Pressable,
+  RefreshControl,
 } from "react-native"
 import { fetchComments, postComment, editComment, deleteComment } from "../api/comment"
 import { toggleCommentLike } from "../api/commentLike"
@@ -29,9 +27,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage"
 import { SERVER_URL } from "../constant/config"
 import Animated, { 
   FadeIn, 
+  FadeOut,
+  SlideInRight,
+  SlideOutRight,
   useAnimatedStyle, 
   useSharedValue, 
-  withSpring, 
+  withSpring,
   withTiming,
   runOnJS,
   interpolate,
@@ -39,6 +40,8 @@ import Animated, {
 } from "react-native-reanimated"
 import { Gesture, GestureDetector } from "react-native-gesture-handler"
 import { RouteProp } from "@react-navigation/native"
+import { Image as CachedImage } from 'react-native-expo-image-cache'
+import { BlurView } from 'expo-blur'
 
 const IMAGE_BASE_URL = `${SERVER_URL}`
 const { height: SCREEN_HEIGHT } = Dimensions.get('window')
@@ -79,7 +82,7 @@ const CommentScreen = ({ route }: CommentScreenProps) => {
   const [page, setPage] = useState(0);
   const [hasMoreComments, setHasMoreComments] = useState(true);
   const [input, setInput] = useState("");
-  const [replyTo, setReplyTo] = useState<number | null>(null);
+  const [replyTo, setReplyTo] = useState<{ id: number; username: string } | null>(null);
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -190,34 +193,30 @@ const CommentScreen = ({ route }: CommentScreenProps) => {
     setLoadingMore(false)
   }
 
-  const handlePostComment = async () => {
+  const handlePostComment = useCallback(async () => {
     try {
       const token = await AsyncStorage.getItem("token")
       if (!token || !input.trim()) return
 
-      const response = await postComment(voteId, input.trim(), replyTo ?? undefined, token)
-      setInput("")
-      setReplyTo(null)
+      const response = await postComment(
+        voteId, 
+        input.trim(), 
+        replyTo?.id ?? undefined, 
+        token
+      );
+      
+      setInput("");
+      setReplyTo(null);
 
-      // 댓글 작성 후 스크롤 최상단 이동
-      scrollViewRef.current?.scrollTo({ y: 0, animated: true })
-
-      // 새로 작성된 댓글을 상태에 저장
-      if (response && response.id) {
-        setNewComment(response)
-        // // 5초 후에 새 댓글 상태를 초기화
-        // setTimeout(() => {
-        //   setNewComment(null)
-        //   loadComments(true)
-        // }, 5000)
-      }
+      // 새 댓글 작성 후 목록 새로고침
+      loadComments(true);
     } catch (error) {
       console.error("댓글 작성 실패:", error)
       Alert.alert("오류", "댓글 작성 중 문제가 발생했습니다.")
     }
-  }
+  }, [voteId, input, replyTo]);
 
-  const handleToggleLike = async (commentId: number) => {
+  const handleToggleLike = useCallback(async (commentId: number) => {
     try {
       const token = await AsyncStorage.getItem("token")
       if (!token) {
@@ -247,7 +246,7 @@ const CommentScreen = ({ route }: CommentScreenProps) => {
       console.error("좋아요 토글 실패:", err)
       Alert.alert("오류", "좋아요 처리 중 문제가 발생했습니다.")
     }
-  }
+  }, [])
 
   const handleEditComment = async (commentId: number) => {
     try {
@@ -342,18 +341,25 @@ const CommentScreen = ({ route }: CommentScreenProps) => {
       replyInputRefs.current[commentId].measureLayout(
         scrollViewRef.current as any,
         (x: number, y: number) => {
-          scrollViewRef.current?.scrollTo({ y, animated: true })
+          const screenHeight = Dimensions.get('window').height;
+          const keyboardHeight = Platform.OS === 'ios' ? 320 : 280; // 예상 키보드 높이
+          const targetY = Math.max(0, y - (screenHeight - keyboardHeight) / 2); // 댓글을 화면 중앙에 위치
+          
+          scrollViewRef.current?.scrollTo({ 
+            y: targetY,
+            animated: true 
+          });
         },
         () => console.log('measurement failed')
-      )
+      );
     }
-  }
+  };
 
-  const handleReplyClick = (commentId: number) => {
-    setReplyInputStates(prev => ({ ...prev, [commentId]: true }))
-    setExpandedComments(prev => ({ ...prev, [commentId]: true }))
-    setTimeout(() => scrollToReplyInput(commentId), 100)
-  }
+  const handleReplyClick = (commentId: number, username: string) => {
+    setReplyTo({ id: commentId, username });
+    setInput("");
+    inputRef.current?.focus();
+  };
 
   const handleCancelReply = (commentId: number) => {
     setReplyInputStates(prev => ({ ...prev, [commentId]: false }))
@@ -418,7 +424,7 @@ const CommentScreen = ({ route }: CommentScreenProps) => {
     navigation.navigate('UserPageScreen', { userId })
   }
 
-  const renderCommentItem = (item: Comment, indent = 0, index = 0, isBestComment = false) => {
+  const renderCommentItem = (item: Comment, indent = 0, index = 0, isBestComment = false, isLast = false) => {
     const isDefault = item.profileImage === "default.jpg"
     const imageUrl = isDefault ? `${IMAGE_BASE_URL}/images/default.jpg` : `${IMAGE_BASE_URL}${item.profileImage}`
 
@@ -442,7 +448,14 @@ const CommentScreen = ({ route }: CommentScreenProps) => {
       <View key={item.id}>
         <Animated.View
           entering={FadeIn.duration(300).delay(index * 50)}
-          style={[styles.commentItem, { marginLeft: indent }, isBestComment && styles.bestCommentItem]}
+          exiting={FadeOut.duration(200)}
+          style={[
+            styles.commentItem, 
+            { marginLeft: indent }, 
+            isBestComment && styles.bestCommentItem,
+            isLast && styles.lastCommentItem,
+            indent > 0 && { borderBottomWidth: 0 } // 답글은 구분선 없음
+          ]}
         >
           {isBestComment && (
             <View style={styles.bestCommentBadge}>
@@ -493,7 +506,7 @@ const CommentScreen = ({ route }: CommentScreenProps) => {
                 {item.parentId === null && (
                   <>
                     <TouchableOpacity 
-                      onPress={() => handleReplyClick(item.id)} 
+                      onPress={() => handleReplyClick(item.id, item.username)} 
                       style={styles.actionButton} 
                       activeOpacity={0.7}
                     >
@@ -568,7 +581,7 @@ const CommentScreen = ({ route }: CommentScreenProps) => {
           <View style={styles.repliesContainer}>
             {sortedReplies.map((reply, replyIndex) => {
               const isBestReply = bestReply ? reply.id === bestReply.id : false
-              return renderCommentItem(reply, 20, replyIndex, isBestReply)
+              return renderCommentItem(reply, 20, replyIndex, isBestReply, false)
             })}
             {replyInputStates[item.id] && (
               <View 
@@ -655,10 +668,11 @@ const CommentScreen = ({ route }: CommentScreenProps) => {
 
     return (
       <>
-        {newComment && renderCommentItem(newComment, 0, 0, false)}
+        {newComment && renderCommentItem(newComment, 0, 0, false, false)}
         {sortedParentComments.map((parent, index) => {
           const isBestComment = bestComment ? parent.id === bestComment.id : false
-          return renderCommentItem(parent, 0, index + 1, isBestComment)
+          const isLast = index === sortedParentComments.length - 1
+          return renderCommentItem(parent, 0, index + 1, isBestComment, isLast)
         })}
   
         {hasMoreComments && loadingMore && (
@@ -671,18 +685,26 @@ const CommentScreen = ({ route }: CommentScreenProps) => {
     )
   }
 
-  const replyingToUser = replyTo ? comments.find((c) => c.id === replyTo)?.username : null
+  const replyingToUser = replyTo ? comments.find((c) => c.id === replyTo.id)?.username : null
 
   const handleClose = () => {
     navigation.goBack();
   };
 
+  // 새로고침 기능 추가
+  const [refreshing, setRefreshing] = useState(false)
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    await loadComments(true)
+    setRefreshing(false)
+  }, [])
+
+  const inputRef = useRef<TextInput>(null);
+
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <View style={styles.backButton} />
         <Text style={styles.headerTitle}>댓글</Text>
-        <View style={styles.backButton} />
       </View>
 
       <ScrollView
@@ -691,56 +713,75 @@ const CommentScreen = ({ route }: CommentScreenProps) => {
         contentContainerStyle={styles.commentList}
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
-        scrollEventThrottle={100}
-        keyboardDismissMode="on-drag"
+        scrollEventThrottle={16}
+        keyboardDismissMode="interactive"
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#4299E1"
+            colors={['#4299E1']}
+          />
+        }
       >
         {renderAllComments()}
         <View style={{ height: 120 }} />
       </ScrollView>
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "position" : "padding"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 200 : 120}
-        style={styles.keyboardView}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
         {replyTo && (
-          <View style={styles.replyingContainer}>
-            <View style={styles.replyingBadge}>
-              <Text style={styles.replyingText}>{replyingToUser}님에게 답글 작성 중</Text>
-            </View>
-            <TouchableOpacity onPress={() => setReplyTo(null)} style={styles.cancelReplyButton} activeOpacity={0.7}>
-              <Text style={styles.cancelReplyText}>취소</Text>
+          <View style={styles.replyingBadge}>
+            <Text style={styles.replyingText}>
+              {replyingToUser}님에게 답글 작성 중
+            </Text>
+            <TouchableOpacity 
+              onPress={() => setReplyTo(null)}
+              style={styles.cancelReplyButton}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.cancelReplyText}>✕</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        <View style={styles.inputContainer}>
-          <TextInput
-            value={input}
-            onChangeText={setInput}
-            placeholder={replyTo ? "답글 작성..." : "댓글 작성..."}
-            style={styles.input}
-            multiline
-            placeholderTextColor="#A0AEC0"
-          />
-          <TouchableOpacity
-            onPress={handlePostComment}
-            style={[styles.postButton, input.trim() ? styles.postButtonActive : styles.postButtonInactive]}
-            disabled={!input.trim()}
-            activeOpacity={0.7}
-          >
-            <Text
+        <BlurView intensity={80} style={styles.inputContainer}>
+          <View style={styles.inputWrapper}>
+            <TextInput
+              ref={inputRef}
+              value={input}
+              onChangeText={setInput}
+              placeholder={replyTo ? "답글을 입력하세요..." : "댓글을 입력하세요..."}
+              style={styles.input}
+              multiline
+              placeholderTextColor="#A0AEC0"
+            />
+            <TouchableOpacity
+              onPress={handlePostComment}
               style={[
-                styles.postButtonText,
-                input.trim() ? styles.postButtonTextActive : styles.postButtonTextInactive,
+                styles.postButton, 
+                input.trim() ? styles.postButtonActive : styles.postButtonInactive
               ]}
+              disabled={!input.trim()}
+              activeOpacity={0.7}
             >
-              게시
-            </Text>
-          </TouchableOpacity>
-        </View>
+              <Text
+                style={[
+                  styles.postButtonText,
+                  input.trim() ? styles.postButtonTextActive : styles.postButtonTextInactive,
+                ]}
+              >
+                게시
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </BlurView>
       </KeyboardAvoidingView>
-    </View>
+    </SafeAreaView>
   )
 }
 
@@ -748,187 +789,75 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    overflow: 'hidden',
-  },
-  scrollView: {
-    flex: 1,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    justifyContent: 'center',
+    padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
     backgroundColor: '#FFFFFF',
     zIndex: 10,
   },
-  backButton: {
-    padding: 8,
-    width: 40,
-  },
   headerTitle: {
-    flex: 1,
     fontSize: 18,
     fontWeight: '600',
     color: '#2D3748',
-    textAlign: 'center',
+  },
+  scrollView: {
+    flex: 1,
   },
   commentList: {
-    padding: 12,
-    paddingBottom: 80,
+    padding: 8,
+    paddingBottom: 120,
   },
   keyboardView: {
     width: '100%',
-    backgroundColor: '#F7FAFC',
-    borderTopWidth: 1,
-    borderColor: '#E2E8F0',
+    backgroundColor: 'transparent',
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 0,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
   },
   inputContainer: {
-    flexDirection: "row",
-    padding: 8,
+    width: '100%',
+    backgroundColor: 'transparent',
     paddingHorizontal: 12,
-    alignItems: "center",
-    backgroundColor: "#F7FAFC",
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+    paddingTop: 8,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(247, 250, 252, 0.8)',
     borderRadius: 20,
-    marginHorizontal: 8,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+    padding: 8,
   },
   input: {
     flex: 1,
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    fontSize: 14,
-    maxHeight: 80,
-    color: "#2D3748",
-    minHeight: 36,
-  },
-  commentItem: {
-    flexDirection: "row",
-    marginBottom: 12,
-    alignItems: "flex-start",
-    position: "relative",
-  },
-  avatar: {
-    width: 32,
-    height: 32,
     borderRadius: 16,
-    marginRight: 8,
-    backgroundColor: "#E2E8F0",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  commentContent: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-    padding: 10,
-    paddingBottom: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  commentHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  userInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  username: {
-    fontWeight: "600",
-    color: "#2D3748",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     fontSize: 13,
-  },
-  authorBadge: {
-    backgroundColor: "#EBF8FF",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    marginLeft: 6,
-  },
-  authorBadgeText: {
-    color: "#3182CE",
-    fontSize: 11,
-    fontWeight: "500",
-  },
-  timestamp: {
-    fontSize: 11,
-    color: "#718096",
-    fontWeight: "500",
-  },
-  commentText: {
-    fontSize: 14,
-    color: "#4A5568",
-    lineHeight: 18,
-  },
-  actionRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 6,
-  },
-  likeContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  likeButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 2,
-    paddingHorizontal: 4,
-  },
-  heart: {
-    fontSize: 14,
-    color: "#A0AEC0",
-    marginRight: 4,
-  },
-  liked: {
-    color: "#F56565",
-  },
-  likeCount: {
-    fontSize: 12,
-    color: "#4A5568",
-    fontWeight: "500",
-  },
-  actionButton: {
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-  },
-  replyText: {
-    fontSize: 12,
-    color: "#1499D9",
-    fontWeight: "500",
+    maxHeight: 60,
+    color: "#2D3748",
+    minHeight: 32,
   },
   postButton: {
     justifyContent: "center",
-    marginLeft: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    marginLeft: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
   },
   postButtonActive: {
-    backgroundColor: "#1499D9",
+    backgroundColor: "#4299E1",
   },
   postButtonInactive: {
-    backgroundColor: "transparent",
+    backgroundColor: "#E2E8F0",
   },
   postButtonText: {
     fontWeight: "600",
@@ -948,27 +877,201 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     backgroundColor: "#EDF2F7",
     marginBottom: 8,
+    borderRadius: 12,
+    marginHorizontal: 16,
   },
   replyingBadge: {
-    backgroundColor: "#5E72E4",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#EBF8FF',
+    padding: 8,
     borderRadius: 12,
+    marginBottom: 8,
   },
   replyingText: {
-    color: "#FFFFFF",
     fontSize: 12,
-    fontWeight: "500",
+    color: '#2B6CB0',
+    fontWeight: '500',
   },
   cancelReplyButton: {
     marginLeft: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "#F7FAFC",
+    borderRadius: 8,
   },
   cancelReplyText: {
-    color: "#F56565",
+    fontSize: 14,
+    color: '#718096',
+    fontWeight: '600',
+  },
+  commentItem: {
+    flexDirection: "row",
+    marginBottom: 12,
+    alignItems: "flex-start",
+    position: "relative",
+    paddingHorizontal: 4,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  lastCommentItem: {
+    borderBottomWidth: 0,
+  },
+  avatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginRight: 6,
+    backgroundColor: "#E2E8F0",
+  },
+  commentContent: {
+    flex: 1,
+    backgroundColor: "transparent",
+    padding: 0,
+    paddingRight: 4,
+  },
+  commentHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 2,
+  },
+  userInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  username: {
+    fontWeight: "600",
+    color: "#1A202C",
     fontSize: 13,
+  },
+  authorBadge: {
+    backgroundColor: "#EBF8FF",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 6,
+  },
+  authorBadgeText: {
+    color: "#3182CE",
+    fontSize: 11,
     fontWeight: "500",
+  },
+  timestamp: {
+    fontSize: 12,
+    color: "#718096",
+    fontWeight: "400",
+  },
+  commentText: {
+    fontSize: 13,
+    color: "#2D3748",
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  actionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 2,
+  },
+  likeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  likeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 2,
+    paddingHorizontal: 2,
+  },
+  heart: {
+    fontSize: 14,
+    color: "#A0AEC0",
+    marginRight: 4,
+  },
+  liked: {
+    color: "#F56565",
+  },
+  likeCount: {
+    fontSize: 12,
+    color: "#718096",
+    fontWeight: "400",
+  },
+  actionButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  replyText: {
+    fontSize: 11,
+    color: "#718096",
+    fontWeight: "500",
+  },
+  viewRepliesText: {
+    fontSize: 11,
+    color: "#718096",
+    fontWeight: "500",
+  },
+  repliesContainer: {
+    marginLeft: 34,
+    marginTop: 4,
+    marginBottom: 4,
+    borderLeftWidth: 1,
+    borderLeftColor: '#E2E8F0',
+    paddingLeft: 8,
+  },
+  replyInputContainer: {
+    marginTop: 8,
+    backgroundColor: '#F7FAFC',
+    borderRadius: 8,
+    padding: 8,
+  },
+  replyInput: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    padding: 8,
+    minHeight: 40,
+    maxHeight: 100,
+  },
+  replyInputButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 8,
+  },
+  postReplyButton: {
+    backgroundColor: '#4299E1',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  postReplyText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  bestCommentItem: {
+    marginTop: 8,
+    marginBottom: 24,
+  },
+  bestCommentBadge: {
+    position: "absolute",
+    top: -8,
+    left: 34,
+    backgroundColor: "#4299E1",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    zIndex: 1,
+  },
+  bestCommentText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  bestCommentContent: {
+    backgroundColor: "#EBF8FF",
+    borderWidth: 1,
+    borderColor: "#4299E1",
   },
   loadingContainer: {
     padding: 40,
@@ -1005,14 +1108,6 @@ const styles = StyleSheet.create({
     color: "#718096",
     fontSize: 14,
   },
-  repliesContainer: {
-    marginLeft: 20,
-    marginTop: -8,
-    marginBottom: 16,
-    borderLeftWidth: 2,
-    borderLeftColor: '#E2E8F0',
-    paddingLeft: 16,
-  },
   loadMoreRepliesButton: {
     marginLeft: 20,
     paddingVertical: 8,
@@ -1026,58 +1121,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
   },
-  replyInputContainer: {
-    marginTop: 8,
-    backgroundColor: '#F7FAFC',
-    borderRadius: 8,
-    padding: 8,
-  },
-  replyInput: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    padding: 8,
-    minHeight: 40,
-    maxHeight: 100,
-  },
-  replyInputButtons: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 8,
-  },
-  postReplyButton: {
-    backgroundColor: '#1499D9',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  postReplyText: {
-    color: '#FFFFFF',
+  cancelText: {
     fontSize: 13,
-    fontWeight: '500',
-  },
-  bestCommentItem: {
-    marginTop: 8,
-    marginBottom: 24,
-  },
-  bestCommentBadge: {
-    position: "absolute",
-    top: -10,
-    left: 40,
-    backgroundColor: "#1499D9",
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 12,
-    zIndex: 1,
-  },
-  bestCommentText: {
-    color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  bestCommentContent: {
-    backgroundColor: "#FFFAF0",
-    borderWidth: 1,
-    borderColor: "#F6AD55",
+    color: "#718096",
+    fontWeight: "500",
   },
   editInput: {
     backgroundColor: "#EDF2F7",
@@ -1111,16 +1158,6 @@ const styles = StyleSheet.create({
     color: "#F56565",
     fontWeight: "500",
   },
-  viewRepliesText: {
-    fontSize: 13,
-    color: "#718096",
-    fontWeight: "500",
-  },
-  cancelText: {
-    fontSize: 13,
-    color: "#718096",
-    fontWeight: "500",
-  },
 })
 
-export default CommentScreen
+export default React.memo(CommentScreen)
