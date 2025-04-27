@@ -31,8 +31,8 @@ import GenderStatistics from '../components/statistics/GenderStatistics';
 
 const STORAGE_TYPES = [
   { label: '참여한 투표', value: 'voted', count: 0 },
-  { label: '좋아요한 글', value: 'liked', count: 0 },
-  { label: '북마크한 글', value: 'bookmarked', count: 0 },
+  { label: '좋아요한 투표', value: 'liked', count: 0 },
+  { label: '북마크한 투표', value: 'bookmarked', count: 0 },
 ] as const;
 
 type StorageType = 'voted' | 'liked' | 'bookmarked';
@@ -121,7 +121,7 @@ const EmptyState = React.memo(({
     return (
       <View style={styles.container}>
         {Array(3).fill(0).map((_, index) => (
-          <SkeletonLoader key={index} />
+          <SkeletonLoader key={`skeleton-${index}`} />
         ))}
       </View>
     );
@@ -131,8 +131,8 @@ const EmptyState = React.memo(({
     <View style={styles.emptyContainer}>
       <Text style={styles.emptyText}>
         {storageType === 'voted' ? '아직 참여한 투표가 없습니다.' :
-         storageType === 'liked' ? '아직 좋아요한 글이 없습니다.' :
-         '아직 북마크한 글이 없습니다.'}
+         storageType === 'liked' ? '아직 좋아요한 투표가 없습니다.' :
+         '아직 북마크한 투표가 없습니다.'}
       </Text>
     </View>
   );
@@ -196,6 +196,16 @@ const ReactionButton = React.memo(({
     )}
   </TouchableOpacity>
 ));
+
+// voteId 기준 중복 제거 함수 추가
+function uniqueVotes(arr: VoteResponse[]): VoteResponse[] {
+  const seen = new Set<number>();
+  return arr.filter(vote => {
+    if (seen.has(vote.voteId)) return false;
+    seen.add(vote.voteId);
+    return true;
+  });
+}
 
 const StorageScreen: React.FC = () => {
   const [storageType, setStorageType] = useState<StorageType>('voted');
@@ -334,36 +344,30 @@ const StorageScreen: React.FC = () => {
     if (loading && nextPage !== 0) {
       return;
     }
-    
     if (!hasInitialLoad && nextPage === 0) {
       return;
     }
-    
     setLoading(true);
-    
     try {
       const res = await getStoragePosts(storageType, nextPage);
-      
       if (res && res.content) {
         const newVotes = nextPage === 0 ? res.content : [...cachedData[storageType], ...res.content];
-        
-        // 캐시 데이터 업데이트
-        setCachedData(prev => ({
-          ...prev,
-          [storageType]: newVotes
-        }));
-        setCachedPages(prev => ({
-          ...prev,
-          [storageType]: res.number + 1
-        }));
-        setCachedIsLast(prev => ({
-          ...prev,
-          [storageType]: res.last
-        }));
-        
-        // 현재 화면 상태 업데이트
-        setVotes(newVotes);
-        setPage(res.number + 1);
+        const uniqueNewVotes = uniqueVotes(newVotes);
+        const pageNumber = typeof res.page === 'number' ? res.page : 0;
+        setCachedData(prev => {
+          const updated = { ...prev, [storageType]: uniqueNewVotes };
+          return updated;
+        });
+        setCachedPages(prev => {
+          const updated = { ...prev, [storageType]: pageNumber + 1 };
+          return updated;
+        });
+        setCachedIsLast(prev => {
+          const updated = { ...prev, [storageType]: res.last };
+          return updated;
+        });
+        setVotes(uniqueNewVotes);
+        setPage(pageNumber + 1);
         setIsLast(res.last);
       }
     } catch (err) {
@@ -393,31 +397,27 @@ const StorageScreen: React.FC = () => {
     if (refreshing) {
       return;
     }
-    
     setRefreshing(true);
     try {
       const res = await getStoragePosts(storageType, 0);
       if (res && res.content) {
-        // 현재 탭의 캐시 데이터만 업데이트
-        setCachedData(prev => ({
-          ...prev,
-          [storageType]: res.content
-        }));
-        setCachedPages(prev => ({
-          ...prev,
-          [storageType]: res.number + 1
-        }));
-        setCachedIsLast(prev => ({
-          ...prev,
-          [storageType]: res.last
-        }));
-        
-        // 현재 화면 상태 업데이트
-        setVotes(res.content);
-        setPage(res.number + 1);
+        const uniqueContent = uniqueVotes(res.content);
+        const pageNumber = typeof res.page === 'number' ? res.page : 0;
+        setCachedData(prev => {
+          const updated = { ...prev, [storageType]: uniqueContent };
+          return updated;
+        });
+        setCachedPages(prev => {
+          const updated = { ...prev, [storageType]: pageNumber + 1 };
+          return updated;
+        });
+        setCachedIsLast(prev => {
+          const updated = { ...prev, [storageType]: res.last };
+          return updated;
+        });
+        setVotes(uniqueContent);
+        setPage(pageNumber + 1);
         setIsLast(res.last);
-        
-        // 카운트 정보도 업데이트
         await fetchAllCounts();
       }
     } catch (err) {
@@ -536,8 +536,8 @@ const StorageScreen: React.FC = () => {
     }
   };
 
-  const keyExtractor = useCallback((item: VoteResponse) => {
-    return item.voteId.toString();
+  const keyExtractor = useCallback((item: VoteResponse, index: number) => {
+    return item.voteId ? `vote-${item.voteId}` : `vote-skeleton-${index}`;
   }, []);
 
   const VoteOptionItem = useMemo(() => React.memo(({ 
@@ -773,13 +773,13 @@ const StorageScreen: React.FC = () => {
           onPress={() => handleTabChange('voted')}
         />
         <TabButton
-          label="좋아요한 글"
+          label="좋아요한 투표"
           count={counts.liked}
           isActive={storageType === 'liked'}
           onPress={() => handleTabChange('liked')}
         />
         <TabButton
-          label="북마크한 글"
+          label="북마크한 투표"
           count={counts.bookmarked}
           isActive={storageType === 'bookmarked'}
           onPress={() => handleTabChange('bookmarked')}

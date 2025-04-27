@@ -36,12 +36,17 @@ import Animated, {
   withTiming,
   runOnJS,
   interpolate,
-  Extrapolate
+  Extrapolate,
+  interpolateColor,
+  withSequence,
+  withDelay,
 } from "react-native-reanimated"
 import { Gesture, GestureDetector } from "react-native-gesture-handler"
 import { RouteProp } from "@react-navigation/native"
 import { Image as CachedImage } from 'react-native-expo-image-cache'
 import { BlurView } from 'expo-blur'
+import type { ViewStyle, TextStyle, ImageStyle } from 'react-native';
+import type { SharedValue } from 'react-native-reanimated';
 
 const IMAGE_BASE_URL = `${SERVER_URL}`
 const { height: SCREEN_HEIGHT } = Dimensions.get('window')
@@ -74,6 +79,44 @@ type CommentScreenProps = {
     };
   };
 };
+
+// CommentItemProps 타입 정의
+interface CommentItemProps {
+  item: Comment;
+  indent?: number;
+  index?: number;
+  isBestComment?: boolean;
+  isLast?: boolean;
+  isHighlighted: boolean;
+  highlightAnimation: SharedValue<number>;
+  currentUsername: string | null;
+  editingCommentId: number | null;
+  editedContent: string;
+  setEditedContent: React.Dispatch<React.SetStateAction<string>>;
+  setEditingCommentId: React.Dispatch<React.SetStateAction<number | null>>;
+  handleEditComment: (commentId: number) => void;
+  handleDeleteComment: (commentId: number) => void;
+  handleToggleLike: (commentId: number) => void;
+  handleReplyClick: (commentId: number, username: string) => void;
+  expandedComments: Record<number, boolean>;
+  toggleRepliesVisibility: (commentId: number) => void;
+  replyInputStates: Record<number, boolean>;
+  replyInputs: Record<number, string>;
+  handleReplyInputChange: (commentId: number, text: string) => void;
+  handlePostReply: (commentId: number) => void;
+  handleCancelReply: (commentId: number) => void;
+  replyInputRefs: React.MutableRefObject<Record<number, View>>;
+  loadReplies: (commentId: number, page: number) => Comment[];
+  replyPages: Record<number, number>;
+  findBestReply: (replies: Comment[]) => Comment | null;
+  styles: { [key: string]: ViewStyle | TextStyle } & { avatar: ImageStyle };
+  formatTimestamp: (dateString: string) => string;
+  setExpandedComments: React.Dispatch<React.SetStateAction<Record<number, boolean>>>;
+  hasReplies: boolean;
+  bestReply: Comment | null;
+  sortedReplies: Comment[];
+  handleUserPress: (userId: number) => void;
+}
 
 const CommentScreen = ({ route }: CommentScreenProps) => {
   const { voteId } = route.params;
@@ -193,6 +236,9 @@ const CommentScreen = ({ route }: CommentScreenProps) => {
     setLoadingMore(false)
   }
 
+  const [highlightedCommentId, setHighlightedCommentId] = useState<number | null>(null);
+  const highlightAnimation = useSharedValue(0);
+
   const handlePostComment = useCallback(async () => {
     try {
       const token = await AsyncStorage.getItem("token")
@@ -209,12 +255,39 @@ const CommentScreen = ({ route }: CommentScreenProps) => {
       setReplyTo(null);
 
       // 새 댓글 작성 후 목록 새로고침
-      loadComments(true);
+      await loadComments(true);
+      
+      // 새로 작성된 댓글 하이라이트 및 스크롤
+      setTimeout(() => {
+        setHighlightedCommentId(response.id);
+        
+        // 하이라이트 애니메이션 시작
+        highlightAnimation.value = withSequence(
+          withTiming(1, { duration: 100 }),
+          withDelay(
+            1000,
+            withTiming(0, { duration: 1000 })
+          )
+        );
+
+        // 해당 댓글로 스크롤
+        const commentIndex = comments.findIndex(c => c.id === response.id);
+        if (commentIndex !== -1) {
+          scrollViewRef.current?.scrollTo({
+            y: commentIndex * 100, // 예상 댓글 높이
+            animated: true
+          });
+        }
+
+        // 하이라이트 제거
+        setTimeout(() => setHighlightedCommentId(null), 2100);
+      }, 100);
+
     } catch (error) {
       console.error("댓글 작성 실패:", error)
       Alert.alert("오류", "댓글 작성 중 문제가 발생했습니다.")
     }
-  }, [voteId, input, replyTo]);
+  }, [voteId, input, replyTo, highlightAnimation, comments]);
 
   const handleToggleLike = useCallback(async (commentId: number) => {
     try {
@@ -424,37 +497,86 @@ const CommentScreen = ({ route }: CommentScreenProps) => {
     navigation.navigate('UserPageScreen', { userId })
   }
 
-  const renderCommentItem = (item: Comment, indent = 0, index = 0, isBestComment = false, isLast = false) => {
+  // CommentItem 컴포넌트 분리 (타입 적용)
+  const CommentItem: React.FC<CommentItemProps> = ({
+    item,
+    indent = 0,
+    index = 0,
+    isBestComment = false,
+    isLast = false,
+    isHighlighted,
+    highlightAnimation,
+    currentUsername,
+    editingCommentId,
+    editedContent,
+    setEditedContent,
+    setEditingCommentId,
+    handleEditComment,
+    handleDeleteComment,
+    handleToggleLike,
+    handleReplyClick,
+    expandedComments,
+    toggleRepliesVisibility,
+    replyInputStates,
+    replyInputs,
+    handleReplyInputChange,
+    handlePostReply,
+    handleCancelReply,
+    replyInputRefs,
+    loadReplies,
+    replyPages,
+    findBestReply,
+    styles,
+    formatTimestamp,
+    setExpandedComments,
+    hasReplies,
+    bestReply,
+    sortedReplies,
+    handleUserPress
+  }) => {
+    const highlightStyle = useAnimatedStyle(() => {
+      return {
+        backgroundColor: interpolateColor(
+          highlightAnimation.value,
+          [0, 1],
+          ['transparent', '#EBF8FF']
+        ),
+        transform: [{
+          scale: interpolate(
+            highlightAnimation.value,
+            [0, 0.5, 1],
+            [1, 1.01, 1]
+          )
+        }]
+      };
+    });
+
     const isDefault = item.profileImage === "default.jpg"
     const imageUrl = isDefault ? `${IMAGE_BASE_URL}/images/default.jpg` : `${IMAGE_BASE_URL}${item.profileImage}`
-
     const isMyComment = item.username === currentUsername
     const replies = item.replies || []
-    const hasReplies = replies.length > 0
-
     const currentPage = replyPages[item.id] || 0
     const visibleReplies = loadReplies(item.id, currentPage)
-    const bestReply = findBestReply(replies)
-    const hasMoreReplies = false // 모든 답글이 보이므로 더보기 버튼 제거
-
-    // 답글 정렬 (인기 답글이 먼저 오도록)
-    const sortedReplies = [...visibleReplies].sort((a, b) => {
-      if (bestReply && a.id === bestReply.id) return -1
-      if (bestReply && b.id === bestReply.id) return 1
+    const hasRepliesLocal = replies.length > 0
+    const bestReplyLocal = findBestReply(replies)
+    const sortedRepliesLocal = [...visibleReplies].sort((a, b) => {
+      if (bestReplyLocal && a.id === bestReplyLocal.id) return -1
+      if (bestReplyLocal && b.id === bestReplyLocal.id) return 1
       return 0
     })
 
     return (
-      <View key={item.id}>
+      <View key={item.id} nativeID={`comment-${item.id}`}>
         <Animated.View
           entering={FadeIn.duration(300).delay(index * 50)}
           exiting={FadeOut.duration(200)}
           style={[
-            styles.commentItem, 
-            { marginLeft: indent }, 
+            styles.commentItem,
+            { marginLeft: indent },
             isBestComment && styles.bestCommentItem,
             isLast && styles.lastCommentItem,
-            indent > 0 && { borderBottomWidth: 0 } // 답글은 구분선 없음
+            indent > 0 && { borderBottomWidth: 0 },
+            isHighlighted && highlightStyle
           ]}
         >
           {isBestComment && (
@@ -513,7 +635,7 @@ const CommentScreen = ({ route }: CommentScreenProps) => {
                       <Text style={styles.replyText}>답글</Text>
                     </TouchableOpacity>
 
-                    {hasReplies && (
+                    {hasRepliesLocal && (
                       <TouchableOpacity
                         onPress={() => toggleRepliesVisibility(item.id)}
                         style={styles.actionButton}
@@ -576,12 +698,49 @@ const CommentScreen = ({ route }: CommentScreenProps) => {
             </View>
           </View>
         </Animated.View>
-        
         {(expandedComments[item.id] || replyInputStates[item.id]) && (
           <View style={styles.repliesContainer}>
-            {sortedReplies.map((reply, replyIndex) => {
-              const isBestReply = bestReply ? reply.id === bestReply.id : false
-              return renderCommentItem(reply, 20, replyIndex, isBestReply, false)
+            {sortedRepliesLocal.map((reply, replyIndex) => {
+              const isBestReply = bestReplyLocal ? reply.id === bestReplyLocal.id : false
+              return (
+                <CommentItem
+                  key={reply.id}
+                  item={reply}
+                  indent={20}
+                  index={replyIndex}
+                  isBestComment={isBestReply}
+                  isLast={false}
+                  isHighlighted={false}
+                  highlightAnimation={highlightAnimation}
+                  currentUsername={currentUsername}
+                  editingCommentId={editingCommentId}
+                  editedContent={editedContent}
+                  setEditedContent={setEditedContent}
+                  setEditingCommentId={setEditingCommentId}
+                  handleEditComment={handleEditComment}
+                  handleDeleteComment={handleDeleteComment}
+                  handleToggleLike={handleToggleLike}
+                  handleReplyClick={handleReplyClick}
+                  expandedComments={expandedComments}
+                  toggleRepliesVisibility={toggleRepliesVisibility}
+                  replyInputStates={replyInputStates}
+                  replyInputs={replyInputs}
+                  handleReplyInputChange={handleReplyInputChange}
+                  handlePostReply={handlePostReply}
+                  handleCancelReply={handleCancelReply}
+                  replyInputRefs={replyInputRefs}
+                  loadReplies={loadReplies}
+                  replyPages={replyPages}
+                  findBestReply={findBestReply}
+                  styles={styles}
+                  formatTimestamp={formatTimestamp}
+                  setExpandedComments={setExpandedComments}
+                  hasReplies={hasRepliesLocal}
+                  bestReply={bestReplyLocal}
+                  sortedReplies={sortedRepliesLocal}
+                  handleUserPress={handleUserPress}
+                />
+              )
             })}
             {replyInputStates[item.id] && (
               <View 
@@ -605,7 +764,7 @@ const CommentScreen = ({ route }: CommentScreenProps) => {
                     style={styles.cancelReplyButton}
                     onPress={() => {
                       handleCancelReply(item.id)
-                      if (!hasReplies) {
+                      if (!hasRepliesLocal) {
                         setExpandedComments(prev => ({ ...prev, [item.id]: false }))
                       }
                     }}
@@ -625,8 +784,8 @@ const CommentScreen = ({ route }: CommentScreenProps) => {
           </View>
         )}
       </View>
-    )
-  }
+    );
+  };
 
   const parentComments = comments
 
@@ -668,13 +827,82 @@ const CommentScreen = ({ route }: CommentScreenProps) => {
 
     return (
       <>
-        {newComment && renderCommentItem(newComment, 0, 0, false, false)}
+        {newComment && (
+          <CommentItem
+            item={newComment}
+            isHighlighted={highlightedCommentId === newComment.id}
+            highlightAnimation={highlightAnimation}
+            currentUsername={currentUsername}
+            editingCommentId={editingCommentId}
+            editedContent={editedContent}
+            setEditedContent={setEditedContent}
+            setEditingCommentId={setEditingCommentId}
+            handleEditComment={handleEditComment}
+            handleDeleteComment={handleDeleteComment}
+            handleToggleLike={handleToggleLike}
+            handleReplyClick={handleReplyClick}
+            expandedComments={expandedComments}
+            toggleRepliesVisibility={toggleRepliesVisibility}
+            replyInputStates={replyInputStates}
+            replyInputs={replyInputs}
+            handleReplyInputChange={handleReplyInputChange}
+            handlePostReply={handlePostReply}
+            handleCancelReply={handleCancelReply}
+            replyInputRefs={replyInputRefs}
+            loadReplies={loadReplies}
+            replyPages={replyPages}
+            findBestReply={findBestReply}
+            styles={styles}
+            formatTimestamp={formatTimestamp}
+            setExpandedComments={setExpandedComments}
+            hasReplies={!!(newComment.replies && newComment.replies.length > 0)}
+            bestReply={findBestReply(newComment.replies)}
+            sortedReplies={newComment.replies || []}
+            handleUserPress={handleUserPress}
+          />
+        )}
         {sortedParentComments.map((parent, index) => {
           const isBestComment = bestComment ? parent.id === bestComment.id : false
           const isLast = index === sortedParentComments.length - 1
-          return renderCommentItem(parent, 0, index + 1, isBestComment, isLast)
+          return (
+            <CommentItem
+              key={parent.id}
+              item={parent}
+              index={index + 1}
+              isBestComment={isBestComment}
+              isLast={isLast}
+              isHighlighted={highlightedCommentId === parent.id}
+              highlightAnimation={highlightAnimation}
+              currentUsername={currentUsername}
+              editingCommentId={editingCommentId}
+              editedContent={editedContent}
+              setEditedContent={setEditedContent}
+              setEditingCommentId={setEditingCommentId}
+              handleEditComment={handleEditComment}
+              handleDeleteComment={handleDeleteComment}
+              handleToggleLike={handleToggleLike}
+              handleReplyClick={handleReplyClick}
+              expandedComments={expandedComments}
+              toggleRepliesVisibility={toggleRepliesVisibility}
+              replyInputStates={replyInputStates}
+              replyInputs={replyInputs}
+              handleReplyInputChange={handleReplyInputChange}
+              handlePostReply={handlePostReply}
+              handleCancelReply={handleCancelReply}
+              replyInputRefs={replyInputRefs}
+              loadReplies={loadReplies}
+              replyPages={replyPages}
+              findBestReply={findBestReply}
+              styles={styles}
+              formatTimestamp={formatTimestamp}
+              setExpandedComments={setExpandedComments}
+              hasReplies={!!(parent.replies && parent.replies.length > 0)}
+              bestReply={findBestReply(parent.replies)}
+              sortedReplies={parent.replies || []}
+              handleUserPress={handleUserPress}
+            />
+          )
         })}
-  
         {hasMoreComments && loadingMore && (
           <View style={styles.loadingMoreContainer}>
             <ActivityIndicator size="small" color="#5E72E4" />
@@ -915,6 +1143,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
+    borderRadius: 8,
   },
   lastCommentItem: {
     borderBottomWidth: 0,
@@ -925,7 +1154,8 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginRight: 6,
     backgroundColor: "#E2E8F0",
-  },
+    overflow: 'hidden' as 'hidden',
+  } as ImageStyle,
   commentContent: {
     flex: 1,
     backgroundColor: "transparent",
@@ -1157,6 +1387,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#F56565",
     fontWeight: "500",
+  },
+  highlightedComment: {
+    backgroundColor: '#EBF8FF',
+    borderRadius: 8,
   },
 })
 
