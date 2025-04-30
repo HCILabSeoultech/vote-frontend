@@ -1,62 +1,43 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, Dimensions, ScrollView, Animated as RNAnimated, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { PieChart } from 'react-native-chart-kit';
-import { getVoteStatisticsByAge } from '../../api/post';
-import { AgeStatistics as AgeStatsType } from '../../types/Vote';
+import { Dimensions } from 'react-native';
+import { getVoteStatisticsByRegion } from '../api/post';
+import { RegionStatistics as RegionStatsType, StatOption } from '../types/Vote';
 import Animated, { 
+  FadeIn, 
+  SlideInRight,
   useAnimatedStyle, 
   useSharedValue, 
   withRepeat, 
   withSequence, 
-  withTiming,
-  FadeIn,
-  SlideInRight
+  withTiming 
 } from 'react-native-reanimated';
 
 const CHART_COLORS = [
-  '#4C51BF', // 인디고
-  '#48BB78', // 그린
-  '#4299E1', // 블루
-  '#ED64A6', // 핑크
-  '#ECC94B', // 옐로우
-  '#9F7AEA', // 퍼플
-  '#F56565', // 레드
-  '#38B2AC', // 틸
-  '#667EEA', // 라이트 인디고
-  '#ED8936', // 오렌지
+  '#FF6B6B', // 빨간색
+  '#4ECDC4', // 청록색
+  '#45B7D1', // 하늘색
+  '#96CEB4', // 민트색
+  '#FFEEAD', // 연한 노란색
+  '#D4A5A5', // 분홍색
+  '#9B59B6', // 보라색
+  '#3498DB', // 파란색
+  '#2ECC71', // 초록색
+  '#F1C40F', // 노란색
 ];
 
-// 테스트용 목업 데이터
-const mockData = {
-  "20": {
-    stat: {
-      "찬성": 150,
-      "반대": 50
-    }
-  },
-  "30": {
-    stat: {
-      "찬성": 200,
-      "반대": 100
-    }
-  },
-  "40": {
-    stat: {
-      "찬성": 180,
-      "반대": 120
-    }
-  },
-  "50": {
-    stat: {
-      "찬성": 120,
-      "반대": 80
-    }
-  }
-};
-
-interface AgeStatisticsProps {
+interface Props {
   voteId: number;
 }
+
+type RegionData = {
+  [key: string]: {
+    stat: {
+      [key: string]: number;
+    };
+  };
+};
 
 const SkeletonLoader = () => {
   const opacity = useSharedValue(0.3);
@@ -78,7 +59,7 @@ const SkeletonLoader = () => {
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.title}>연령별 투표 분포</Text>
+      <Text style={styles.title}>지역별 투표 분포</Text>
       
       <Animated.View style={[styles.chartContainer, animatedStyle]}>
         <View style={styles.skeletonChartTitle} />
@@ -86,9 +67,10 @@ const SkeletonLoader = () => {
       </Animated.View>
       
       <View style={styles.statsContainer}>
-        {[1, 2, 3, 4].map((index) => (
-          <Animated.View key={index} style={[styles.ageSection, animatedStyle]}>
-            <View style={styles.ageHeader}>
+        <View style={styles.skeletonStatsTitle} />
+        {[1, 2, 3, 4, 5].map((index) => (
+          <Animated.View key={index} style={[styles.regionSection, animatedStyle]}>
+            <View style={styles.regionHeader}>
               <View style={styles.skeletonLabel} />
               <View style={styles.skeletonValue} />
             </View>
@@ -111,55 +93,50 @@ const SkeletonLoader = () => {
   );
 };
 
-const AgeStatistics: React.FC<AgeStatisticsProps> = ({ voteId }) => {
+const RegionStatistics = ({ voteId }: Props) => {
   const [loading, setLoading] = useState(true);
-  const [statistics, setStatistics] = useState<AgeStatsType | null>(null);
+  const [stats, setStats] = useState<RegionData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [selectedAge, setSelectedAge] = useState<string | null>(null);
+  const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
 
-  const fetchStatistics = useCallback(async () => {
+  const fetchStats = useCallback(async () => {
     try {
-      console.log('연령별 통계 요청 시작:', voteId);
-      const data = await getVoteStatisticsByAge(voteId);
+      const response = await getVoteStatisticsByRegion(voteId);
       
-      const typedResponse = data as AgeStatsType;
-      const cleanedResponse: AgeStatsType = {};
+      const typedResponse = response as RegionData;
+      const cleanedResponse: RegionData = {};
       Object.keys(typedResponse).forEach(key => {
         const cleanedKey = key.replace(/^\d+\s+/, '').trim();
         cleanedResponse[cleanedKey] = typedResponse[key];
       });
       
-      setStatistics(cleanedResponse);
-    } catch (error: any) {
-      console.error('연령별 통계 에러 상세:', error);
-      if (error.response) {
-        console.error('에러 응답:', error.response.data);
-        console.error('에러 상태:', error.response.status);
-      }
-      setError('연령별 통계를 불러오는데 실패했습니다.');
+      setStats(cleanedResponse);
+    } catch (err) {
+      console.error('Region Stats Error:', err);
+      setError('통계 데이터를 불러오는데 실패했습니다.');
     } finally {
       setLoading(false);
     }
   }, [voteId]);
 
   useEffect(() => {
-    fetchStatistics();
-  }, [fetchStatistics]);
+    fetchStats();
+  }, [fetchStats]);
 
   const datasets = useMemo(() => {
-    if (!statistics) return [];
+    if (!stats) return [];
     
-    const data = Object.entries(statistics).map(([age, data]) => {
+    const data = Object.entries(stats).map(([region, data]) => {
       const total = Object.values(data.stat).reduce<number>((sum, count) => sum + Number(count), 0);
       return {
-        age: age.replace(/[^0-9]/g, ''),
+        region,
         total,
         details: data.stat
       };
     });
 
-    return data.sort((a, b) => Number(a.age) - Number(b.age));
-  }, [statistics]);
+    return data.sort((a, b) => b.total - a.total);
+  }, [stats]);
 
   const totalParticipants = useMemo(() => 
     datasets.reduce((sum, { total }) => sum + total, 0),
@@ -167,8 +144,8 @@ const AgeStatistics: React.FC<AgeStatisticsProps> = ({ voteId }) => {
   );
 
   const chartData = useMemo(() => 
-    datasets.map(({ age, total }, index) => ({
-      name: `${age}대`,
+    datasets.map(({ region, total }, index) => ({
+      name: `${region}`,
       population: total,
       color: CHART_COLORS[index % CHART_COLORS.length],
       legendFontColor: '#7F7F7F',
@@ -177,23 +154,16 @@ const AgeStatistics: React.FC<AgeStatisticsProps> = ({ voteId }) => {
     [datasets]
   );
 
-  const chartAnimation = new RNAnimated.Value(0);
-  
-  useEffect(() => {
-    if (!loading && statistics) {
-      RNAnimated.timing(chartAnimation, {
-        toValue: 1,
-        duration: 1000,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [loading, statistics]);
+  const maxParticipationRegion = useMemo(() => 
+    datasets[0],
+    [datasets]
+  );
 
   if (loading) {
     return <SkeletonLoader />;
   }
 
-  if (error || !statistics) {
+  if (error || !stats) {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>{error || '데이터를 불러올 수 없습니다.'}</Text>
@@ -201,10 +171,12 @@ const AgeStatistics: React.FC<AgeStatisticsProps> = ({ voteId }) => {
     );
   }
 
+  console.log('[DEBUG] stats 데이터:', stats);
+
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <Animated.View entering={FadeIn.duration(600)} style={styles.headerContainer}>
-        <Text style={styles.title}>연령별 투표 분포</Text>
+        <Text style={styles.title}>지역별 투표 분포</Text>
         <Text style={styles.totalParticipants}>총 참여자 {totalParticipants}명</Text>
       </Animated.View>
       
@@ -231,42 +203,44 @@ const AgeStatistics: React.FC<AgeStatisticsProps> = ({ voteId }) => {
               absolute
               hasLegend={false}
               center={[20, 0]}
+              avoidFalseZero
             />
           </View>
 
           <View style={styles.quickStatsContainer}>
-            {datasets.map(({ age, total }, index) => (
+            {datasets.map(({ region, total }, index) => (
               <TouchableOpacity
-                key={age}
+                key={region}
                 style={[
                   styles.quickStatItem,
-                  selectedAge === age && styles.selectedQuickStatItem
+                  selectedRegion === region && styles.selectedQuickStatItem
                 ]}
-                onPress={() => setSelectedAge(age === selectedAge ? null : age)}
+                onPress={() => setSelectedRegion(region === selectedRegion ? null : region)}
               >
                 <View style={[styles.colorIndicator, { backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }]} />
                 <Text style={styles.quickStatText}>
-                  {age}대 ({total}명)
+                  {region} ({total}명)
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
       </Animated.View>
-
+      
       <View style={styles.statsContainer}>
-        {datasets.map(({ age, total, details }, index) => (
+        <Text style={styles.statsTitle}>상세 통계</Text>
+        {datasets.map(({ region, total, details }, index) => (
           <Animated.View
-            key={age}
+            key={region}
             entering={SlideInRight.delay(index * 100).springify()}
             style={[
-              styles.ageSection,
-              selectedAge === age && styles.selectedAgeSection
+              styles.regionSection,
+              selectedRegion === region && styles.selectedRegionSection
             ]}
           >
-            <View style={styles.ageHeader}>
-              <View style={styles.ageLabelContainer}>
-                <Text style={styles.label}>{age}대</Text>
+            <View style={styles.regionHeader}>
+              <View style={styles.regionLabelContainer}>
+                <Text style={styles.label}>{region}</Text>
                 <View style={[styles.colorIndicator, { backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }]} />
               </View>
               <Text style={styles.value}>
@@ -293,11 +267,8 @@ const AgeStatistics: React.FC<AgeStatisticsProps> = ({ voteId }) => {
       >
         <Text style={styles.aiAnalysisTitle}>AI 분석 결과</Text>
         <Text style={styles.aiAnalysisContent}>
-          {datasets.length === 1 ? (
-            `현재 ${datasets[0].age}대만 투표에 참여했으며, 총 ${totalParticipants}명이 참여했습니다. 다른 연령대의 참여를 유도하면 더 다양한 의견을 수렴할 수 있을 것으로 예상됩니다.`
-          ) : (
-            `총 ${datasets.length}개 연령대가 참여했으며, 전체 ${totalParticipants}명이 투표했습니다.\n${datasets[0].age}대의 참여율이 가장 높았습니다(${((datasets[0].total / totalParticipants) * 100).toFixed(1)}%).`
-          )}
+          {maxParticipationRegion.region}에서 가장 높은 참여율({((maxParticipationRegion.total / totalParticipants) * 100).toFixed(1)}%)을 보였으며, 
+          이는 해당 지역의 관심도가 특히 높았음을 나타냅니다.
         </Text>
       </Animated.View>
     </ScrollView>
@@ -309,32 +280,25 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
-  headerContainer: {
-    marginTop: 10,
-    marginBottom: 10,
-    alignItems: 'center',
-  },
-  headerLine: {
-    width: 40,
-    height: 3,
-    backgroundColor: '#4299E1',
-    marginTop: 8,
-    borderRadius: 2,
-  },
   errorContainer: {
     padding: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
   errorText: {
-    color: '#E53E3E',
+    color: 'red',
     fontSize: 16,
-    textAlign: 'center',
   },
   title: {
     fontSize: 22,
     fontWeight: 'bold',
     color: '#2D3748',
+  },
+  totalParticipants: {
+    fontSize: 16,
+    color: '#4A5568',
+    marginTop: 8,
+    fontWeight: '500',
   },
   chartContainer: {
     margin: 10,
@@ -357,8 +321,8 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   quickStatsContainer: {
-    width: 130,
-    paddingRight: 16,
+    width: 160,
+    paddingRight: 0,
     justifyContent: 'center',
   },
   quickStatItem: {
@@ -385,7 +349,6 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    marginLeft: 6,
   },
   statsContainer: {
     margin: 16,
@@ -393,7 +356,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#F7FAFC',
     borderRadius: 16,
   },
-  ageSection: {
+  statsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+  regionSection: {
     marginBottom: 12,
     padding: 16,
     backgroundColor: '#ffffff',
@@ -407,7 +375,12 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 3,
   },
-  ageHeader: {
+  selectedRegionSection: {
+    borderColor: '#4299E1',
+    borderWidth: 2,
+    backgroundColor: '#F7FAFC',
+  },
+  regionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -416,7 +389,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#EDF2F7',
   },
-  ageLabelContainer: {
+  regionLabelContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -424,6 +397,7 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     color: '#2D3748',
+    marginRight: 8,
   },
   value: {
     fontSize: 16,
@@ -479,6 +453,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#E2E8F0',
     borderRadius: 8,
   },
+  skeletonStatsTitle: {
+    height: 24,
+    width: '30%',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+    marginBottom: 16,
+  },
   skeletonLabel: {
     height: 20,
     width: '30%',
@@ -508,17 +489,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#E2E8F0',
     borderRadius: 4,
   },
-  totalParticipants: {
-    fontSize: 16,
-    color: '#4A5568',
-    marginTop: 8,
-    fontWeight: '500',
-  },
-  selectedAgeSection: {
-    borderColor: '#4299E1',
-    borderWidth: 2,
-    backgroundColor: '#F7FAFC',
+  headerContainer: {
+    marginTop: 10,
+    marginBottom: 10,
+    alignItems: 'center',
   },
 });
 
-export default React.memo(AgeStatistics); 
+export default RegionStatistics; 

@@ -27,9 +27,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { checkFollow, followUser, unfollowUser } from '../api/follow';
 import { Feather } from '@expo/vector-icons';
 import CommentScreen from '../screens/CommentScreen';
-import RegionStatistics from '../components/statistics/RegionStatistics';
-import AgeStatistics from '../components/statistics/AgeStatistics';
-import GenderStatistics from '../components/statistics/GenderStatistics';
+import RegionStatistics from '../components/RegionStatistics';
+import AgeStatistics from '../components/AgeStatistics';
+import GenderStatistics from '../components/GenderStatistics';
 
 import { SERVER_URL } from '../constant/config';
 

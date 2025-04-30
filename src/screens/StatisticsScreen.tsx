@@ -3,9 +3,9 @@ import { View, StyleSheet, TouchableOpacity, Text, SafeAreaView } from 'react-na
 import { Tab, TabView } from '@rneui/themed';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/AppNavigator';
-import GenderStatistics from '../components/statistics/GenderStatistics';
-import AgeStatistics from '../components/statistics/AgeStatistics';
-import RegionStatistics from '../components/statistics/RegionStatistics';
+import GenderStatistics from '../components/GenderStatistics';
+import AgeStatistics from '../components/AgeStatistics';
+import RegionStatistics from '../components/RegionStatistics';
 import { Feather } from '@expo/vector-icons';
 
 type StatisticsScreenRouteProp = RouteProp<RootStackParamList, 'Statistics'>;

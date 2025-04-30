@@ -25,9 +25,9 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { Feather } from '@expo/vector-icons'
 import CommentScreen from '../screens/CommentScreen';
-import RegionStatistics from '../components/statistics/RegionStatistics';
-import AgeStatistics from '../components/statistics/AgeStatistics';
-import GenderStatistics from '../components/statistics/GenderStatistics';
+import RegionStatistics from '../components/RegionStatistics';
+import AgeStatistics from '../components/AgeStatistics';
+import GenderStatistics from '../components/GenderStatistics';
 
 const STORAGE_TYPES = [
   { label: '참여한 투표', value: 'voted', count: 0 },

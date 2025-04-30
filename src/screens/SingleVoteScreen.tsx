@@ -26,9 +26,9 @@ import { Ionicons } from '@expo/vector-icons';
 import CommentScreen from './CommentScreen';
 import { Gesture, GestureDetector } from "react-native-gesture-handler"
 import { Feather } from '@expo/vector-icons';
-import RegionStatistics from '../components/statistics/RegionStatistics';
-import AgeStatistics from '../components/statistics/AgeStatistics';
-import GenderStatistics from '../components/statistics/GenderStatistics';
+import RegionStatistics from '../components/RegionStatistics';
+import AgeStatistics from '../components/AgeStatistics';
+import GenderStatistics from '../components/GenderStatistics';
 
 import { SERVER_URL } from '../constant/config';
 const IMAGE_BASE_URL = `${SERVER_URL}`;

@@ -26,9 +26,9 @@ import type { RootStackParamList } from "../navigation/AppNavigator"
 import { jwtDecode } from "jwt-decode"
 import { useVoteList } from "../hooks/useVoteList"
 import CommentScreen from "../screens/CommentScreen"
-import RegionStatistics from "../components/statistics/RegionStatistics"
-import AgeStatistics from "../components/statistics/AgeStatistics"
-import GenderStatistics from "../components/statistics/GenderStatistics"
+import RegionStatistics from "../components/RegionStatistics"
+import AgeStatistics from "../components/AgeStatistics"
+import GenderStatistics from "../components/GenderStatistics"
 
 import { SERVER_URL } from "../constant/config"
 

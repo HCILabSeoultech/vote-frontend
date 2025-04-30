@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { PieChart } from 'react-native-chart-kit';
 import { Dimensions } from 'react-native';
-import { getVoteStatisticsByGender } from '../../api/post';
-import { GenderStatistics as GenderStatsType } from '../../types/Vote';
+import { getVoteStatisticsByGender } from '../api/post';
+import { GenderStatistics as GenderStatsType } from '../types/Vote';
 import Animated, { 
   FadeIn, 
   SlideInRight,
