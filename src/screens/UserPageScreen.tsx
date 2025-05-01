@@ -55,44 +55,19 @@ const SkeletonLoader = () => {
   }));
 
   return (
-    <Animated.View style={[styles.skeletonContainer, animatedStyle]}>
-      <View style={styles.skeletonProfile}>
-        <View style={styles.skeletonProfileImage} />
-        <View style={styles.skeletonProfileInfo}>
+    <Animated.View style={[styles.skeletonItem, animatedStyle]}>
+      <View style={styles.skeletonHeader}>
+        <View style={styles.skeletonAvatar} />
+        <View style={styles.skeletonUserInfo}>
           <View style={styles.skeletonText} />
-          <View style={styles.skeletonText} />
+          <View style={[styles.skeletonText, { width: '60%' }]} />
         </View>
       </View>
-      <View style={styles.skeletonTabs}>
-        <View style={styles.skeletonTab} />
-        <View style={styles.skeletonTab} />
-        <View style={styles.skeletonTab} />
+      <View style={styles.skeletonTitle} />
+      <View style={styles.skeletonOptions}>
+        <View style={styles.skeletonOption} />
+        <View style={styles.skeletonOption} />
       </View>
-      {[1, 2, 3].map((_, index) => (
-        <View key={index} style={styles.skeletonPost}>
-          <View style={styles.skeletonPostHeader}>
-            <View style={styles.skeletonAvatar} />
-            <View style={styles.skeletonPostInfo}>
-              <View style={styles.skeletonText} />
-              <View style={styles.skeletonText} />
-            </View>
-          </View>
-          <View style={styles.skeletonPostContent}>
-            <View style={[styles.skeletonText, { width: '80%' }]} />
-            <View style={[styles.skeletonText, { width: '60%' }]} />
-          </View>
-          <View style={styles.skeletonOptions}>
-            <View style={styles.skeletonOption} />
-            <View style={styles.skeletonOption} />
-          </View>
-          <View style={styles.skeletonReactions}>
-            <View style={styles.skeletonReaction} />
-            <View style={styles.skeletonReaction} />
-            <View style={styles.skeletonReaction} />
-            <View style={styles.skeletonReaction} />
-          </View>
-        </View>
-      ))}
     </Animated.View>
   );
 };
@@ -1235,6 +1210,29 @@ const styles = StyleSheet.create({
     height: 24,
     backgroundColor: '#E2E8F0',
     borderRadius: 12,
+  },
+  skeletonItem: {
+    backgroundColor: '#F7FAFC',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    marginHorizontal: 4,
+    width: '100%',
+  },
+  skeletonHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  skeletonUserInfo: {
+    flex: 1,
+  },
+  skeletonTitle: {
+    height: 24,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
+    marginBottom: 16,
+    width: '90%',
   },
 });
 

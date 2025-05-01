@@ -67,10 +67,16 @@ const SkeletonLoader = React.memo(() => {
         </View>
       </View>
       <View style={styles.skeletonTitle} />
+      <View style={styles.skeletonMetaContainer}>
+        <View style={styles.skeletonCategory} />
+        <View style={styles.skeletonDate} />
+      </View>
+      <View style={styles.skeletonContent} />
       <View style={styles.skeletonOptions}>
         <View style={styles.skeletonOption} />
         <View style={styles.skeletonOption} />
       </View>
+      <View style={styles.skeletonReactions} />
     </Animated.View>
   )
 })
@@ -1048,8 +1054,10 @@ const styles = StyleSheet.create({
   skeletonItem: {
     backgroundColor: '#F7FAFC',
     borderRadius: 16,
-    padding: 16,
+    padding: -4,
+    marginTop: 10,
     marginBottom: 16,
+    width: '100%',
   },
   skeletonHeader: {
     flexDirection: 'row',
@@ -1077,8 +1085,33 @@ const styles = StyleSheet.create({
     height: 24,
     backgroundColor: '#E2E8F0',
     borderRadius: 12,
-    marginBottom: 16,
+    marginBottom: 8,
     width: '90%',
+  },
+  skeletonMetaContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  skeletonCategory: {
+    width: 60,
+    height: 24,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
+    marginRight: 8,
+  },
+  skeletonDate: {
+    width: 100,
+    height: 16,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 8,
+  },
+  skeletonContent: {
+    height: 40,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 8,
+    marginBottom: 12,
+    width: '100%',
   },
   skeletonOptions: {
     gap: 8,
@@ -1087,6 +1120,14 @@ const styles = StyleSheet.create({
     height: 54,
     backgroundColor: '#E2E8F0',
     borderRadius: 12,
+    width: '100%',
+  },
+  skeletonReactions: {
+    height: 32,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 8,
+    marginTop: 12,
+    width: '100%',
   },
   footerLoadingContainer: {
     paddingVertical: 20,

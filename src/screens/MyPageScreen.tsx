@@ -67,37 +67,37 @@ const SkeletonLoader = () => {
       <View style={styles.skeletonProfile}>
         <View style={styles.skeletonProfileImage} />
         <View style={styles.skeletonProfileInfo}>
-          <View style={styles.skeletonText} />
-          <View style={styles.skeletonText} />
+          <View style={[styles.skeletonText, { width: '60%' }]} />
+          <View style={[styles.skeletonText, { width: '40%' }]} />
         </View>
       </View>
       <View style={styles.skeletonTabs}>
-        <View style={styles.skeletonTab} />
-        <View style={styles.skeletonTab} />
-        <View style={styles.skeletonTab} />
+        <View style={[styles.skeletonTab, { width: '30%' }]} />
+        <View style={[styles.skeletonTab, { width: '30%' }]} />
+        <View style={[styles.skeletonTab, { width: '30%' }]} />
       </View>
       {[1, 2, 3].map((_, index) => (
         <View key={index} style={styles.skeletonPost}>
           <View style={styles.skeletonPostHeader}>
             <View style={styles.skeletonAvatar} />
             <View style={styles.skeletonPostInfo}>
-              <View style={styles.skeletonText} />
-              <View style={styles.skeletonText} />
+              <View style={[styles.skeletonText, { width: '40%' }]} />
+              <View style={[styles.skeletonText, { width: '30%' }]} />
             </View>
           </View>
           <View style={styles.skeletonPostContent}>
+            <View style={[styles.skeletonText, { width: '100%' }]} />
             <View style={[styles.skeletonText, { width: '80%' }]} />
-            <View style={[styles.skeletonText, { width: '60%' }]} />
           </View>
           <View style={styles.skeletonOptions}>
-            <View style={styles.skeletonOption} />
-            <View style={styles.skeletonOption} />
+            <View style={[styles.skeletonOption, { width: '100%' }]} />
+            <View style={[styles.skeletonOption, { width: '100%' }]} />
           </View>
           <View style={styles.skeletonReactions}>
-            <View style={styles.skeletonReaction} />
-            <View style={styles.skeletonReaction} />
-            <View style={styles.skeletonReaction} />
-            <View style={styles.skeletonReaction} />
+            <View style={[styles.skeletonReaction, { width: 24 }]} />
+            <View style={[styles.skeletonReaction, { width: 24 }]} />
+            <View style={[styles.skeletonReaction, { width: 24 }]} />
+            <View style={[styles.skeletonReaction, { width: 24 }]} />
           </View>
         </View>
       ))}
@@ -644,23 +644,23 @@ const MyPageScreen: React.FC = () => {
                       <View style={styles.skeletonPostHeader}>
                         <View style={styles.skeletonAvatar} />
                         <View style={styles.skeletonPostInfo}>
-                          <View style={styles.skeletonText} />
-                          <View style={styles.skeletonText} />
+                          <View style={[styles.skeletonText, { width: '40%' }]} />
+                          <View style={[styles.skeletonText, { width: '30%' }]} />
                         </View>
                       </View>
                       <View style={styles.skeletonPostContent}>
+                        <View style={[styles.skeletonText, { width: '100%' }]} />
                         <View style={[styles.skeletonText, { width: '80%' }]} />
-                        <View style={[styles.skeletonText, { width: '60%' }]} />
                       </View>
                       <View style={styles.skeletonOptions}>
-                        <View style={styles.skeletonOption} />
-                        <View style={styles.skeletonOption} />
+                        <View style={[styles.skeletonOption, { width: '100%' }]} />
+                        <View style={[styles.skeletonOption, { width: '100%' }]} />
                       </View>
                       <View style={styles.skeletonReactions}>
-                        <View style={styles.skeletonReaction} />
-                        <View style={styles.skeletonReaction} />
-                        <View style={styles.skeletonReaction} />
-                        <View style={styles.skeletonReaction} />
+                        <View style={[styles.skeletonReaction, { width: 24 }]} />
+                        <View style={[styles.skeletonReaction, { width: 24 }]} />
+                        <View style={[styles.skeletonReaction, { width: 24 }]} />
+                        <View style={[styles.skeletonReaction, { width: 24 }]} />
                       </View>
                     </View>
                   ))}
@@ -677,22 +677,22 @@ const MyPageScreen: React.FC = () => {
             <View style={styles.skeletonProfile}>
               <View style={styles.skeletonProfileImage} />
               <View style={styles.skeletonProfileInfo}>
-                <View style={styles.skeletonText} />
-                <View style={styles.skeletonText} />
+                <View style={[styles.skeletonText, { width: '40%' }]} />
+                <View style={[styles.skeletonText, { width: '30%' }]} />
               </View>
             </View>
             <View style={styles.skeletonTabs}>
-              <View style={styles.skeletonTab} />
-              <View style={styles.skeletonTab} />
-              <View style={styles.skeletonTab} />
+              <View style={[styles.skeletonTab, { width: '30%' }]} />
+              <View style={[styles.skeletonTab, { width: '30%' }]} />
+              <View style={[styles.skeletonTab, { width: '30%' }]} />
             </View>
             {[1, 2, 3].map((_, index) => (
               <View key={index} style={styles.skeletonFollower}>
                 <View style={styles.skeletonFollowerHeader}>
                   <View style={styles.skeletonAvatar} />
                   <View style={styles.skeletonFollowerInfo}>
-                    <View style={styles.skeletonText} />
-                    <View style={styles.skeletonText} />
+                    <View style={[styles.skeletonText, { width: '40%' }]} />
+                    <View style={[styles.skeletonText, { width: '30%' }]} />
                   </View>
                 </View>
               </View>
@@ -705,22 +705,22 @@ const MyPageScreen: React.FC = () => {
             <View style={styles.skeletonProfile}>
               <View style={styles.skeletonProfileImage} />
               <View style={styles.skeletonProfileInfo}>
-                <View style={styles.skeletonText} />
-                <View style={styles.skeletonText} />
+                <View style={[styles.skeletonText, { width: '40%' }]} />
+                <View style={[styles.skeletonText, { width: '30%' }]} />
               </View>
             </View>
             <View style={styles.skeletonTabs}>
-              <View style={styles.skeletonTab} />
-              <View style={styles.skeletonTab} />
-              <View style={styles.skeletonTab} />
+              <View style={[styles.skeletonTab, { width: '30%' }]} />
+              <View style={[styles.skeletonTab, { width: '30%' }]} />
+              <View style={[styles.skeletonTab, { width: '30%' }]} />
             </View>
             {[1, 2, 3].map((_, index) => (
               <View key={index} style={styles.skeletonFollower}>
                 <View style={styles.skeletonFollowerHeader}>
                   <View style={styles.skeletonAvatar} />
                   <View style={styles.skeletonFollowerInfo}>
-                    <View style={styles.skeletonText} />
-                    <View style={styles.skeletonText} />
+                    <View style={[styles.skeletonText, { width: '40%' }]} />
+                    <View style={[styles.skeletonText, { width: '30%' }]} />
                   </View>
                 </View>
               </View>
@@ -1406,13 +1406,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 20,
+    paddingHorizontal: 16,
   },
   skeletonTab: {
-    flex: 1,
     height: 40,
     backgroundColor: '#E2E8F0',
     borderRadius: 8,
-    marginHorizontal: 4,
   },
   skeletonPost: {
     backgroundColor: '#FFFFFF',
@@ -1463,9 +1462,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingHorizontal: 16,
+    gap: 16,
   },
   skeletonReaction: {
-    width: 24,
     height: 24,
     backgroundColor: '#E2E8F0',
     borderRadius: 12,

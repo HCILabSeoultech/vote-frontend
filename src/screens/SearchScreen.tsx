@@ -76,20 +76,20 @@ const SkeletonLoader = () => {
         <View style={styles.skeletonImage} />
         <View style={styles.simpleVoteInfo}>
           <View style={styles.voteHeader}>
-            <View style={styles.skeletonTitle} />
-            <View style={styles.skeletonCategory} />
+            <View style={[styles.skeletonTitle, { width: '100%' }]} />
+            <View style={[styles.skeletonCategory, { width: 60 }]} />
           </View>
           <View style={styles.authorInfo}>
-            <View style={styles.skeletonAuthor} />
-            <View style={styles.skeletonDot} />
-            <View style={styles.skeletonDate} />
+            <View style={[styles.skeletonAuthor, { width: 80 }]} />
+            <View style={[styles.skeletonDot, { width: 16 }]} />
+            <View style={[styles.skeletonDate, { width: 60 }]} />
           </View>
           <View style={styles.simpleMetaRow}>
-            <View style={styles.skeletonTime} />
+            <View style={[styles.skeletonTime, { width: 100 }]} />
             <View style={styles.statsContainer}>
-              <View style={styles.skeletonStat} />
-              <View style={styles.skeletonStat} />
-              <View style={styles.skeletonStat} />
+              <View style={[styles.skeletonStat, { width: 30 }]} />
+              <View style={[styles.skeletonStat, { width: 30 }]} />
+              <View style={[styles.skeletonStat, { width: 30 }]} />
             </View>
           </View>
         </View>
@@ -142,6 +142,7 @@ const SearchScreen: React.FC = () => {
   const [showSortModal, setShowSortModal] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, "CommentScreen">>()
 
@@ -150,8 +151,10 @@ const SearchScreen: React.FC = () => {
       const res = await getTopLikedVotes(30)
       setVotes(res)
       setHasLoaded(true)
+      setIsInitialLoading(false)
     } catch (err) {
       console.error("인기 투표 불러오기 실패:", err)
+      setIsInitialLoading(false)
     }
   }, [])
 
@@ -181,7 +184,7 @@ const SearchScreen: React.FC = () => {
 
   useEffect(() => {
     if (!hasLoaded) {
-    fetchVotes()
+      fetchVotes()
     }
   }, [hasLoaded, fetchVotes])
 
@@ -189,7 +192,7 @@ const SearchScreen: React.FC = () => {
     if (searchKeyword.trim() === "") {
       if (selectedCategory === 0) {
         if (!hasLoaded) {
-        fetchVotes()
+          fetchVotes()
         }
       } else {
         fetchCategoryVotes(selectedCategory)
@@ -556,7 +559,6 @@ const SearchScreen: React.FC = () => {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    setLoading(true);
     try {
       if (searchKeyword.trim() === "") {
         if (selectedCategory === 0) {
@@ -577,7 +579,6 @@ const SearchScreen: React.FC = () => {
       console.error("새로고침 실패:", error);
     } finally {
       setRefreshing(false);
-      setLoading(false);
     }
   }, [searchKeyword, selectedCategory, searchType, fetchVotes, fetchCategoryVotes]);
 
@@ -756,7 +757,7 @@ const SearchScreen: React.FC = () => {
         </TouchableOpacity>
       </Modal>
 
-      {loading ? (
+      {isInitialLoading ? (
         <FlatList
           data={Array(5).fill({})}
           keyExtractor={(_, index) => `skeleton-${index}`}
@@ -768,9 +769,6 @@ const SearchScreen: React.FC = () => {
           windowSize={10}
           initialNumToRender={5}
           updateCellsBatchingPeriod={50}
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1499D9" colors={["#1499D9"]}/>}
         />
       ) : searchType === "user" ? (
         <FlatList
@@ -787,7 +785,14 @@ const SearchScreen: React.FC = () => {
           updateCellsBatchingPeriod={50}
           refreshing={refreshing}
           onRefresh={onRefresh}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1499D9" colors={["#1499D9"]}/>}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#1499D9"
+              colors={["#1499D9"]}
+            />
+          }
         />
       ) : searchKeyword.trim() !== "" ? (
         <FlatList
@@ -804,7 +809,14 @@ const SearchScreen: React.FC = () => {
           updateCellsBatchingPeriod={50}
           refreshing={refreshing}
           onRefresh={onRefresh}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1499D9" colors={["#1499D9"]}/>}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#1499D9"
+              colors={["#1499D9"]}
+            />
+          }
         />
       ) : (
         <FlatList
@@ -821,7 +833,14 @@ const SearchScreen: React.FC = () => {
           updateCellsBatchingPeriod={50}
           refreshing={refreshing}
           onRefresh={onRefresh}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1499D9" colors={["#1499D9"]}/>}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#1499D9"
+              colors={["#1499D9"]}
+            />
+          }
         />
       )}
     </SafeAreaView>
@@ -1527,45 +1546,38 @@ const styles = StyleSheet.create({
   },
   skeletonTitle: {
     height: 20,
-    width: '70%',
     backgroundColor: '#EDF2F7',
     borderRadius: 4,
     marginBottom: 8,
   },
   skeletonCategory: {
     height: 20,
-    width: 60,
     backgroundColor: '#EDF2F7',
     borderRadius: 12,
   },
   skeletonAuthor: {
     height: 16,
-    width: 80,
     backgroundColor: '#EDF2F7',
     borderRadius: 4,
   },
   skeletonDot: {
     height: 16,
-    width: 16,
     backgroundColor: '#EDF2F7',
     borderRadius: 8,
     marginHorizontal: 6,
   },
   skeletonDate: {
     height: 16,
-    width: 60,
     backgroundColor: '#EDF2F7',
     borderRadius: 4,
   },
   skeletonTime: {
     height: 16,
-    width: 100,
     backgroundColor: '#EDF2F7',
     borderRadius: 4,
   },
   skeletonStat: {
     height: 16,
-    width: 30,
     backgroundColor: '#EDF2F7',
     borderRadius: 4,
   },

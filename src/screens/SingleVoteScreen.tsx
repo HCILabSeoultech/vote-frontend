@@ -53,7 +53,7 @@ const SkeletonLoader = () => {
   }));
 
   return (
-    <Animated.View style={[styles.skeletonItem, animatedStyle]}>
+    <View style={[styles.skeletonItem, animatedStyle]}>
       <View style={styles.skeletonHeader}>
         <View style={styles.skeletonProfile}>
           <View style={styles.skeletonAvatar} />
@@ -89,7 +89,7 @@ const SkeletonLoader = () => {
           <View key={index} style={styles.skeletonReaction} />
         ))}
       </View>
-    </Animated.View>
+    </View>
   );
 };
 
@@ -256,10 +256,12 @@ const SinglePageScreen: React.FC = () => {
           <View style={styles.skeletonBackButton} />
           <View style={styles.skeletonHeaderTitle} />
           <View style={styles.skeletonShareButton} />
-      </View>
-        <ScrollView contentContainerStyle={styles.container}>
-          <SkeletonLoader />
-        </ScrollView>
+        </View>
+        <View style={[styles.container, { paddingTop: 0 }]}>
+          <View style={styles.contentCard}>
+            <SkeletonLoader />
+          </View>
+        </View>
       </SafeAreaView>
     );
   }
@@ -932,10 +934,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   skeletonItem: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F7FAFC',
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
+    width: '100%',
   },
   skeletonHeader: {
     flexDirection: 'row',

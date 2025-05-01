@@ -1322,6 +1322,8 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
+    marginHorizontal: 12,
+    width: '100%',
   },
   skeletonHeader: {
     flexDirection: 'row',
@@ -1359,6 +1361,7 @@ const styles = StyleSheet.create({
     height: 54,
     backgroundColor: '#E2E8F0',
     borderRadius: 12,
+    width: '100%',
   },
 });
 

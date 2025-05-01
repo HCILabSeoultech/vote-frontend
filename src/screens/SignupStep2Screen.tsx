@@ -71,7 +71,7 @@ const SignupStep2Screen: React.FC<Props> = ({ navigation, route }) => {
   const handleImageSelect = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: 'images',
         allowsEditing: true,
         aspect: [1, 1],
         quality: 1,

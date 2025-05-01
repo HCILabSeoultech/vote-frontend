@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "vote-front",
-    "slug": "vote-front",
+    "name": "VoteY",
+    "slug": "VoteY",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/splash.png",
+    "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -17,13 +17,15 @@
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "갤러리 접근 권한이 필요합니다.",
         "NSCameraUsageDescription": "카메라 사용 권한이 필요합니다."
-      }
+      },
+      "bundleIdentifier": "com.anonymous.vote-front"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.anonymous.votefront"
     },
     "web": {
       "favicon": "./assets/favicon.png"

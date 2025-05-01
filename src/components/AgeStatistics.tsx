@@ -78,10 +78,8 @@ const SkeletonLoader = () => {
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.title}>연령별 투표 분포</Text>
       
       <Animated.View style={[styles.chartContainer, animatedStyle]}>
-        <View style={styles.skeletonChartTitle} />
         <View style={styles.skeletonChart} />
       </Animated.View>
       
