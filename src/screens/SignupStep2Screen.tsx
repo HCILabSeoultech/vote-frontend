@@ -68,6 +68,18 @@ const SignupStep2Screen: React.FC<Props> = ({ navigation, route }) => {
     })();
   }, []);
 
+  const deleteImageFromS3 = async (imageUrl: string) => {
+    try {
+      await fetch(`${SERVER_URL}/image/delete`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileUrl: imageUrl }),
+      });
+    } catch (err) {
+      // 에러는 무시 (필수 아님)
+    }
+  };
+
   const handleImageSelect = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -79,6 +91,9 @@ const SignupStep2Screen: React.FC<Props> = ({ navigation, route }) => {
 
       if (!result.canceled) {
         const uri = result.assets[0].uri;
+        if (userDataState.profileImage && userDataState.profileImage !== 'default.jpg') {
+          await deleteImageFromS3(userDataState.profileImage);
+        }
         setProfileImagePreview(uri);
 
         const formData = new FormData();
@@ -104,7 +119,6 @@ const SignupStep2Screen: React.FC<Props> = ({ navigation, route }) => {
         setUserData(prev => ({ ...prev, profileImage: imageUrl }));
       }
     } catch (e) {
-      console.log('이미지 업로드 실패:', e);
       Alert.alert('이미지 업로드 실패', '프로필 이미지 업로드 중 오류가 발생했습니다.');
     }
   };
@@ -184,7 +198,10 @@ const SignupStep2Screen: React.FC<Props> = ({ navigation, route }) => {
                   <Image source={{ uri: userDataState.profileImage }} style={styles.image} />
                   <TouchableOpacity
                     style={styles.removeButton}
-                    onPress={() => {
+                    onPress={async () => {
+                      if (userDataState.profileImage && userDataState.profileImage !== 'default.jpg') {
+                        await deleteImageFromS3(userDataState.profileImage);
+                      }
                       setProfileImagePreview(null);
                       setUserData(prev => ({ ...prev, profileImage: undefined }));
                     }}

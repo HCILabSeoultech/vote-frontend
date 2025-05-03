@@ -43,6 +43,19 @@ const formatToLocalDateTimeString = (date: Date) => {
   return `${year}-${month}-${day}T${hour}:${minute}:${second}.${millisecond}`;
 };
 
+const deleteImageFromS3 = async (imageUrl: string) => {
+  try {
+    const response = await fetch(`${SERVER_URL}/image/delete`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileUrl: imageUrl }),
+    });
+    const data = await response.text();
+  } catch (err) {
+    console.error('이미지 삭제 실패:', err);
+  }
+};
+
 const CreatePostScreen: React.FC = () => {
   const [step, setStep] = useState(1);
   const [title, setTitle] = useState('');
@@ -57,6 +70,8 @@ const CreatePostScreen: React.FC = () => {
   ]);
   const [optionType, setOptionType] = useState<'text' | 'image'>('text');
   const [maxOptions, setMaxOptions] = useState(4);
+  const [imageRatios, setImageRatios] = useState<number[]>([]);
+  const [postImageRatio, setPostImageRatio] = useState<number | null>(null);
 
   const navigation = useNavigation<BottomTabNavigationProp<TabParamList>>();
 
@@ -77,6 +92,10 @@ const CreatePostScreen: React.FC = () => {
       const image = result.assets[0];
       const uri = image.uri;
 
+      if (imageUrl) {
+        await deleteImageFromS3(imageUrl);
+      }
+
       const formData = new FormData();
       formData.append('file', {
         uri,
@@ -95,7 +114,6 @@ const CreatePostScreen: React.FC = () => {
         }
 
         const imageUrl = await uploadRes.text();
-        console.log('Uploaded image URL:', imageUrl);
         setImageUrl(imageUrl);
       } catch (err) {
         console.error('Image upload error:', err);
@@ -120,6 +138,10 @@ const CreatePostScreen: React.FC = () => {
     if (!result.canceled && result.assets.length > 0) {
       const image = result.assets[0];
       const uri = image.uri;
+
+      if (options[index].image) {
+        await deleteImageFromS3(options[index].image!);
+      }
 
       const formData = new FormData();
       formData.append('file', {
@@ -147,6 +169,15 @@ const CreatePostScreen: React.FC = () => {
         console.error('Option image upload error:', err);
         Alert.alert('옵션 이미지 업로드 실패');
       }
+    }
+  };
+
+  const handleRemoveOptionImage = async (index: number) => {
+    if (options[index].image) {
+      await deleteImageFromS3(options[index].image!);
+      const newOptions = [...options];
+      newOptions[index].image = null;
+      setOptions(newOptions);
     }
   };
 
@@ -298,12 +329,33 @@ const CreatePostScreen: React.FC = () => {
             </Text>
           </TouchableOpacity>
           {imageUrl && (
-            <Image
-              source={{ uri: imageUrl }}
-              style={[styles.postImage, { width: '100%', height: undefined, aspectRatio: 1 }]}
-              onError={(e) => console.error('Image load error:', e.nativeEvent.error)}
-              resizeMode="contain"
-            />
+            <View style={{ position: 'relative', width: '100%' }}>
+              <Image
+                source={{ uri: imageUrl }}
+                style={[
+                  styles.postImage,
+                  postImageRatio
+                    ? { width: '100%', aspectRatio: postImageRatio }
+                    : { width: '100%', aspectRatio: 1 }
+                ]}
+                onLoad={e => {
+                  const { width: imgW, height: imgH } = e.nativeEvent.source;
+                  setPostImageRatio(imgW / imgH);
+                }}
+                onError={e => console.error('Image load error:', e.nativeEvent.error)}
+                resizeMode="contain"
+              />
+              <TouchableOpacity
+                onPress={async () => {
+                  await deleteImageFromS3(imageUrl);
+                  setImageUrl(null);
+                  setPostImageRatio(null);
+                }}
+                style={styles.removeImageButtonOverlay}
+              >
+                <Feather name="trash-2" size={20} color="#E53E3E" />
+              </TouchableOpacity>
+            </View>
           )}
         </View>
       </View>
@@ -436,12 +488,33 @@ const CreatePostScreen: React.FC = () => {
                   </Text>
                 </TouchableOpacity>
                 {opt.image && (
-                  <Image
-                    source={{ uri: opt.image }}
-                    style={[styles.optionImage, { width: '100%', height: undefined, aspectRatio: 1 }]}
-                    onError={(e) => console.error('Option image load error:', e.nativeEvent.error)}
-                    resizeMode="contain"
-                  />
+                  <View style={{ position: 'relative', width: '100%' }}>
+                    <Image
+                      source={{ uri: opt.image }}
+                      style={[
+                        styles.optionImage,
+                        imageRatios[i]
+                          ? { width: '100%', aspectRatio: imageRatios[i] }
+                          : { width: '100%', aspectRatio: 1 }
+                      ]}
+                      onLoad={e => {
+                        const { width: imgW, height: imgH } = e.nativeEvent.source;
+                        setImageRatios(prev => {
+                          const copy = [...prev];
+                          copy[i] = imgW / imgH;
+                          return copy;
+                        });
+                      }}
+                      onError={e => console.error('Option image load error:', e.nativeEvent.error)}
+                      resizeMode="contain"
+                    />
+                    <TouchableOpacity
+                      onPress={() => handleRemoveOptionImage(i)}
+                      style={styles.removeImageButtonOverlay}
+                    >
+                      <Feather name="trash-2" size={20} color="#E53E3E" />
+                    </TouchableOpacity>
+                  </View>
                 )}
               </View>
             )}
@@ -702,9 +775,7 @@ const styles = StyleSheet.create({
   },
   optionImage: {
     width: '100%',
-    height: 140,
     borderRadius: 8,
-    resizeMode: 'cover',
   },
   addOptionButton: {
     flexDirection: 'row',
@@ -827,9 +898,16 @@ const styles = StyleSheet.create({
   },
   postImage: {
     width: '100%',
-    height: 140,
     borderRadius: 8,
-    resizeMode: 'cover',
+  },
+  removeImageButtonOverlay: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    padding: 8,
+    borderRadius: 16,
+    backgroundColor: '#FFF5F5',
+    zIndex: 10,
   },
 });
 

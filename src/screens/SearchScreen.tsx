@@ -532,8 +532,8 @@ const SearchScreen: React.FC = () => {
             source={{
               uri:
                 item.profileImage === "default.jpg"
-                  ? `${IMAGE_BASE_URL}/images/default.jpg`
-                  : `${IMAGE_BASE_URL}${item.profileImage}`,
+                  ? "https://votey-image.s3.ap-northeast-2.amazonaws.com/images/default.png"
+                  : item.profileImage,
             }}
             style={styles.userProfileImage}
           />
