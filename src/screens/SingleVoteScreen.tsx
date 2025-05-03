@@ -352,13 +352,13 @@ const SinglePageScreen: React.FC = () => {
               <Image
                 source={{
                   uri: vote.profileImage === 'default.jpg'
-                    ? `${IMAGE_BASE_URL}/images/default.jpg`
-                    : `${IMAGE_BASE_URL}${vote.profileImage}`,
+                    ? "https://votey-image.s3.ap-northeast-2.amazonaws.com/images/default.png"
+                    : vote.profileImage,
                 }}
                 style={styles.profileImage}
               />
               <View>
-                <Text style={styles.nickname}>{vote.username}</Text>
+                <Text style={styles.nickname}>{vote.name}</Text>
                 <Text style={styles.createdAtText}>{formatCreatedAt(vote.createdAt)}</Text>
               </View>
             </TouchableOpacity>
@@ -394,8 +394,8 @@ const SinglePageScreen: React.FC = () => {
                   style={styles.imageWrapper}
                 >
                   <Image
-                    source={{ uri: `${IMAGE_BASE_URL}${img.imageUrl}` }}
-                    style={styles.image}
+                    source={{ uri: img.imageUrl }}
+                    style={{ width: '100%', aspectRatio: 1, borderRadius: 12 }}
                     resizeMode="cover"
                   />
                 </Animated.View>

@@ -34,7 +34,7 @@ export type VoteResponse = {
   categoryId: number;
   title: string;
   content: string;
-  username: string;
+  name: string;
   categoryName: string;
   createdAt: string;
   finishTime: string;
@@ -59,7 +59,7 @@ export type VotePageResponse = {
 export interface SearchVoteResponse {
   id: number;
   title: string;
-  username: string;
+  name: string;
   category: string;
 }
 

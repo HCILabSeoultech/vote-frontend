@@ -181,7 +181,7 @@ const SignupStep2Screen: React.FC<Props> = ({ navigation, route }) => {
             <TouchableOpacity onPress={handleImageSelect} style={styles.imageContainer}>
               {profileImagePreview ? (
                 <View>
-                  <Image source={{ uri: profileImagePreview }} style={styles.image} />
+                  <Image source={{ uri: userDataState.profileImage }} style={styles.image} />
                   <TouchableOpacity
                     style={styles.removeButton}
                     onPress={() => {

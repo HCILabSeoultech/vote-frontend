@@ -32,8 +32,7 @@ const SignupStep1Screen: React.FC<Props> = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState(0);
 
-
-  const usernameRegex = /^[a-z0-9]{6,15}$/;
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
   const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;
 
   // Reset error message when inputs change
@@ -63,8 +62,8 @@ const SignupStep1Screen: React.FC<Props> = ({ navigation }) => {
   }, [password]);
 
   const handleCheckDuplicate = async () => {
-    if (!usernameRegex.test(username)) {
-      Alert.alert('유효하지 않은 아이디', '아이디는 소문자와 숫자로 구성되며 6~15자여야 합니다.');
+    if (!emailRegex.test(username)) {
+      Alert.alert('유효하지 않은 이메일', '올바른 이메일 형식으로 입력해주세요.');
       setIsChecked(false);
       return;
     }
@@ -74,13 +73,13 @@ const SignupStep1Screen: React.FC<Props> = ({ navigation }) => {
       const isAvailable = await checkUsernameDuplicate(username);
       if (isAvailable) {
         setIsChecked(true);
-        Alert.alert('사용 가능', '사용 가능한 아이디입니다!');
+        Alert.alert('사용 가능', '사용 가능한 이메일입니다!');
       } else {
         setIsChecked(false);
-        Alert.alert('중복된 아이디', '이미 존재하는 아이디입니다.');
+        Alert.alert('중복된 이메일', '이미 존재하는 이메일입니다.');
       }
     } catch {
-      Alert.alert('중복된 아이디', '이미 존재하는 아이디입니다.');
+      Alert.alert('중복된 이메일', '이미 존재하는 이메일입니다.');
     } finally {
       setIsLoading(false);
     }
@@ -152,11 +151,12 @@ const SignupStep1Screen: React.FC<Props> = ({ navigation }) => {
                 <View style={styles.usernameContainer}>
                   <View style={styles.usernameInputWrapper}>
                     <InputField
-                      placeholder="소문자와 숫자 6-15자"
+                      placeholder="이메일을 입력해주세요"
                       value={username}
                       onChangeText={setUsername}
                       autoCapitalize="none"
                       autoCorrect={false}
+                      keyboardType="email-address"
                     />
                   </View>
                   <TouchableOpacity 
@@ -176,9 +176,9 @@ const SignupStep1Screen: React.FC<Props> = ({ navigation }) => {
                     )}
                   </TouchableOpacity>
                 </View>
-                {username.length > 0 && !usernameRegex.test(username) && (
+                {username.length > 0 && !emailRegex.test(username) && (
                   <Text style={styles.hintText}>
-                    소문자와 숫자로만 6-15자 사이로 입력해주세요
+                    올바른 이메일 형식으로 입력해주세요
                   </Text>
                 )}
               </View>

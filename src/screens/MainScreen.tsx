@@ -173,8 +173,8 @@ const VoteItem = React.memo(({
             source={{
               uri:
                 item.profileImage === "default.jpg"
-                  ? `${IMAGE_BASE_URL}/images/default.jpg`
-                  : `${IMAGE_BASE_URL}${item.profileImage}`,
+                  ? "https://votey-image.s3.ap-northeast-2.amazonaws.com/images/default.png"
+                  : item.profileImage,
             }}
             style={styles.profileImage}
           />
@@ -183,7 +183,7 @@ const VoteItem = React.memo(({
               onPress={() => navigation.navigate("UserPageScreen", { userId: item.userId })}
               activeOpacity={0.7}
             >
-              <Text style={styles.nickname}>{item.username}</Text>
+              <Text style={styles.nickname}>{item.name}</Text>
             </TouchableOpacity>
             <Text style={styles.creationTime}>{formatCreationTime(item.createdAt)}</Text>
           </View>
@@ -216,7 +216,7 @@ const VoteItem = React.memo(({
           {item.images.map((img) => (
             <Image
               key={img.id}
-              source={{ uri: `${IMAGE_BASE_URL}${img.imageUrl}` }}
+              source={{ uri: img.imageUrl }}
               style={styles.image}
               resizeMode="cover"
             />
@@ -260,7 +260,7 @@ const VoteItem = React.memo(({
                   {opt.optionImage ? (
                     <View style={styles.optionContentWithImage}>
                       <Image
-                        source={{ uri: `${IMAGE_BASE_URL}${opt.optionImage}` }}
+                        source={{ uri: opt.optionImage }}
                         style={styles.largeOptionImage}
                         resizeMode="cover"
                       />
@@ -851,7 +851,8 @@ const styles = StyleSheet.create({
   },
   image: {
     width: "100%",
-    height: width * 0.6,
+    height: undefined,
+    aspectRatio: 1,
     borderRadius: 12,
   },
   optionContainer: {

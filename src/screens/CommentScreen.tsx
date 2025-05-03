@@ -552,7 +552,7 @@ const CommentScreen = ({ route }: CommentScreenProps) => {
     });
 
     const isDefault = item.profileImage === "default.jpg"
-    const imageUrl = isDefault ? `${IMAGE_BASE_URL}/images/default.jpg` : `${IMAGE_BASE_URL}${item.profileImage}`
+    const imageUrl = isDefault ? "https://votey-image.s3.ap-northeast-2.amazonaws.com/images/default.png" : item.profileImage
     const isMyComment = item.username === currentUsername
     const replies = item.replies || []
     const currentPage = replyPages[item.id] || 0

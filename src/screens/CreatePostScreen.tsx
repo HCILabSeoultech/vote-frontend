@@ -68,7 +68,7 @@ const CreatePostScreen: React.FC = () => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: 'images',
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       quality: 1,
     });
@@ -87,15 +87,18 @@ const CreatePostScreen: React.FC = () => {
       try {
         const uploadRes = await fetch(`${SERVER_URL}/image/upload`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
           body: formData,
         });
 
-        const imageUrlRes = await uploadRes.text();
-        setImageUrl(imageUrlRes);
+        if (!uploadRes.ok) {
+          throw new Error('이미지 업로드 실패');
+        }
+
+        const imageUrl = await uploadRes.text();
+        console.log('Uploaded image URL:', imageUrl);
+        setImageUrl(imageUrl);
       } catch (err) {
+        console.error('Image upload error:', err);
         Alert.alert('이미지 업로드 실패');
       }
     }
@@ -109,7 +112,7 @@ const CreatePostScreen: React.FC = () => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: 'images',
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       quality: 1,
     });
@@ -128,17 +131,20 @@ const CreatePostScreen: React.FC = () => {
       try {
         const uploadRes = await fetch(`${SERVER_URL}/image/upload`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
           body: formData,
         });
 
-        const imageUrlRes = await uploadRes.text();
+        if (!uploadRes.ok) {
+          throw new Error('이미지 업로드 실패');
+        }
+
+        const imageUrl = await uploadRes.text();
+        console.log('Uploaded option image URL:', imageUrl);
         const newOptions = [...options];
-        newOptions[index].image = imageUrlRes;
+        newOptions[index].image = imageUrl;
         setOptions(newOptions);
-      } catch {
+      } catch (err) {
+        console.error('Option image upload error:', err);
         Alert.alert('옵션 이미지 업로드 실패');
       }
     }
@@ -293,8 +299,10 @@ const CreatePostScreen: React.FC = () => {
           </TouchableOpacity>
           {imageUrl && (
             <Image
-              source={{ uri: `${SERVER_URL}${imageUrl}` }}
-              style={styles.postImage}
+              source={{ uri: imageUrl }}
+              style={[styles.postImage, { width: '100%', height: undefined, aspectRatio: 1 }]}
+              onError={(e) => console.error('Image load error:', e.nativeEvent.error)}
+              resizeMode="contain"
             />
           )}
         </View>
@@ -429,8 +437,10 @@ const CreatePostScreen: React.FC = () => {
                 </TouchableOpacity>
                 {opt.image && (
                   <Image
-                    source={{ uri: `${SERVER_URL}${opt.image}` }}
-                    style={styles.optionImage}
+                    source={{ uri: opt.image }}
+                    style={[styles.optionImage, { width: '100%', height: undefined, aspectRatio: 1 }]}
+                    onError={(e) => console.error('Option image load error:', e.nativeEvent.error)}
+                    resizeMode="contain"
                   />
                 )}
               </View>

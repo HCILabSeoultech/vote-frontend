@@ -420,7 +420,7 @@ const SearchScreen: React.FC = () => {
                 </View>
               </View>
               <View style={styles.authorInfo}>
-                <Text style={styles.authorName}>{item.username}</Text>
+                <Text style={styles.authorName}>{item.name}</Text>
               </View>
             </View>
           </View>
@@ -477,7 +477,7 @@ const SearchScreen: React.FC = () => {
                 </View>
               </View>
               <View style={styles.authorInfo}>
-                <Text style={styles.authorName}>{item.username}</Text>
+                <Text style={styles.authorName}>{item.name}</Text>
                 <Text style={styles.dotSeparator}>•</Text>
                 <Text style={styles.createdAt}>{formattedCreationTime}</Text>
               </View>

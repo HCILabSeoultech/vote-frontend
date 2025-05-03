@@ -266,6 +266,8 @@ const StorageScreen: React.FC = () => {
   const [commentModalVoteId, setCommentModalVoteId] = useState<number | null>(null);
   const [statisticsModalVoteId, setStatisticsModalVoteId] = useState<number | null>(null);
 
+  const [imageSizes, setImageSizes] = useState<Record<number, { width: number; height: number }>>({});
+
   const handleTabChange = (value: StorageType) => {
     setStorageType(value);
     // 캐시된 데이터로 상태 업데이트
@@ -674,8 +676,8 @@ const StorageScreen: React.FC = () => {
             <Image
               source={{
                 uri: item.profileImage === 'default.jpg'
-                  ? `${IMAGE_BASE_URL}/images/default.jpg`
-                  : `${IMAGE_BASE_URL}${item.profileImage}`,
+                  ? "https://votey-image.s3.ap-northeast-2.amazonaws.com/images/default.png"
+                  : item.profileImage,
               }}
               style={styles.profileImage}
             />
@@ -684,7 +686,7 @@ const StorageScreen: React.FC = () => {
                 onPress={() => navigation.navigate('UserPageScreen', { userId: item.userId })}
                 activeOpacity={0.7}
               >
-                <Text style={styles.nickname}>{item.username}</Text>
+                <Text style={styles.nickname}>{item.name}</Text>
               </TouchableOpacity>
               <Text style={styles.createdAtText}>{formatCreatedAt(item.createdAt)}</Text>
             </View>
@@ -711,14 +713,28 @@ const StorageScreen: React.FC = () => {
 
         {item.images.length > 0 && (
           <View style={styles.imageContainer}>
-            {item.images.map((img) => (
-              <Image
-                key={img.id}
-                source={{ uri: `${IMAGE_BASE_URL}${img.imageUrl}` }}
-                style={styles.image}
-                resizeMode="cover"
-              />
-            ))}
+            {item.images.map((img) => {
+              const onLoad = (e: any) => {
+                const { width: imgW, height: imgH } = e.nativeEvent.source;
+                setImageSizes(prev => ({
+                  ...prev,
+                  [img.id]: { width: imgW, height: imgH }
+                }));
+              };
+              // 기본 비율(16:9)로 먼저 보여주고, 실제 크기 알면 교체
+              const aspectRatio = imageSizes[img.id]
+                ? imageSizes[img.id].width / imageSizes[img.id].height
+                : 16 / 9;
+              return (
+                <Image
+                  key={img.id}
+                  source={{ uri: img.imageUrl }}
+                  style={[styles.image, { aspectRatio }]}
+                  resizeMode="cover"
+                  onLoad={onLoad}
+                />
+              );
+            })}
           </View>
         )}
 
@@ -760,7 +776,8 @@ const StorageScreen: React.FC = () => {
     handleToggleBookmark,
     handleCommentPress,
     handleStatisticsPress,
-    navigation
+    navigation,
+    imageSizes
   ]);
 
   const renderTabs = useCallback(() => (
@@ -1121,8 +1138,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   image: { 
-    width: '100%', 
-    height: width * 0.6, 
+    width: '100%',
     borderRadius: 12,
   },
   optionContainer: { 

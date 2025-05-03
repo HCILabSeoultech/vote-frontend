@@ -87,6 +87,7 @@ const UserPageScreen: React.FC = () => {
   const [showStatisticsModal, setShowStatisticsModal] = useState(false);
   const [selectedVoteForStats, setSelectedVoteForStats] = useState<number | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [imageSizes, setImageSizes] = useState<Record<number, { width: number; height: number }>>({});
 
   const isFocused = useIsFocused();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'CommentScreen'>>();
@@ -324,13 +325,13 @@ const UserPageScreen: React.FC = () => {
             <Image
               source={{
                 uri: item.profileImage === 'default.jpg'
-                  ? `${IMAGE_BASE_URL}/images/default.jpg`
-                  : `${IMAGE_BASE_URL}${item.profileImage}`,
+                  ? "https://votey-image.s3.ap-northeast-2.amazonaws.com/images/default.png"
+                  : item.profileImage,
               }}
               style={styles.profileImageSmall}
             />
             <View>
-              <Text style={styles.nickname}>{item.username}</Text>
+              <Text style={styles.nickname}>{item.name}</Text>
               <Text style={styles.createdAtText}>{formatCreatedAt(item.createdAt)}</Text>
             </View>
           </View>
@@ -360,8 +361,8 @@ const UserPageScreen: React.FC = () => {
             {item.images.map((img) => (
               <Image
                 key={img.id}
-                source={{ uri: `${IMAGE_BASE_URL}${img.imageUrl}` }}
-                style={styles.image}
+                source={{ uri: img.imageUrl }}
+                style={[styles.image, { width: '100%', aspectRatio: 1, borderRadius: 12 }]}
                 resizeMode="cover"
               />
             ))}
@@ -534,13 +535,13 @@ const UserPageScreen: React.FC = () => {
             <Image
               source={{
                 uri: isDefault
-                  ? `${IMAGE_BASE_URL}/images/default.jpg`
-                  : `${IMAGE_BASE_URL}${profile.profileImage}`,
+                  ? "https://votey-image.s3.ap-northeast-2.amazonaws.com/images/default.png"
+                  : profile.profileImage,
               }}
               style={styles.profileImage}
             />
             <View style={styles.profileInfo}>
-              <Text style={styles.username}>{profile.username}</Text>
+              <Text style={styles.name}>{profile.name}</Text>
               <View style={styles.pointContainer}>
                 <Text style={styles.pointLabel}>포인트</Text>
                 <Text style={styles.pointValue}>{profile.point}</Text>
@@ -777,7 +778,7 @@ const styles = StyleSheet.create({
     marginLeft: 20,
     flex: 1,
   },
-  username: { 
+  name: { 
     fontSize: 22, 
     fontWeight: 'bold', 
     color: '#2D3748',
@@ -967,7 +968,7 @@ const styles = StyleSheet.create({
   },
   image: { 
     width: '100%', 
-    height: width * 0.6, 
+    height: undefined, 
     borderRadius: 12,
   },
   optionContainer: { 
