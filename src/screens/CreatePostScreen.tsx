@@ -10,6 +10,7 @@ import {
   Platform,
   ScrollView,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -20,6 +21,7 @@ import { TabParamList } from '../types/TabParam';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SERVER_URL } from '../constant/config';
 import { Feather } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
@@ -71,9 +73,12 @@ const CreatePostScreen: React.FC = () => {
   const [optionType, setOptionType] = useState<'text' | 'image'>('text');
   const [maxOptions, setMaxOptions] = useState(4);
   const [imageRatios, setImageRatios] = useState<number[]>([]);
-  const [postImageRatio, setPostImageRatio] = useState<number | null>(null);
+  const [postImageRatio, setPostImageRatio] = useState(1);
+  const [postImageLoading, setPostImageLoading] = useState(false);
+  const [optionImageLoading, setOptionImageLoading] = useState<boolean[]>([]);
 
   const navigation = useNavigation<BottomTabNavigationProp<TabParamList>>();
+  const insets = useSafeAreaInsets();
 
   const handleSelectImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -334,22 +339,30 @@ const CreatePostScreen: React.FC = () => {
                 source={{ uri: imageUrl }}
                 style={[
                   styles.postImage,
-                  postImageRatio
-                    ? { width: '100%', aspectRatio: postImageRatio }
-                    : { width: '100%', aspectRatio: 1 }
+                  { width: '100%', aspectRatio: postImageRatio }
                 ]}
+                onLoadStart={() => setPostImageLoading(true)}
+                onLoadEnd={() => setPostImageLoading(false)}
                 onLoad={e => {
                   const { width: imgW, height: imgH } = e.nativeEvent.source;
-                  setPostImageRatio(imgW / imgH);
+                  const ratio = imgW / imgH;
+                  if (postImageRatio !== ratio) {
+                    setPostImageRatio(ratio);
+                  }
                 }}
                 onError={e => console.error('Image load error:', e.nativeEvent.error)}
                 resizeMode="contain"
               />
+              {postImageLoading && (
+                <View style={styles.imageLoadingOverlay}>
+                  <ActivityIndicator size="large" color="#1499D9" />
+                </View>
+              )}
               <TouchableOpacity
                 onPress={async () => {
                   await deleteImageFromS3(imageUrl);
                   setImageUrl(null);
-                  setPostImageRatio(null);
+                  setPostImageRatio(1);
                 }}
                 style={styles.removeImageButtonOverlay}
               >
@@ -497,6 +510,16 @@ const CreatePostScreen: React.FC = () => {
                           ? { width: '100%', aspectRatio: imageRatios[i] }
                           : { width: '100%', aspectRatio: 1 }
                       ]}
+                      onLoadStart={() => {
+                        const arr = [...optionImageLoading];
+                        arr[i] = true;
+                        setOptionImageLoading(arr);
+                      }}
+                      onLoadEnd={() => {
+                        const arr = [...optionImageLoading];
+                        arr[i] = false;
+                        setOptionImageLoading(arr);
+                      }}
                       onLoad={e => {
                         const { width: imgW, height: imgH } = e.nativeEvent.source;
                         setImageRatios(prev => {
@@ -508,6 +531,11 @@ const CreatePostScreen: React.FC = () => {
                       onError={e => console.error('Option image load error:', e.nativeEvent.error)}
                       resizeMode="contain"
                     />
+                    {optionImageLoading[i] && (
+                      <View style={styles.imageLoadingOverlay}>
+                        <ActivityIndicator size="large" color="#1499D9" />
+                      </View>
+                    )}
                     <TouchableOpacity
                       onPress={() => handleRemoveOptionImage(i)}
                       style={styles.removeImageButtonOverlay}
@@ -579,7 +607,7 @@ const CreatePostScreen: React.FC = () => {
   );
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: '#FFFFFF' }}>
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton}
@@ -594,12 +622,12 @@ const CreatePostScreen: React.FC = () => {
       {renderStepIndicator()}
 
       <ScrollView 
-        contentContainerStyle={styles.container}
+        contentContainerStyle={[styles.container, { flexGrow: 1 }]}
         showsVerticalScrollIndicator={false}
       >
         {step === 1 ? renderStep1() : renderStep2()}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -664,6 +692,7 @@ const styles = StyleSheet.create({
     color: '#1499D9',
   },
   container: {
+    flexGrow: 1,
     padding: 16,
     paddingTop: 12,
   },
@@ -908,6 +937,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: '#FFF5F5',
     zIndex: 10,
+  },
+  imageLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 20,
   },
 });
 

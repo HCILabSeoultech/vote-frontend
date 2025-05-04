@@ -6,8 +6,8 @@ import {
   StyleSheet, 
   TouchableOpacity, 
   SafeAreaView,
-  ScrollView,
-  Image,
+  TouchableWithoutFeedback,
+  Keyboard,
   Dimensions
 } from 'react-native';
 import InputField from '../components/InputField';
@@ -32,204 +32,141 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
       Alert.alert("로그인 실패", "아이디를 입력해주세요.");
       return;
     }
-    
     if (!password.trim()) {
       Alert.alert("로그인 실패", "비밀번호를 입력해주세요.");
       return;
     }
-    
     try {
       await login({ username, password });
-      Alert.alert("로그인 성공", "메인 페이지로 이동합니다.");
       navigation.navigate('Main');
     } catch (error) {
       Alert.alert("로그인 실패", "아이디 또는 비밀번호가 잘못되었습니다.");
     }
   };
 
-  const handleFindAccount = () => {
-    Alert.alert("안내", "아이디/비밀번호 찾기 기능은 준비 중입니다.");
-  };
-
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView 
-        contentContainerStyle={styles.scrollContainer}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.container}>
-          <View style={styles.logoContainer}>
-            <View style={styles.logoCircle}>
-              <View style={styles.logoInnerCircle}>
-                <Logo width={100} height={100} />
-              </View>
-            </View>
-            <Text style={styles.title}>VOTY</Text>
-            <Text style={styles.subtitle}>Just Vote What You Like</Text>
+    <SafeAreaView style={styles.igSafeArea}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <View style={styles.igContainer}>
+          <View style={styles.igLogoWrap}>
+            <Logo width={72} height={72} />
+            <Text style={styles.igTitle}>VoteY</Text>
           </View>
-          
-          <View style={styles.formContainer}>
-            <View style={styles.inputGroup}>
-              <InputField 
-                placeholder="아이디" 
-                value={username} 
-                onChangeText={setUsername}
-                autoCapitalize="none"
-              />
-            </View>
-            
-            <View style={styles.inputGroup}>
-              <InputField 
-                placeholder="비밀번호" 
-                value={password} 
-                onChangeText={setPassword} 
-                secureTextEntry
-              />
-            </View>
-            
-            <Button 
-              title="로그인" 
-              onPress={handleLogin} 
-              style={styles.loginButton}
-              textStyle={styles.loginButtonText}
+          <View style={styles.igForm}>
+            <InputField
+              placeholder="아이디"
+              value={username}
+              onChangeText={setUsername}
+              autoCapitalize="none"
+              style={[styles.igInput, { borderBottomWidth: 0, borderWidth: 0 }]}
             />
-
-            <TouchableOpacity 
-              onPress={handleFindAccount}
-              style={styles.findAccountButton}
-            >
-              <Text style={styles.findAccountText}>아이디/비밀번호 찾기</Text>
+            <InputField
+              placeholder="비밀번호"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              style={[styles.igInput, { borderBottomWidth: 0, borderWidth: 0 }]}
+            />
+            <TouchableOpacity onPress={handleLogin} style={styles.igLoginBtn} activeOpacity={0.8}>
+              <Text style={styles.igLoginBtnText}>로그인</Text>
             </TouchableOpacity>
           </View>
-          
-          <View style={styles.footerContainer}>
-            <Text style={styles.footerText}>계정이 없으신가요?</Text>
-            <TouchableOpacity 
-              onPress={() => navigation.navigate('SignupStep1Screen')}
-              style={styles.signupButton}
-            >
-              <Text style={styles.signupText}>회원가입</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity onPress={() => navigation.navigate('SignupStep1Screen')} style={styles.igSignupWrap} activeOpacity={0.7}>
+            <Text style={styles.igSignupText}>계정이 없으신가요? <Text style={styles.igSignupLink}>회원가입</Text></Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => Alert.alert("안내", "아이디/비밀번호 찾기 기능은 준비 중입니다.")} style={styles.igFindWrap} activeOpacity={0.7}>
+            <Text style={styles.igFindText}>비밀번호를 잊으셨나요?</Text>
+          </TouchableOpacity>
         </View>
-      </ScrollView>
+      </TouchableWithoutFeedback>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  igSafeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fff',
   },
-  scrollContainer: {
-    flexGrow: 1,
-  },
-  container: {
+  igContainer: {
     flex: 1,
-    padding: 16,
-    justifyContent: 'space-between',
-  },
-  logoContainer: {
-    alignItems: 'center',
-    marginTop: 32,
-    marginBottom: 24,
-  },
-  logoCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#F0F4FF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
-    shadowColor: '#1499D9',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
+    paddingHorizontal: 32,
+    backgroundColor: '#fff',
   },
-  logoInnerCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
+  igLogoWrap: {
     alignItems: 'center',
-    shadowColor: '#1499D9',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    marginBottom: 36,
   },
-  title: {
-    fontSize: 24,
+  igTitle: {
+    fontSize: 32,
     fontWeight: 'bold',
     color: '#1499D9',
-    marginBottom: 4,
+    marginTop: 12,
+    letterSpacing: 2,
+  },
+  igForm: {
+    width: '100%',
+    marginBottom: 28,
+  },
+  igInput: {
+    backgroundColor: '#F7F7F7',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 6,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 10,
+    height: 40,
+    justifyContent: 'center',
+    fontSize: 16,
+    lineHeight: 22,
+    textAlignVertical: 'center',
+  },
+  igInputText: {
+    fontSize: 16,
+    color: '#222',
+    paddingVertical: 0,
+    lineHeight: 22,
+    textAlignVertical: 'center',
+  },
+  igLoginBtn: {
+    backgroundColor: '#1499D9',
+    borderRadius: 12,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+    marginBottom: 8,
+    shadowColor: 'transparent',
+  },
+  igLoginBtnText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
     letterSpacing: 1,
   },
-  subtitle: {
-    fontSize: 12,
-    color: '#718096',
-    letterSpacing: 0.5,
+  igSignupWrap: {
+    marginTop: 8,
+    marginBottom: 0,
   },
-  formContainer: {
-    width: '100%',
-    marginBottom: 24,
-  },
-  inputGroup: {
-    marginBottom: 12,
-  },
-  loginButton: {
-    backgroundColor: '#1499D9',
-    height: 40,
-    borderRadius: 10,
-    marginTop: 16,
-    shadowColor: '#1499D9',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  loginButtonText: {
+  igSignupText: {
+    color: '#888',
     fontSize: 14,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
   },
-  findAccountButton: {
-    marginTop: 12,
-    alignItems: 'center',
-    paddingVertical: 6,
-  },
-  findAccountText: {
-    color: '#718096',
-    fontSize: 12,
-    fontWeight: '500',
-    letterSpacing: 0.5,
-  },
-  footerContainer: {
-    marginBottom: 16,
-    alignItems: 'center',
-  },
-  footerText: {
-    color: '#718096',
-    fontSize: 12,
-    marginBottom: 6,
-    letterSpacing: 0.5,
-  },
-  signupButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: '#F0F4FF',
-    borderRadius: 8,
-  },
-  signupText: {
+  igSignupLink: {
     color: '#1499D9',
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.5,
+    fontWeight: 'bold',
+  },
+  igFindWrap: {
+    marginTop: 18,
+  },
+  igFindText: {
+    color: '#A0AEC0',
+    fontSize: 13,
+    textAlign: 'center',
   },
 });
 

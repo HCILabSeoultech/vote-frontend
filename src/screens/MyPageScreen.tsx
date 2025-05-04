@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,8 +14,9 @@ import {
   Pressable,
   ScrollView,
   RefreshControl,
+  Animated as RNAnimated,
 } from 'react-native';
-import Animated, { FadeInLeft, FadeIn, useAnimatedStyle, withRepeat, withTiming, withSequence, useSharedValue } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, useAnimatedStyle, withRepeat, withTiming, withSequence, useSharedValue } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { getMyPage } from '../api/user';
@@ -29,6 +30,7 @@ import CommentScreen from '../screens/CommentScreen';
 import RegionStatistics from '../components/RegionStatistics';
 import AgeStatistics from '../components/AgeStatistics';
 import GenderStatistics from '../components/GenderStatistics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SERVER_URL } from '../constant/config';
 
@@ -64,18 +66,6 @@ const SkeletonLoader = () => {
 
   return (
     <Animated.View style={[styles.skeletonContainer, animatedStyle]}>
-      <View style={styles.skeletonProfile}>
-        <View style={styles.skeletonProfileImage} />
-        <View style={styles.skeletonProfileInfo}>
-          <View style={[styles.skeletonText, { width: '60%' }]} />
-          <View style={[styles.skeletonText, { width: '40%' }]} />
-        </View>
-      </View>
-      <View style={styles.skeletonTabs}>
-        <View style={[styles.skeletonTab, { width: '30%' }]} />
-        <View style={[styles.skeletonTab, { width: '30%' }]} />
-        <View style={[styles.skeletonTab, { width: '30%' }]} />
-      </View>
       {[1, 2, 3].map((_, index) => (
         <View key={index} style={styles.skeletonPost}>
           <View style={styles.skeletonPostHeader}>
@@ -105,67 +95,145 @@ const SkeletonLoader = () => {
   );
 };
 
+// 게이지 애니메이션 컴포넌트 (MainScreen과 동일)
+const VoteOptionGauge = ({ percentage, isSelected }: { percentage: number; isSelected: boolean }) => {
+  const widthAnim = useRef(new RNAnimated.Value(0)).current;
+
+  useEffect(() => {
+    RNAnimated.timing(widthAnim, {
+      toValue: percentage,
+      duration: 600,
+      useNativeDriver: false,
+    }).start();
+  }, [percentage]);
+
+  const animatedWidth = widthAnim.interpolate({
+    inputRange: [0, 100],
+    outputRange: ['0%', '100%'],
+  });
+
+  return (
+    <RNAnimated.View
+      style={[
+        styles.gaugeBar,
+        {
+          width: animatedWidth,
+          backgroundColor: isSelected ? "#4299E1" : "#E2E8F0",
+          opacity: 0.3,
+        },
+      ]}
+    />
+  );
+};
+
 const MyPageScreen: React.FC = () => {
   const [profile, setProfile] = useState<any>(null);
   const [posts, setPosts] = useState<VoteResponse[]>([]);
+  const [followers, setFollowers] = useState<any[]>([]);
+  const [following, setFollowing] = useState<any[]>([]);
   const [page, setPage] = useState(0);
   const [isLast, setIsLast] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [postsLoading, setPostsLoading] = useState(true);
   const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({});
   const [commentModalVoteId, setCommentModalVoteId] = useState<number | null>(null);
   const [statisticsModalVoteId, setStatisticsModalVoteId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('posts');
   const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('region');
   const [refreshing, setRefreshing] = useState(false);
-  const [hasLoaded, setHasLoaded] = useState(false);
+  const isFirstLoad = useRef(true);
   const [animatedWidths, setAnimatedWidths] = useState<Record<string, number>>({});
 
   const isFocused = useIsFocused();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'CommentScreen'>>();
+  const insets = useSafeAreaInsets();
 
-  const fetchData = useCallback(async (nextPage: number) => {
-    if (loading && nextPage !== 0) return;
-    setLoading(true);
+  const optionWidthRef = useRef<Record<number, number>>({});
+  const gaugeWidthAnims = useRef<Record<number, RNAnimated.Value>>({});
+  const imageWidth = 100;
+
+  // 이미지 옵션 게이지 애니메이션 useEffect (posts가 바뀔 때마다)
+  useEffect(() => {
+    posts.forEach(item => {
+      const totalCount = item.voteOptions.reduce((sum, o) => sum + o.voteCount, 0);
+      item.voteOptions.forEach(opt => {
+        if (opt.optionImage) {
+          if (!gaugeWidthAnims.current[opt.id]) {
+            gaugeWidthAnims.current[opt.id] = new RNAnimated.Value(0);
+          }
+          const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
+          const optionWidth = optionWidthRef.current[opt.id] || 0;
+          if (optionWidth > 0) {
+            const targetWidth = (optionWidth - imageWidth) * (percentage / 100);
+            RNAnimated.timing(gaugeWidthAnims.current[opt.id], {
+              toValue: targetWidth,
+              duration: 600,
+              useNativeDriver: false,
+            }).start();
+          }
+        }
+      });
+    });
+  }, [posts]);
+
+  const fetchProfile = useCallback(async () => {
+    try {
+      const res = await getMyPage(0);
+      setProfile(res);
+    } catch (err) {
+      Alert.alert('에러', '프로필 정보를 불러오지 못했습니다.');
+    }
+  }, []);
+
+  const fetchPosts = useCallback(async (nextPage: number) => {
     try {
       const res = await getMyPage(nextPage);
       if (nextPage === 0) {
-        setProfile(res);
         setPosts(res.posts.content);
-        setHasLoaded(true);
       } else {
         setPosts(prev => [...prev, ...res.posts.content]);
       }
       setPage(res.posts.number + 1);
       setIsLast(res.posts.last);
     } catch (err) {
-      Alert.alert('에러', '마이페이지 정보를 불러오지 못했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  }, [loading]);
-
-  useEffect(() => {
-    if (isFocused && !hasLoaded) {
-      fetchData(0);
-    }
-  }, [isFocused, hasLoaded, fetchData]);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    setLoading(true);
-    try {
-      const res = await getMyPage(0);
-      setProfile(res);
-      setPosts(res.posts.content);
-      setPage(1);
-      setIsLast(res.posts.last);
-    } catch (err) {
-      Alert.alert('에러', '마이페이지 정보를 불러오지 못했습니다.');
-    } finally {
-      setRefreshing(false);
-      setLoading(false);
+      Alert.alert('에러', '게시물을 불러오지 못했습니다.');
     }
   }, []);
+
+  // 초기 데이터 로딩
+  useEffect(() => {
+    if (isFirstLoad.current) {
+      const loadInitialData = async () => {
+        setProfileLoading(true);
+        setPostsLoading(true);
+        try {
+          await Promise.all([
+            fetchProfile(),
+            fetchPosts(0)
+          ]);
+        } finally {
+          setProfileLoading(false);
+          setPostsLoading(false);
+          isFirstLoad.current = false;
+        }
+      };
+      loadInitialData();
+    }
+  }, []); // mount 시에만 실행
+
+  // 새로고침
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        fetchProfile(),
+        fetchPosts(0)
+      ]);
+    } finally {
+      setRefreshing(false);
+      isFirstLoad.current = false;
+    }
+  }, [fetchProfile, fetchPosts]);
 
   const isVoteClosed = useCallback((finishTime: string) => {
     const finish = new Date(finishTime)
@@ -261,14 +329,9 @@ const MyPageScreen: React.FC = () => {
   }, []);
 
   const handleTabChange = useCallback((value: TabType) => {
+    if (activeTab === value) return;
     setActiveTab(value);
-    if (value === 'posts') {
-      setPosts([]);
-      setPage(0);
-      setIsLast(false);
-      fetchData(0);
-    }
-  }, [fetchData]);
+  }, [activeTab]);
 
   const handleStatisticsPress = useCallback((voteId: number) => {
     const vote = posts.find(v => v.voteId === voteId);
@@ -311,67 +374,61 @@ const MyPageScreen: React.FC = () => {
     };
 
     return (
-      <View 
-        style={[styles.voteItem, closed ? styles.closedVoteItem : styles.activeVoteItem]}
-      >
+      <View style={styles.voteItem}>
         <View style={styles.userInfoRow}>
-          <View style={styles.userInfoLeft}>
-            <Image
-              source={{
-                uri: item.profileImage === 'default.jpg'
-                  ? "https://votey-image.s3.ap-northeast-2.amazonaws.com/images/default.png"
-                  : item.profileImage,
-              }}
-              style={styles.profileImageSmall}
-            />
-            <View>
-              <Text style={styles.nickname}>{item.name}</Text>
-              <Text style={styles.createdAtText}>{formatCreatedAt(item.createdAt)}</Text>
-            </View>
+          <Image
+            source={{
+              uri: item.profileImage === 'default.jpg'
+                ? "https://votey-image.s3.ap-northeast-2.amazonaws.com/images/default.png"
+                : item.profileImage,
+            }}
+            style={styles.profileImageSmall}
+          />
+          <View>
+            <Text style={styles.nickname}>{item.name}</Text>
+            <Text style={styles.createdAtText}>{formatCreatedAt(item.createdAt)}</Text>
           </View>
-
-          <View style={styles.userInfoActions}>
-            {closed && (
-              <TouchableOpacity
-                onPress={() => navigation.navigate('ReuploadVoteScreen', { voteId: item.voteId })}
-                style={styles.reuploadButton}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.reuploadText}>재업로드</Text>
-              </TouchableOpacity>
-            )}
+          <View style={{ flex: 1 }} />
+          {closed && (
             <TouchableOpacity
-              onPress={() =>
-                Alert.alert('삭제 확인', '정말 삭제하시겠습니까?', [
-                  { text: '취소', style: 'cancel' },
-                  {
-                    text: '삭제',
-                    style: 'destructive',
-                    onPress: () => handleDeleteVote(item.voteId),
-                  },
-                ])
-              }
-              style={styles.deleteButton}
+              onPress={() => navigation.navigate('ReuploadVoteScreen', { voteId: item.voteId })}
+              style={[styles.pointContainer, { backgroundColor: '#EBF8FF' }]}
               activeOpacity={0.7}
             >
-              <Text style={styles.deleteText}>삭제</Text>
+              <Text style={[styles.pointLabel, { color: '#3182CE' }]}>재업로드</Text>
             </TouchableOpacity>
-          </View>
+          )}
+          <TouchableOpacity
+            onPress={() =>
+              Alert.alert('삭제 확인', '정말 삭제하시겠습니까?', [
+                { text: '취소', style: 'cancel' },
+                {
+                  text: '삭제',
+                  style: 'destructive',
+                  onPress: () => handleDeleteVote(item.voteId),
+                },
+              ])
+            }
+            style={[styles.pointContainer, { backgroundColor: '#FFF5F5' }]}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.pointLabel, { color: '#E53E3E' }]}>삭제</Text>
+          </TouchableOpacity>
         </View>
 
-        <Text style={styles.title}>{item.title}</Text>
-
-        <View style={styles.metaContainer}>
+        <View style={styles.metaRow}>
           <View style={styles.categoryBadge}>
             <Text style={styles.categoryText}>{item.categoryName}</Text>
           </View>
           <Text style={styles.dateText}>{formatDate(item.finishTime)}</Text>
           {closed && (
-            <View style={styles.closedBadge}>
-              <Text style={styles.closedBadgeText}>마감됨</Text>
+            <View style={[styles.categoryBadge, { backgroundColor: '#CBD5E0', marginLeft: 0 }]}>
+              <Text style={[styles.categoryText, { color: '#4A5568' }]}>마감됨</Text>
             </View>
           )}
         </View>
+
+        <Text style={styles.title}>{item.title}</Text>
 
         {item.content && (
           <Text numberOfLines={2} style={styles.content}>{item.content}</Text>
@@ -391,44 +448,50 @@ const MyPageScreen: React.FC = () => {
         )}
 
         {item.voteOptions.length > 0 && (
-          <View style={[styles.optionContainer, hasImageOptions && styles.imageOptionContainer]}>
+          <View style={styles.optionContainer}>
             {item.voteOptions.map((opt) => {
               const isSelected = selectedOptionId === opt.id;
               const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
-
-              return (
-                <View key={opt.id} style={[styles.optionWrapper, opt.optionImage && styles.imageOptionWrapper]}>
-                  <TouchableOpacity
-                    style={[
-                      styles.optionButton,
-                      closed && styles.closedOptionButton,
-                      isSelected && styles.selectedOptionButton,
-                      opt.optionImage && styles.optionButtonWithImage,
-                    ]}
-                    onPress={() => handleVote(item.voteId, opt.id)}
-                    disabled={closed || isSelected}
-                    activeOpacity={0.7}
-                  >
-                    {showGauge && (
-                      <View style={{
-                        position: 'absolute',
-                        left: 0,
-                        top: 0,
-                        bottom: 0,
-                        width: `${percentage * (opt.optionImage ? 1.25 : 1.11)}%`,
-                        backgroundColor: isSelected ? "#4299E1" : "#E2E8F0",
-                        opacity: 0.3,
-                        borderRadius: 12,
-                      }} />
-                    )}
-                    {opt.optionImage ? (
-                      <View style={styles.optionContentWithImage}>
-                        <Image
-                          source={{ uri: `${IMAGE_BASE_URL}${opt.optionImage}` }}
-                          style={styles.largeOptionImage}
-                          resizeMode="cover"
+              if (opt.optionImage) {
+                return (
+                  <View key={opt.id} style={styles.optionWrapper}>
+                    <TouchableOpacity
+                      style={[
+                        styles.optionButton,
+                        styles.optionButtonWithImage,
+                        isSelected && styles.selectedOptionButton,
+                      ]}
+                      onPress={() => handleVote(item.voteId, opt.id)}
+                      disabled={closed || isSelected}
+                      activeOpacity={0.7}
+                      onLayout={e => {
+                        optionWidthRef.current[opt.id] = e.nativeEvent.layout.width;
+                      }}
+                    >
+                      <Image
+                        source={{ uri: opt.optionImage }}
+                        style={styles.leftOptionImage}
+                        resizeMode="cover"
+                      />
+                      {showGauge && (
+                        <RNAnimated.View
+                          style={[
+                            styles.gaugeBar,
+                            {
+                              left: imageWidth,
+                              width: gaugeWidthAnims.current[opt.id],
+                              backgroundColor: isSelected ? "#4299E1" : "#E2E8F0",
+                              opacity: 0.3,
+                              position: 'absolute',
+                              top: 0,
+                              height: '100%',
+                              zIndex: 1,
+                            },
+                          ]}
                         />
-                        <View style={styles.optionTextContainer}>
+                      )}
+                      <View style={styles.rightContent}>
+                        <View style={styles.textAndPercentRow}>
                           <Text style={[
                             styles.optionButtonText,
                             isSelected && styles.selectedOptionText,
@@ -446,28 +509,45 @@ const MyPageScreen: React.FC = () => {
                           )}
                         </View>
                       </View>
-                    ) : (
-                      <View style={styles.optionTextContainer}>
-                        <Text style={[
-                          styles.optionButtonText,
-                          isSelected && styles.selectedOptionText,
-                          showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
-                        ]}>
-                          {opt.content}
-                        </Text>
-                        {showGauge && (
-                          <Text style={[
-                            styles.percentageText,
-                            isSelected && styles.selectedPercentageText
-                          ]}>
-                            {percentage}%
-                          </Text>
-                        )}
-                      </View>
+                    </TouchableOpacity>
+                  </View>
+                );
+              }
+              return (
+                <View key={opt.id} style={styles.optionWrapper}>
+                  <TouchableOpacity
+                    style={[
+                      styles.optionButton,
+                      closed && styles.closedOptionButton,
+                      isSelected && styles.selectedOptionButton,
+                    ]}
+                    onPress={() => handleVote(item.voteId, opt.id)}
+                    disabled={closed || isSelected}
+                    activeOpacity={0.7}
+                  >
+                    {showGauge && (
+                      <VoteOptionGauge percentage={percentage} isSelected={isSelected} />
                     )}
+                    <View style={styles.optionTextContainer}>
+                      <Text style={[
+                        styles.optionButtonText,
+                        isSelected && styles.selectedOptionText,
+                        showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
+                      ]}>
+                        {opt.content}
+                      </Text>
+                      {showGauge && (
+                        <Text style={[
+                          styles.percentageText,
+                          isSelected && styles.selectedPercentageText
+                        ]}>
+                          {percentage}%
+                        </Text>
+                      )}
+                    </View>
                   </TouchableOpacity>
                 </View>
-              );
+              )
             })}
             {showGauge && totalCount > 0 && (
               <Text style={styles.responseCountText}>{totalCount}명 참여</Text>
@@ -485,7 +565,7 @@ const MyPageScreen: React.FC = () => {
           >
             <Feather 
               name={item.isLiked ? "heart" : "heart"} 
-              size={20} 
+              size={22} 
               color={item.isLiked ? "#FF4B6E" : "#718096"} 
             />
             <Text style={[
@@ -501,7 +581,7 @@ const MyPageScreen: React.FC = () => {
             onPress={() => handleCommentPress(item.voteId)}
             activeOpacity={0.7}
           >
-            <Feather name="message-circle" size={20} color="#718096" />
+            <Feather name="message-circle" size={22} color="#718096" />
             <Text style={styles.reactionText}>{item.commentCount}</Text>
           </TouchableOpacity>
 
@@ -512,7 +592,7 @@ const MyPageScreen: React.FC = () => {
           >
             <Feather 
               name={item.isBookmarked ? "bookmark" : "bookmark"} 
-              size={20} 
+              size={22} 
               color={item.isBookmarked ? "#1499D9" : "#718096"} 
             />
           </TouchableOpacity>
@@ -590,183 +670,241 @@ const MyPageScreen: React.FC = () => {
         {profile.introduction && (
           <Text style={styles.introduction}>{profile.introduction}</Text>
         )}
-
-        <View style={styles.tabContainer}>
-          <View style={styles.tabRow}>
-            {TABS.map((tab) => (
-              <TouchableOpacity
-                key={tab.value}
-                style={[styles.tabButton, activeTab === tab.value && styles.activeTab]}
-                onPress={() => handleTabChange(tab.value)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.tabText, activeTab === tab.value && styles.activeTabText]}>
-                  {tab.label} {tab.value === 'posts' ? `(${profile?.postCount || 0})` :
-                             tab.value === 'followers' ? `(${profile?.followerCount || 0})` :
-                             `(${profile?.followingCount || 0})`}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <View style={styles.tabIndicator}>
-            <Animated.View 
-              style={[
-                styles.tabIndicatorBar,
-                { 
-                  left: activeTab === 'posts' ? '0%' : 
-                       activeTab === 'followers' ? '33.333%' : '66.666%',
-                  width: '33.333%'
-                }
-              ]} 
-            />
-          </View>
-        </View>
       </Animated.View>
     );
   }, [profile, activeTab, handleTabChange, navigation]);
 
+  const renderUser = useCallback(({ item }: { item: any }) => (
+    <View style={styles.userCard}>
+      <Image source={{ uri: item.profileImage }} style={styles.userCardImage} />
+      <View style={styles.userCardInfo}>
+        <Text style={styles.userCardName}>{item.name}</Text>
+        {/* <Text style={styles.userCardIntro}>간단한 소개글</Text> */}
+      </View>
+      {/* <TouchableOpacity style={styles.userCardButton}><Text style={styles.userCardButtonText}>팔로우</Text></TouchableOpacity> */}
+    </View>
+  ), []);
+
+  // 게시물 무한 스크롤
+  const handleLoadMore = useCallback(() => {
+    if (postsLoading || isLast || activeTab !== 'posts') return;
+    fetchPosts(page);
+  }, [postsLoading, isLast, activeTab, page, fetchPosts]);
+
   const renderContent = () => {
-    switch (activeTab) {
-      case 'posts':
-        return (loading || refreshing) ? (
-          <SkeletonLoader />
-        ) : (
-          <FlatList
-            data={posts}
-            renderItem={renderPost}
-            keyExtractor={(item) => item.voteId.toString()}
-            onEndReached={() => fetchData(page)}
-            onEndReachedThreshold={0.5}
-            ListFooterComponent={
-              loading ? (
-                <View style={styles.skeletonContainer}>
-                  {[1, 2, 3].map((_, index) => (
-                    <View key={index} style={styles.skeletonPost}>
-                      <View style={styles.skeletonPostHeader}>
-                        <View style={styles.skeletonAvatar} />
-                        <View style={styles.skeletonPostInfo}>
-                          <View style={[styles.skeletonText, { width: '40%' }]} />
-                          <View style={[styles.skeletonText, { width: '30%' }]} />
-                        </View>
-                      </View>
-                      <View style={styles.skeletonPostContent}>
-                        <View style={[styles.skeletonText, { width: '100%' }]} />
-                        <View style={[styles.skeletonText, { width: '80%' }]} />
-                      </View>
-                      <View style={styles.skeletonOptions}>
-                        <View style={[styles.skeletonOption, { width: '100%' }]} />
-                        <View style={[styles.skeletonOption, { width: '100%' }]} />
-                      </View>
-                      <View style={styles.skeletonReactions}>
-                        <View style={[styles.skeletonReaction, { width: 24 }]} />
-                        <View style={[styles.skeletonReaction, { width: 24 }]} />
-                        <View style={[styles.skeletonReaction, { width: 24 }]} />
-                        <View style={[styles.skeletonReaction, { width: 24 }]} />
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              ) : null
-            }
-            ListEmptyComponent={null}
-            showsVerticalScrollIndicator={false}
-          />
-        );
-      case 'followers':
-        return (loading || refreshing) ? (
-          <View style={styles.skeletonContainer}>
-            <View style={styles.skeletonProfile}>
-              <View style={styles.skeletonProfileImage} />
-              <View style={styles.skeletonProfileInfo}>
-                <View style={[styles.skeletonText, { width: '40%' }]} />
-                <View style={[styles.skeletonText, { width: '30%' }]} />
-              </View>
-            </View>
-            <View style={styles.skeletonTabs}>
-              <View style={[styles.skeletonTab, { width: '30%' }]} />
-              <View style={[styles.skeletonTab, { width: '30%' }]} />
-              <View style={[styles.skeletonTab, { width: '30%' }]} />
-            </View>
-            {[1, 2, 3].map((_, index) => (
-              <View key={index} style={styles.skeletonFollower}>
-                <View style={styles.skeletonFollowerHeader}>
-                  <View style={styles.skeletonAvatar} />
-                  <View style={styles.skeletonFollowerInfo}>
-                    <View style={[styles.skeletonText, { width: '40%' }]} />
-                    <View style={[styles.skeletonText, { width: '30%' }]} />
-                  </View>
-                </View>
-              </View>
-            ))}
-          </View>
-        ) : null;
-      case 'following':
-        return (loading || refreshing) ? (
-          <View style={styles.skeletonContainer}>
-            <View style={styles.skeletonProfile}>
-              <View style={styles.skeletonProfileImage} />
-              <View style={styles.skeletonProfileInfo}>
-                <View style={[styles.skeletonText, { width: '40%' }]} />
-                <View style={[styles.skeletonText, { width: '30%' }]} />
-              </View>
-            </View>
-            <View style={styles.skeletonTabs}>
-              <View style={[styles.skeletonTab, { width: '30%' }]} />
-              <View style={[styles.skeletonTab, { width: '30%' }]} />
-              <View style={[styles.skeletonTab, { width: '30%' }]} />
-            </View>
-            {[1, 2, 3].map((_, index) => (
-              <View key={index} style={styles.skeletonFollower}>
-                <View style={styles.skeletonFollowerHeader}>
-                  <View style={styles.skeletonAvatar} />
-                  <View style={styles.skeletonFollowerInfo}>
-                    <View style={[styles.skeletonText, { width: '40%' }]} />
-                    <View style={[styles.skeletonText, { width: '30%' }]} />
-                  </View>
-                </View>
-              </View>
-            ))}
-          </View>
-        ) : null;
+    let data = [];
+    let renderItem = undefined;
+    let keyExtractor = undefined;
+    if (activeTab === 'posts') {
+      data = posts;
+      renderItem = renderPost;
+      keyExtractor = (item: VoteResponse) => item.voteId.toString();
+    } else if (activeTab === 'followers') {
+      data = followers;
+      renderItem = renderUser;
+      keyExtractor = (item: any) => `follower-${item.id}`;
+    } else if (activeTab === 'following') {
+      data = following;
+      renderItem = renderUser;
+      keyExtractor = (item: any) => `following-${item.id}`;
     }
+    return (
+      <FlatList
+        data={data}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
+        ListEmptyComponent={null}
+        contentContainerStyle={styles.container}
+        style={{ flex: 1 }}
+        showsVerticalScrollIndicator={false}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={5}
+        windowSize={10}
+        initialNumToRender={5}
+        updateCellsBatchingPeriod={50}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#1499D9"]}
+            tintColor="#1499D9"
+          />
+        }
+      />
+    );
   };
 
-  const keyExtractor = useCallback((item: VoteResponse) => item.voteId.toString(), []);
+  const ProfileSkeleton = () => {
+    const opacity = useSharedValue(0.3);
+    
+    useEffect(() => {
+      opacity.value = withRepeat(
+        withSequence(
+          withTiming(0.7, { duration: 1000 }),
+          withTiming(0.3, { duration: 1000 })
+        ),
+        -1,
+        true
+      );
+    }, []);
+
+    const animatedStyle = useAnimatedStyle(() => ({
+      opacity: opacity.value,
+    }));
+
+    return (
+      <Animated.View 
+        style={[styles.profileContainer, animatedStyle]}
+        entering={FadeIn.duration(300)}
+        exiting={FadeOut.duration(300)}
+      >
+        <View style={styles.skeletonProfile}>
+          <View style={styles.skeletonProfileImage} />
+          <View style={styles.skeletonProfileInfo}>
+            <View style={[styles.skeletonText, { width: '60%' }]} />
+            <View style={[styles.skeletonText, { width: '40%' }]} />
+          </View>
+        </View>
+      </Animated.View>
+    );
+  };
+
+  const PostsSkeleton = () => {
+    const opacity = useSharedValue(0.3);
+    
+    useEffect(() => {
+      opacity.value = withRepeat(
+        withSequence(
+          withTiming(0.7, { duration: 1000 }),
+          withTiming(0.3, { duration: 1000 })
+        ),
+        -1,
+        true
+      );
+    }, []);
+
+    const animatedStyle = useAnimatedStyle(() => ({
+      opacity: opacity.value,
+    }));
+
+    return (
+      <Animated.View 
+        style={[styles.container, animatedStyle]}
+        entering={FadeIn.duration(300)}
+        exiting={FadeOut.duration(300)}
+      >
+        {[1, 2, 3].map((_, index) => (
+          <View key={index} style={styles.skeletonPost}>
+            <View style={styles.skeletonPostHeader}>
+              <View style={styles.skeletonAvatar} />
+              <View style={styles.skeletonPostInfo}>
+                <View style={[styles.skeletonText, { width: '40%' }]} />
+                <View style={[styles.skeletonText, { width: '30%' }]} />
+              </View>
+            </View>
+            <View style={styles.skeletonPostContent}>
+              <View style={[styles.skeletonText, { width: '100%' }]} />
+              <View style={[styles.skeletonText, { width: '80%' }]} />
+            </View>
+            <View style={styles.skeletonOptions}>
+              <View style={[styles.skeletonOption, { width: '100%' }]} />
+              <View style={[styles.skeletonOption, { width: '100%' }]} />
+            </View>
+            <View style={styles.skeletonReactions}>
+              <View style={[styles.skeletonReaction, { width: 24 }]} />
+              <View style={[styles.skeletonReaction, { width: 24 }]} />
+              <View style={[styles.skeletonReaction, { width: 24 }]} />
+              <View style={[styles.skeletonReaction, { width: 24 }]} />
+            </View>
+          </View>
+        ))}
+      </Animated.View>
+    );
+  };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      {loading && !hasLoaded ? (
-        <View style={styles.container}>
-          <SkeletonLoader />
-        </View>
+    <SafeAreaView style={[styles.safeArea, { flex: 1, paddingTop: insets.top }]}>
+      {profileLoading ? (
+        <ProfileSkeleton />
       ) : (
-        <FlatList
-          ListHeaderComponent={renderProfile()}
-          data={activeTab === 'posts' ? posts : []}
-          renderItem={activeTab === 'posts' ? renderPost : null}
-          keyExtractor={keyExtractor}
-          onEndReached={() => activeTab === 'posts' && fetchData(page)}
-          onEndReachedThreshold={0.5}
-          ListEmptyComponent={null}
-          contentContainerStyle={styles.container}
-          showsVerticalScrollIndicator={false}
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor="#1499D9"
-              colors={["#1499D9"]}
-              progressViewOffset={50}
-            />
-          }
-          removeClippedSubviews={true}
-          maxToRenderPerBatch={5}
-          windowSize={10}
-          initialNumToRender={5}
-          updateCellsBatchingPeriod={50}
-        />
+        <Animated.View entering={FadeIn.duration(300)}>
+          {renderProfile()}
+        </Animated.View>
+      )}
+      <View style={styles.tabContainer}>
+        <View style={styles.tabRow}>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'posts' && styles.activeTab]}
+            onPress={() => handleTabChange('posts')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabText, activeTab === 'posts' && styles.activeTabText]}>
+              게시물 <Text style={{ color: '#3182CE' }}>{profile ? `(${profile.postCount || 0})` : ''}</Text>
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'followers' && styles.activeTab]}
+            onPress={() => handleTabChange('followers')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabText, activeTab === 'followers' && styles.activeTabText]}>
+              팔로워 <Text style={{ color: '#3182CE' }}>{profile ? `(${profile.followerCount || 0})` : ''}</Text>
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'following' && styles.activeTab]}
+            onPress={() => handleTabChange('following')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tabText, activeTab === 'following' && styles.activeTabText]}>
+              팔로잉 <Text style={{ color: '#3182CE' }}>{profile ? `(${profile.followingCount || 0})` : ''}</Text>
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.tabIndicator}>
+          <Animated.View 
+            style={[
+              styles.tabIndicatorBar,
+              { 
+                left: activeTab === 'posts' ? '0%' : 
+                     activeTab === 'followers' ? '33.333%' : '66.666%',
+                width: '33.333%'
+              }
+            ]} 
+          />
+        </View>
+      </View>
+      {postsLoading && activeTab === 'posts' ? (
+        <PostsSkeleton />
+      ) : (
+        <Animated.View entering={FadeIn.duration(300)} style={{ flex: 1 }}>
+          <FlatList
+            data={activeTab === 'posts' ? posts : activeTab === 'followers' ? followers : following}
+            renderItem={activeTab === 'posts' ? renderPost : renderUser}
+            keyExtractor={activeTab === 'posts' ? (item: VoteResponse) => item.voteId.toString() : (item: any) => `${activeTab}-${item.id}`}
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.5}
+            ListEmptyComponent={null}
+            contentContainerStyle={styles.container}
+            style={{ flex: 1 }}
+            showsVerticalScrollIndicator={false}
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={5}
+            windowSize={10}
+            initialNumToRender={5}
+            updateCellsBatchingPeriod={50}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={["#1499D9"]}
+                tintColor="#1499D9"
+              />
+            }
+          />
+        </Animated.View>
       )}
 
       {commentModalVoteId !== null && (
@@ -872,35 +1010,23 @@ const MyPageScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: { 
     flex: 1, 
-    backgroundColor: '#F7FAFC' 
+    backgroundColor: '#FFFFFF' 
   },
   container: {
-    padding: 16,
+    padding: 0,
     paddingBottom: 24,
+    backgroundColor: '#fff',
+    flexGrow: 1,
   },
-  loadingProfileContainer: {
-    padding: 16,
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 8,
-    color: "#1499D9",
-    fontSize: 14,
-  },
-
-  loaderContainer: {
-    padding: 16,
-    alignItems: "center",
-  },
-  
-
   profileContainer: { 
-    marginBottom: 24,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
   profileHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 12,
   },
   profileMainInfo: {
@@ -909,186 +1035,127 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   profileImage: {
-    width: 90, 
-    height: 90, 
-    borderRadius: 45, 
+    width: 80, 
+    height: 80, 
+    borderRadius: 40, 
     backgroundColor: '#E2E8F0',
-    borderWidth: 3,
+    borderWidth: 2,
     borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
   },
   profileInfo: {
-    marginLeft: 20,
+    marginLeft: 16,
     flex: 1,
   },
   name: { 
-    fontSize: 22, 
+    fontSize: 18, 
     fontWeight: 'bold', 
-    color: '#2D3748',
-    marginBottom: 6,
+    color: '#1A202C',
+    marginBottom: 4,
   },
   pointContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EBF8FF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    alignSelf: 'flex-start',
-  },
-  pointLabel: {
-    fontSize: 13,
-    color: '#3182CE',
-    fontWeight: '500',
-    marginRight: 6,
-  },
-  pointValue: {
-    fontSize: 15,
-    color: '#2B6CB0',
-    fontWeight: '700',
-  },
-  introduction: { 
-    marginTop: 8,
-    marginBottom: 20,
-    fontSize: 15, 
-    color: '#4A5568',
-    lineHeight: 22,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 24,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  statItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#2D3748',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 14,
-    color: '#718096',
-  },
-  statDivider: {
-    width: 1,
-    height: '70%',
-    backgroundColor: '#E2E8F0',
-    alignSelf: 'center',
-  },
-  sectionDivider: {
-    height: 1,
-    backgroundColor: '#E2E8F0',
-    marginVertical: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#2D3748',
-    marginBottom: 16,
-  },
-  voteItem: {
-    position: 'relative',
-    marginBottom: 16,
-    padding: 16,
-    borderRadius: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-  },
-  activeVoteItem: {
-    backgroundColor: '#FFFFFF',
-  },
-  closedVoteItem: {
-    backgroundColor: '#F9FAFB',
-  },
-  userInfoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  userInfoLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  profileImageSmall: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    marginRight: 10,
-    backgroundColor: '#E2E8F0',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  nickname: {
-    fontSize: 15,
-    color: '#1A202C',
-    fontWeight: '600',
-  },
-  userInfoActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  reuploadButton: {
-    backgroundColor: '#EBF8FF',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    marginRight: 8,
-  },
-  reuploadText: {
-    fontSize: 13,
-    color: '#3182CE',
-    fontWeight: '500',
-  },
-  deleteButton: {
-    backgroundColor: '#FFF5F5',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  deleteText: {
-    fontSize: 13,
-    color: '#E53E3E',
-    fontWeight: '500',
-  },
-  title: { 
-    fontSize: 18, 
-    fontWeight: 'bold',
-    color: '#2D3748',
-    marginBottom: 8,
-    lineHeight: 24,
-  },
-  metaContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    flexWrap: 'wrap',
-  },
-  categoryBadge: {
-    backgroundColor: '#EBF4FF',
+    backgroundColor: '#F7FAFC',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  pointLabel: {
+    fontSize: 12,
+    color: '#4A5568',
+    fontWeight: '500',
+    marginRight: 4,
+  },
+  pointValue: {
+    fontSize: 13,
+    color: '#2B6CB0',
+    fontWeight: '600',
+  },
+  introduction: { 
+    marginTop: 8,
+    fontSize: 14, 
+    color: '#4A5568',
+    lineHeight: 20,
+  },
+  tabContainer: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#fff',
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  activeTab: {
+    borderBottomColor: '#3182CE',
+  },
+  tabText: {
+    fontSize: 14,
+    color: '#718096',
+    fontWeight: '500',
+  },
+  activeTabText: {
+    color: '#3182CE',
+    fontWeight: '600',
+  },
+  voteItem: {
+    backgroundColor: '#fff',
+    marginBottom: 0,
+    borderRadius: 0,
+    padding: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  userInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 8,
+  },
+  profileImageSmall: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     marginRight: 8,
+    backgroundColor: '#E2E8F0',
+    borderWidth: 0,
+  },
+  nickname: {
+    fontWeight: 'bold',
+    fontSize: 15,
+    color: '#222',
+  },
+  createdAtText: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 2,
+  },
+  title: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: '#222',
+    marginBottom: 0,
+    lineHeight: 22,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 12,
+    marginBottom: 2,
+  },
+  categoryBadge: {
+    backgroundColor: '#F0F4FF',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginRight: 4,
   },
   categoryText: {
     color: '#3182CE',
@@ -1097,77 +1164,55 @@ const styles = StyleSheet.create({
   },
   dateText: {
     fontSize: 12,
-    color: '#718096',
-    fontWeight: '500',
-    marginRight: 8,
-  },
-  closedBadge: {
-    backgroundColor: '#CBD5E0',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  closedBadgeText: {
-    color: '#4A5568',
-    fontSize: 12,
+    color: '#888',
     fontWeight: '500',
   },
-  content: { 
-    fontSize: 15, 
-    marginBottom: 12,
-    color: '#4A5568',
+  content: {
+    fontSize: 15,
+    color: '#222',
     lineHeight: 22,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 0,
   },
-  imageContainer: { 
-    marginBottom: 12,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  image: { 
-    width: '100%', 
-    height: undefined,
-    aspectRatio: 1,
-    borderRadius: 12,
-  },
-  optionContainer: { 
-    marginBottom: 16,
+  optionContainer: {
+    marginBottom: 0,
+    paddingHorizontal: 12,
+    paddingTop: 4,
+    width: '100%',
+    alignItems: 'stretch',
   },
   imageOptionContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
-  optionWrapper: { 
-    position: 'relative', 
-    marginVertical: 6,
+  optionWrapper: {
+    position: 'relative',
+    marginVertical: 2,
+    borderRadius: 0,
+    width: '100%',
   },
   imageOptionWrapper: {
     width: '48%',
   },
   optionButton: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#E2E8F0',
-    borderWidth: 1.5,
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    alignItems: 'center',
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    minHeight: 54,
-  },
-  closedOptionButton: {
-    backgroundColor: '#F7FAFC',
-    borderColor: '#E2E8F0',
-  },
-  selectedOptionButton: {
-    borderColor: '#1499D9',
-    borderWidth: 1.5,
+    alignItems: 'center',
+    minHeight: 60,
+    backgroundColor: '#F7F7F7',
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginBottom: 6,
+    width: '100%',
+    padding: 0,
+    position: 'relative',
   },
   optionButtonWithImage: {
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    minHeight: 120,
+    minHeight: 100,
+  },
+  optionButtonTextContainer: {
+    minHeight: 60,
   },
   optionContentWithImage: {
     width: '100%',
@@ -1175,71 +1220,65 @@ const styles = StyleSheet.create({
   },
   largeOptionImage: {
     width: '100%',
-    height: 120,
+    height: 90,
     borderRadius: 8,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   optionTextContainer: {
     width: '100%',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    position: 'relative',
+    zIndex: 2,
+    paddingHorizontal: 12,
   },
-  gaugeBar: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    borderRadius: 12,
-    zIndex: -1,
-  },
-  optionButtonText: { 
-    fontSize: 15, 
-    color: '#2D3748',
+  optionButtonText: {
+    fontSize: 15,
+    color: '#222',
     fontWeight: '500',
     flex: 1,
   },
   selectedOptionText: {
-    color: '#1499D9',
+    color: '#3182CE',
     fontWeight: '600',
   },
-  percentageText: { 
-    fontSize: 15, 
-    fontWeight: '600', 
-    color: '#4A5568',
+  percentageText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#888',
     marginLeft: 8,
   },
   selectedPercentageText: {
-    color: '#4A5568',
-  },
-  responseCountText: {
-    marginTop: 8,
-    fontSize: 13,
-    color: '#718096',
-    textAlign: 'right',
-    fontWeight: '500',
+    color: '#3182CE',
   },
   divider: {
     height: 1,
     backgroundColor: '#E2E8F0',
-    marginBottom: 12,
+    marginVertical: 8,
+    marginHorizontal: 12,
   },
   reactionRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    gap: 16,
+    paddingHorizontal: 0,
+    paddingVertical: 10,
+    gap: 44,
+    borderTopWidth: 0,
+    borderTopColor: 'transparent',
   },
-  reactionItem: { 
-    flexDirection: 'row', 
+  reactionItem: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 4,
+    justifyContent: 'center',
     paddingHorizontal: 8,
+    paddingVertical: 4,
+    minWidth: 52,
   },
-  reactionText: { 
-    fontSize: 14, 
-    color: '#4A5568',
+  reactionText: {
+    fontSize: 14,
+    color: '#888',
     fontWeight: '500',
     marginLeft: 4,
   },
@@ -1261,11 +1300,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#718096',
   },
-  createdAtText: {
-    fontSize: 12,
-    color: '#718096',
-    marginTop: 2,
-  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -1284,40 +1318,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     overflow: 'hidden',
-  },
-  tabContainer: {
-    backgroundColor: '#FFFFFF',
-    paddingTop: 0,
-    paddingBottom: 0,
-    marginBottom: -20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-    zIndex: 10,
-  },
-  tabRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 0,
-  },
-  tabButton: {
-    paddingVertical: 12,
-    flex: 1,
-    alignItems: 'center',
-  },
-  activeTab: {
-    backgroundColor: 'transparent',
-  },
-  tabText: {
-    fontSize: 14,
-    color: '#718096',
-    fontWeight: '500',
-  },
-  activeTabText: {
-    color: '#1499D9',
-    fontWeight: '600',
   },
   tabIndicator: {
     height: 2,
@@ -1490,6 +1490,108 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     flex: 1,
     gap: 4,
+  },
+  imageContainer: { 
+    marginBottom: 0,
+    borderRadius: 0,
+    overflow: 'hidden',
+  },
+  image: { 
+    width: '100%', 
+    height: undefined,
+    aspectRatio: 1,
+  },
+  closedOptionButton: {
+    backgroundColor: '#F7FAFC',
+    borderColor: '#E2E8F0',
+  },
+  selectedOptionButton: {
+    borderColor: '#3182CE',
+    borderWidth: 2,
+    backgroundColor: '#E6F0FF',
+    borderRadius: 8,
+  },
+  responseCountText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#888',
+    textAlign: 'right',
+    fontWeight: '500',
+  },
+  tabRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 0,
+  },
+  gaugeBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    height: '100%',
+    borderRadius: 0,
+    zIndex: 1,
+  },
+  userCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+    gap: 14,
+  },
+  userCardImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#E2E8F0',
+  },
+  userCardInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  userCardName: {
+    fontSize: 16,
+    color: '#222',
+    fontWeight: '600',
+  },
+  userCardIntro: {
+    fontSize: 13,
+    color: '#888',
+    marginTop: 2,
+  },
+  userCardButton: {
+    backgroundColor: '#3182CE',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+  },
+  userCardButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  leftOptionImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 0,
+    backgroundColor: '#111',
+    marginRight: 6,
+  },
+  rightContent: {
+    flex: 1,
+    position: 'relative',
+    justifyContent: 'center',
+    minHeight: 100,
+    paddingRight: 16,
+  },
+  textAndPercentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    zIndex: 2,
   },
 });
 

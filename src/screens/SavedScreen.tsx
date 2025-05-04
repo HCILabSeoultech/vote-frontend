@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import {
   ScrollView,
 } from 'react-native';
 import Animated, { SlideInDown, FadeIn, useAnimatedStyle, withRepeat, withTiming, withSequence, useSharedValue } from 'react-native-reanimated';
+import { Animated as RNAnimated } from 'react-native';
 import { getStoragePosts } from '../api/storage';
 import { toggleLike, toggleBookmark } from '../api/reaction';
 import { getVoteById, selectVoteOption } from '../api/post';
@@ -28,6 +29,11 @@ import CommentScreen from '../screens/CommentScreen';
 import RegionStatistics from '../components/RegionStatistics';
 import AgeStatistics from '../components/AgeStatistics';
 import GenderStatistics from '../components/GenderStatistics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SERVER_URL } from '../constant/config';
+
+const IMAGE_BASE_URL = `${SERVER_URL}`;
+const { width } = Dimensions.get('window');
 
 const STORAGE_TYPES = [
   { label: '참여한 투표', value: 'voted', count: 0 },
@@ -38,31 +44,52 @@ const STORAGE_TYPES = [
 type StorageType = 'voted' | 'liked' | 'bookmarked';
 type NavigationProp = StackNavigationProp<RootStackParamList, 'CommentScreen'>;
 
-import { SERVER_URL } from '../constant/config';
-const IMAGE_BASE_URL = `${SERVER_URL}`;
-const { width } = Dimensions.get('window');
+// 게이지 애니메이션 컴포넌트 (메인페이지와 동일)
+const VoteOptionGauge = ({ percentage, isSelected }: { percentage: number; isSelected: boolean }) => {
+  const widthAnim = useRef(new RNAnimated.Value(0)).current;
+  useEffect(() => {
+    RNAnimated.timing(widthAnim, {
+      toValue: percentage,
+      duration: 600,
+      useNativeDriver: false,
+    }).start();
+  }, [percentage]);
+  const animatedWidth = widthAnim.interpolate({
+    inputRange: [0, 100],
+    outputRange: ['0%', '100%'],
+  });
+  return (
+    <RNAnimated.View
+      style={[
+        styles.gaugeBar,
+        {
+          width: animatedWidth,
+          backgroundColor: isSelected ? '#4299E1' : '#E2E8F0',
+          opacity: 0.3,
+        },
+      ]}
+    />
+  );
+};
 
-// 스켈레톤 UI 컴포넌트
+// 스켈레톤 UI 컴포넌트 (실제 피드와 비슷하게)
 const SkeletonLoader = () => {
   const opacity = useSharedValue(0.3)
-  
   useEffect(() => {
     opacity.value = withRepeat(
       withSequence(
-        withTiming(0.7, { duration: 1000 }),
-        withTiming(0.3, { duration: 1000 })
+        withTiming(0.5, { duration: 800 }),
+        withTiming(0.3, { duration: 800 })
       ),
       -1,
       true
     )
   }, [])
-
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
   }))
-
   return (
-    <Animated.View style={[styles.skeletonItem, animatedStyle]}>
+    <Animated.View style={[styles.skeletonItem, animatedStyle]} entering={FadeIn.duration(400)}>
       <View style={styles.skeletonHeader}>
         <View style={styles.skeletonAvatar} />
         <View style={styles.skeletonUserInfo}>
@@ -70,11 +97,18 @@ const SkeletonLoader = () => {
           <View style={[styles.skeletonText, { width: '60%' }]} />
         </View>
       </View>
+      <View style={styles.skeletonMetaRow}>
+        <View style={styles.skeletonCategory} />
+        <View style={styles.skeletonDate} />
+      </View>
       <View style={styles.skeletonTitle} />
+      <View style={styles.skeletonContent} />
+      <View style={styles.skeletonImage} />
       <View style={styles.skeletonOptions}>
         <View style={styles.skeletonOption} />
         <View style={styles.skeletonOption} />
       </View>
+      <View style={styles.skeletonReactions} />
     </Animated.View>
   )
 }
@@ -267,6 +301,8 @@ const StorageScreen: React.FC = () => {
   const [statisticsModalVoteId, setStatisticsModalVoteId] = useState<number | null>(null);
 
   const [imageSizes, setImageSizes] = useState<Record<number, { width: number; height: number }>>({});
+
+  const insets = useSafeAreaInsets();
 
   const handleTabChange = (value: StorageType) => {
     setStorageType(value);
@@ -557,43 +593,92 @@ const StorageScreen: React.FC = () => {
     onPress: () => void, 
     closed: boolean 
   }) => {
+    const [optionWidth, setOptionWidth] = useState(0);
+    const imageWidth = 100;
+    const gaugeWidth = optionWidth > 0 ? (optionWidth - imageWidth) * (percentage / 100) : 0;
+
+    // 게이지 애니메이션 (이미지 옵션)
+    const gaugeAnim = useRef(new RNAnimated.Value(0)).current;
+    useEffect(() => {
+      if (showGauge && option.optionImage) {
+        RNAnimated.timing(gaugeAnim, {
+          toValue: gaugeWidth,
+          duration: 600,
+          useNativeDriver: false,
+        }).start();
+      }
+    }, [gaugeWidth, showGauge, option.optionImage]);
+
     return (
       <View style={[styles.optionWrapper, option.optionImage && styles.imageOptionWrapper]}>
         <TouchableOpacity
           style={[
             styles.optionButton,
-            closed && styles.closedOptionButton,
+            option.optionImage && isSelected && styles.optionButtonWithImage,
             isSelected && styles.selectedOptionButton,
-            option.optionImage && styles.optionButtonWithImage,
           ]}
           onPress={onPress}
           disabled={closed || isSelected}
           activeOpacity={0.7}
+          onLayout={option.optionImage ? (e) => setOptionWidth(e.nativeEvent.layout.width) : undefined}
         >
-          {showGauge && (
-            <View style={{
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: `${percentage * (option.optionImage ? 1.25 : 1.11)}%`,
-              backgroundColor: isSelected ? "#4299E1" : "#E2E8F0",
-              opacity: 0.3,
-              borderRadius: 12,
-            }} />
+          {/* 이미지 옵션: 게이지 바 */}
+          {option.optionImage && showGauge && (
+            <RNAnimated.View
+              style={[
+                styles.gaugeBar,
+                {
+                  left: imageWidth,
+                  width: gaugeAnim,
+                  backgroundColor: isSelected ? '#4299E1' : '#E2E8F0',
+                  opacity: 0.3,
+                  position: 'absolute',
+                  top: 0,
+                  height: '100%',
+                  zIndex: 1,
+                  borderRadius: 0,
+                },
+              ]}
+            />
           )}
-          {option.optionImage ? (
-            <View style={styles.optionContentWithImage}>
-              <Image
-                source={{ uri: `${IMAGE_BASE_URL}${option.optionImage}` }}
-                style={styles.largeOptionImage}
-                resizeMode="cover"
-              />
-              <View style={styles.optionTextContainer}>
+          {/* 일반 옵션: 게이지 바 */}
+          {!option.optionImage && showGauge && (
+            <VoteOptionGauge percentage={percentage} isSelected={isSelected} />
+          )}
+          {/* 이미지 */}
+          {option.optionImage && (
+            <Image
+              source={{ uri: option.optionImage.startsWith('http') ? option.optionImage : `${IMAGE_BASE_URL}${option.optionImage}` }}
+              style={styles.leftOptionImage}
+              resizeMode="cover"
+            />
+          )}
+          {/* 일반 옵션: 텍스트/퍼센트는 optionTextContainer로 감싸기 */}
+          {!option.optionImage ? (
+            <View style={styles.optionTextContainer}>
+              <Text style={[
+                styles.optionButtonText,
+                isSelected && styles.selectedOptionText,
+                showGauge && { color: isSelected ? '#2C5282' : '#4A5568' }
+              ]}>
+                {option.content}
+              </Text>
+              {showGauge && (
+                <Text style={[
+                  styles.percentageText,
+                  isSelected && styles.selectedPercentageText
+                ]}>
+                  {percentage}%
+                </Text>
+              )}
+            </View>
+          ) : (
+            <View style={styles.rightContent}>
+              <View style={styles.textAndPercentRow}>
                 <Text style={[
                   styles.optionButtonText,
                   isSelected && styles.selectedOptionText,
-                  showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
+                  showGauge && { color: isSelected ? '#2C5282' : '#4A5568' }
                 ]}>
                   {option.content}
                 </Text>
@@ -606,24 +691,6 @@ const StorageScreen: React.FC = () => {
                   </Text>
                 )}
               </View>
-            </View>
-          ) : (
-            <View style={styles.optionTextContainer}>
-              <Text style={[
-                styles.optionButtonText,
-                isSelected && styles.selectedOptionText,
-                showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
-              ]}>
-                {option.content}
-              </Text>
-              {showGauge && (
-                <Text style={[
-                  styles.percentageText,
-                  isSelected && styles.selectedPercentageText
-                ]}>
-                  {percentage}%
-                </Text>
-              )}
             </View>
           )}
         </TouchableOpacity>
@@ -669,7 +736,7 @@ const StorageScreen: React.FC = () => {
     return (
       <Animated.View
         entering={FadeIn.duration(400).delay(index * 50)}
-        style={[styles.voteItem, closed ? styles.closedVoteItem : styles.activeVoteItem]}
+        style={styles.voteItem}
       >
         <View style={styles.userInfoRow}>
           <View style={styles.userInfoLeft}>
@@ -691,21 +758,21 @@ const StorageScreen: React.FC = () => {
               <Text style={styles.createdAtText}>{formatCreatedAt(item.createdAt)}</Text>
             </View>
           </View>
-          {closed && (
-            <View style={styles.closedBadge}>
-              <Text style={styles.closedBadgeText}>마감됨</Text>
-            </View>
-          )}
         </View>
-
-        <Text style={styles.title}>{item.title}</Text>
 
         <View style={styles.metaContainer}>
           <View style={styles.categoryBadge}>
             <Text style={styles.categoryText}>{item.categoryName}</Text>
           </View>
           <Text style={styles.dateText}>{formatDate(item.finishTime)}</Text>
+          {closed && (
+            <View style={[styles.categoryBadge, { backgroundColor: '#CBD5E0', marginLeft: 0 }]}>
+              <Text style={[styles.categoryText, { color: '#4A5568' }]}>마감됨</Text>
+            </View>
+          )}
         </View>
+
+        <Text style={styles.title}>{item.title}</Text>
 
         {item.content && (
           <Text numberOfLines={2} style={styles.content}>{item.content}</Text>
@@ -838,10 +905,10 @@ const StorageScreen: React.FC = () => {
   ), [activeStatTab]);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={[styles.safeArea, { paddingTop: insets.top }]}>
       {renderTabs()}
       <FlatList
-        data={votes}
+        data={loading ? [] : votes}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         onEndReached={() => {
@@ -853,9 +920,7 @@ const StorageScreen: React.FC = () => {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => {
-              onRefresh();
-            }}
+            onRefresh={onRefresh}
             colors={["#1499D9"]}
             tintColor="#1499D9"
           />
@@ -874,7 +939,7 @@ const StorageScreen: React.FC = () => {
           ) : null
         }
         ListEmptyComponent={() => (
-          <EmptyState storageType={storageType} loading={loading} />
+          loading ? <SkeletonLoader /> : <EmptyState storageType={storageType} loading={loading} />
         )}
         contentContainerStyle={[
           styles.container,
@@ -958,28 +1023,29 @@ const StorageScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   safeArea: { 
     flex: 1, 
-    backgroundColor: '#F7FAFC' 
+    backgroundColor: '#fff' 
   },
   container: { 
-    padding: 14,
-    paddingBottom: 24,
+    padding: 0,
+    paddingBottom: 0,
     flexGrow: 1,
+    backgroundColor: '#fff',
   },
   tabContainer: {
     backgroundColor: '#FFFFFF',
     paddingTop: 0,
     paddingBottom: 0,
-    marginHorizontal: 12,
+    marginHorizontal: 0,
     marginTop: 8,
-    marginBottom: -8,
-    borderRadius: 16,
+    marginBottom: 0,
+    borderRadius: 0,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -996,9 +1062,11 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     flex: 1,
     alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
   },
   activeTab: {
-    backgroundColor: 'transparent',
+    borderBottomColor: '#1499D9',
   },
   tabText: {
     fontSize: 14,
@@ -1045,45 +1113,35 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   voteItem: {
-    position: 'relative',
-    marginBottom: 12,
-    padding: 16,
-    borderRadius: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-  },
-  activeVoteItem: {
-    backgroundColor: '#FFFFFF',
-  },
-  closedVoteItem: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#fff',
+    marginBottom: 0,
+    borderRadius: 0,
+    padding: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
   userInfoRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    padding: 12,
+    gap: 8,
   },
   userInfoLeft: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   profileImage: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    marginRight: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 8,
     backgroundColor: '#E2E8F0',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderWidth: 0,
   },
   nickname: {
+    fontWeight: 'bold',
     fontSize: 15,
-    color: '#1A202C',
-    fontWeight: '600',
+    color: '#222',
   },
   closedBadge: {
     backgroundColor: '#CBD5E0',
@@ -1096,25 +1154,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
   },
-  title: { 
-    fontSize: 18, 
+  title: {
+    fontSize: 17,
     fontWeight: 'bold',
-    color: '#2D3748',
-    marginBottom: 8,
-    lineHeight: 24,
+    color: '#222',
+    marginBottom: 0,
+    lineHeight: 22,
+    paddingHorizontal: 12,
+    paddingTop: 10,
   },
   metaContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    flexWrap: 'wrap',
+    gap: 2,
+    paddingHorizontal: 12,
+    marginBottom: 2,
   },
   categoryBadge: {
-    backgroundColor: '#EBF4FF',
+    backgroundColor: '#F0F4FF',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginRight: 4,
   },
   categoryText: {
     color: '#3182CE',
@@ -1123,136 +1184,146 @@ const styles = StyleSheet.create({
   },
   dateText: {
     fontSize: 12,
-    color: '#718096',
+    color: '#888',
     fontWeight: '500',
   },
-  content: { 
-    fontSize: 15, 
-    marginBottom: 12,
-    color: '#4A5568',
+  content: {
+    fontSize: 15,
+    color: '#222',
     lineHeight: 22,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 0,
   },
-  imageContainer: { 
-    marginBottom: 12,
-    borderRadius: 12,
+  imageContainer: {
+    marginBottom: 0,
+    borderRadius: 0,
     overflow: 'hidden',
   },
-  image: { 
+  image: {
     width: '100%',
-    borderRadius: 12,
+    aspectRatio: 1,
+    backgroundColor: '#eee',
+    borderRadius: 0,
   },
-  optionContainer: { 
-    marginBottom: 16,
+  optionContainer: {
+    marginBottom: 0,
+    paddingHorizontal: 12,
+    paddingTop: 4,
   },
   imageOptionContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
   },
   optionWrapper: {
-    position: "relative",
-    marginVertical: 6,
-    borderRadius: 12,
+    position: 'relative',
+    marginVertical: 2,
+    borderRadius: 0,
     width: '100%',
   },
   imageOptionWrapper: {
-    width: '48%',
+    width: '100%',
   },
   optionButton: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#E2E8F0",
-    borderWidth: 1.5,
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    minHeight: 54,
-    width: '100%',
-    position: 'relative',
-  },
-  optionButtonWithImage: {
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    minHeight: 120,
-  },
-  optionContentWithImage: {
-    width: '100%',
-    alignItems: 'center',
-  },
-  largeOptionImage: {
-    width: '100%',
-    height: 120,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  optionTextContainer: {
-    width: '100%',
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    minHeight: 60,
+    backgroundColor: '#F7F7F7',
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginBottom: 6,
+    width: '100%',
+    padding: 0,
     position: 'relative',
-    zIndex: 1,
-  },
-  closedOptionButton: {
-    backgroundColor: "#F7FAFC",
-    borderColor: "#E2E8F0",
   },
   selectedOptionButton: {
-    borderColor: "#4299E1",
-    borderWidth: 1.5,
-    backgroundColor: '#EBF8FF',
+    borderColor: '#3182CE',
+    borderWidth: 2,
+    backgroundColor: '#E6F0FF',
+    borderRadius: 8,
+  },
+  leftOptionImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 0,
+    backgroundColor: '#111',
+    marginRight: 12,
+  },
+  rightContent: {
+    flex: 1,
+    position: 'relative',
+    justifyContent: 'center',
+    minHeight: 100,
+    paddingRight: 16,
+  },
+  textAndPercentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    zIndex: 2,
   },
   optionButtonText: {
     fontSize: 15,
-    color: "#2D3748",
-    fontWeight: "500",
+    color: '#222',
+    fontWeight: '500',
     flex: 1,
   },
   selectedOptionText: {
-    color: "#2C5282",
-    fontWeight: "600",
+    color: '#3182CE',
+    fontWeight: '600',
   },
   percentageText: {
     fontSize: 15,
-    fontWeight: "600",
-    color: "#4A5568",
+    fontWeight: '600',
+    color: '#888',
     marginLeft: 8,
   },
   selectedPercentageText: {
-    color: "#2C5282",
+    color: '#3182CE',
+  },
+  gaugeBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    height: '100%',
+    borderRadius: 0,
+    zIndex: 1,
   },
   responseCountText: {
     marginTop: 8,
     fontSize: 13,
-    color: '#718096',
+    color: '#888',
     textAlign: 'right',
     fontWeight: '500',
   },
   divider: {
     height: 1,
     backgroundColor: '#E2E8F0',
-    marginBottom: 12,
+    marginVertical: 8,
+    marginHorizontal: 12,
   },
   reactionRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    gap: 16,
+    paddingHorizontal: 0,
+    paddingVertical: 10,
+    gap: 40,
+    borderTopWidth: 0,
+    borderTopColor: 'transparent',
   },
-  reactionItem: { 
-    flexDirection: 'row', 
+  reactionItem: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 4,
+    justifyContent: 'center',
     paddingHorizontal: 8,
+    paddingVertical: 4,
+    minWidth: 52,
   },
-  reactionText: { 
-    fontSize: 14, 
-    color: '#4A5568',
+  reactionText: {
+    fontSize: 14,
+    color: '#888',
     fontWeight: '500',
-    marginLeft: 6,
+    marginLeft: 4,
   },
   activeReactionText: {
     color: '#FF4B6E',
@@ -1263,7 +1334,7 @@ const styles = StyleSheet.create({
   },
   createdAtText: {
     fontSize: 12,
-    color: '#718096',
+    color: '#888',
     marginTop: 2,
   },
   modalOverlay: {
@@ -1334,24 +1405,24 @@ const styles = StyleSheet.create({
   },
   // 스켈레톤 UI 스타일
   skeletonItem: {
-    backgroundColor: '#F7FAFC',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    marginHorizontal: 12,
-    width: '100%',
+    backgroundColor: '#FFFFFF',
+    marginBottom: 0,
+    borderRadius: 0,
+    padding: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
   skeletonHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    padding: 12,
+    gap: 8,
   },
   skeletonAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#E2E8F0',
-    marginRight: 10,
   },
   skeletonUserInfo: {
     flex: 1,
@@ -1363,21 +1434,86 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     width: '80%',
   },
+  skeletonMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    marginBottom: 2,
+  },
+  skeletonCategory: {
+    width: 80,
+    height: 14,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 7,
+  },
+  skeletonDate: {
+    width: 80,
+    height: 14,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 7,
+  },
   skeletonTitle: {
     height: 24,
     backgroundColor: '#E2E8F0',
     borderRadius: 12,
-    marginBottom: 16,
+    marginBottom: 8,
     width: '90%',
+    marginHorizontal: 12,
+  },
+  skeletonContent: {
+    height: 20,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 8,
+    marginBottom: 8,
+    width: '90%',
+    marginHorizontal: 12,
+  },
+  skeletonImage: {
+    width: '100%',
+    aspectRatio: 1,
+    backgroundColor: '#E2E8F0',
+    marginBottom: 8,
   },
   skeletonOptions: {
+    paddingHorizontal: 12,
     gap: 8,
   },
   skeletonOption: {
-    height: 54,
+    height: 44,
     backgroundColor: '#E2E8F0',
-    borderRadius: 12,
+    borderRadius: 8,
     width: '100%',
+  },
+  skeletonReactions: {
+    height: 28,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 8,
+    marginTop: 8,
+    marginHorizontal: 12,
+    width: '90%',
+  },
+  optionTextContainer: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    position: 'relative',
+    zIndex: 2,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+  },
+  closedOptionButton: {
+    borderColor: '#CBD5E0',
+    borderWidth: 2,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+  },
+  optionButtonWithImage: {
+    borderColor: '#3182CE',
+    borderWidth: 2,
+    backgroundColor: '#E6F0FF',
+    borderRadius: 8,
   },
 });
 

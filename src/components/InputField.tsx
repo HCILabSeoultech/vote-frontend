@@ -81,11 +81,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
     borderRadius: 10,
     paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
   },
   inputFocused: {
-    borderColor: '#1499D9',
     backgroundColor: '#FFFFFF',
   },
   underline: {
@@ -93,6 +90,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     height: 2,
     backgroundColor: '#1499D9',
+    left: 0,
+    right: 0,
   },
 });
 

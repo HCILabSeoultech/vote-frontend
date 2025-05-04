@@ -271,21 +271,26 @@ const SignupStep1Screen: React.FC<Props> = ({ navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fff',
   },
   keyboardAvoid: {
     flex: 1,
   },
   scrollContainer: {
     flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 24,
   },
   container: {
-    flex: 1,
-    padding: 24,
-    justifyContent: 'space-between',
+    width: '100%',
+    maxWidth: 400,
+    alignSelf: 'center',
+    backgroundColor: '#fff',
   },
   header: {
-    marginBottom: 24,
+    marginBottom: 32,
     alignItems: 'center',
   },
   progressContainer: {
@@ -309,14 +314,16 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 14,
-    color: '#718096',
-    letterSpacing: 0.5,
+    color: '#1499D9',
+    letterSpacing: 1,
+    fontWeight: 'bold',
   },
   subtitle: {
     fontSize: 16,
-    color: '#718096',
+    color: '#888',
     letterSpacing: 0.5,
     textAlign: 'center',
+    fontWeight: '500',
   },
   formContainer: {
     marginBottom: 40,
@@ -327,7 +334,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1A202C',
+    color: '#222',
     marginBottom: 8,
     letterSpacing: 0.5,
   },
@@ -347,6 +354,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     minWidth: 80,
+    elevation: 0,
+    shadowColor: 'transparent',
   },
   checkedButton: {
     backgroundColor: '#1499D9',
@@ -359,7 +368,7 @@ const styles = StyleSheet.create({
   },
   hintText: {
     fontSize: 12,
-    color: '#718096',
+    color: '#A0AEC0',
     marginTop: 6,
     letterSpacing: 0.5,
   },
@@ -391,18 +400,16 @@ const styles = StyleSheet.create({
   },
   nextButton: {
     backgroundColor: '#1499D9',
-    height: 56,
-    borderRadius: 16,
-    shadowColor: '#1499D9',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    height: 48,
+    borderRadius: 12,
+    elevation: 0,
+    shadowColor: 'transparent',
   },
   nextButtonText: {
     fontSize: 16,
     fontWeight: 'bold',
     letterSpacing: 1,
+    color: '#fff',
   },
   backButton: {
     paddingVertical: 12,
@@ -410,7 +417,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   backButtonText: {
-    color: '#718096',
+    color: '#A0AEC0',
     fontSize: 14,
     fontWeight: '500',
     letterSpacing: 0.5,

@@ -30,6 +30,7 @@ import type { StackNavigationProp } from "@react-navigation/stack"
 import type { RootStackParamList } from "../navigation/AppNavigator"
 import MainLogo from '../../assets/mainlogo.svg'
 import DefaultVoteImage from '../components/DefaultVoteImage'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { SERVER_URL } from "../constant/config"
 
@@ -145,6 +146,7 @@ const SearchScreen: React.FC = () => {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, "CommentScreen">>()
+  const insets = useSafeAreaInsets();
 
   const fetchVotes = useCallback(async () => {
     try {
@@ -588,7 +590,7 @@ const SearchScreen: React.FC = () => {
   }, []);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: '#F7FAFC' }}>
       <View style={styles.searchContainer}>
         <View style={styles.tabContainer}>
           <View style={styles.tabRow}>
@@ -843,7 +845,7 @@ const SearchScreen: React.FC = () => {
           }
         />
       )}
-    </SafeAreaView>
+    </View>
   )
 }
 
