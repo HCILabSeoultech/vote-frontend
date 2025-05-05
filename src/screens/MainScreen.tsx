@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react"
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import {
   View,
   Text,
@@ -40,22 +40,22 @@ interface JwtPayload {
 }
 
 const SkeletonLoader = React.memo(() => {
-  const opacity = useSharedValue(0.3)
+  const opacity = useSharedValue(0.5);
   
   useEffect(() => {
     opacity.value = withRepeat(
       withSequence(
-        withTiming(0.5, { duration: 800 }),
-        withTiming(0.3, { duration: 800 })
+        withTiming(0.8, { duration: 800 }),
+        withTiming(0.5, { duration: 800 })
       ),
       -1,
       true
-    )
-  }, [])
+    );
+  }, []);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
-  }))
+  }));
 
   return (
     <Animated.View entering={FadeIn.duration(400)}>
@@ -63,16 +63,17 @@ const SkeletonLoader = React.memo(() => {
         <View style={styles.skeletonHeader}>
           <View style={styles.skeletonAvatar} />
           <View style={styles.skeletonUserInfo}>
-            <View style={[styles.skeletonText, { width: '40%' }]} />
-            <View style={[styles.skeletonText, { width: '30%' }]} />
+            <View style={styles.skeletonText} />
+            <View style={[styles.skeletonText, { width: '60%' }]} />
           </View>
         </View>
-        <View style={styles.skeletonTitle} />
-        <View style={styles.skeletonMetaContainer}>
+        <View style={styles.skeletonMetaRow}>
           <View style={styles.skeletonCategory} />
           <View style={styles.skeletonDate} />
         </View>
+        <View style={styles.skeletonTitle} />
         <View style={styles.skeletonContent} />
+        <View style={styles.skeletonImage} />
         <View style={styles.skeletonOptions}>
           <View style={styles.skeletonOption} />
           <View style={styles.skeletonOption} />
@@ -80,7 +81,7 @@ const SkeletonLoader = React.memo(() => {
         <View style={styles.skeletonReactions} />
       </Animated.View>
     </Animated.View>
-  )
+  );
 })
 
 const formatDate = (dateString: string) => {
@@ -139,12 +140,12 @@ const isVoteClosed = (finishTime: string) => {
 
 // 게이지 애니메이션 컴포넌트 분리
 const VoteOptionGauge = ({ percentage, isSelected }: { percentage: number; isSelected: boolean }) => {
-  const widthAnim = useRef(new RNAnimated.Value(0)).current;
+  const widthAnim = useRef(new RNAnimated.Value(percentage)).current;
 
   useEffect(() => {
     RNAnimated.timing(widthAnim, {
       toValue: percentage,
-      duration: 600,
+      duration: 300,
       useNativeDriver: false,
     }).start();
   }, [percentage]);
@@ -177,8 +178,7 @@ const VoteItem = React.memo(({
   onCommentPress,
   onStatisticsPress,
   animatedWidths,
-  onImageLoad,
-  isImageLoaded
+  renderImage,
 }: {
   item: VoteResponse;
   currentUsername: string | null;
@@ -188,43 +188,69 @@ const VoteItem = React.memo(({
   onCommentPress: (voteId: number) => void;
   onStatisticsPress: (vote: VoteResponse) => void;
   animatedWidths: Record<string, number>;
-  onImageLoad: (voteId: number) => void;
-  isImageLoaded: boolean;
+  renderImage: (imageUrl: string, style: any) => React.ReactNode;
 }) => {
   const closed = isVoteClosed(item.finishTime)
   const selectedOptionId = item.selectedOptionId
   const hasVoted = !!selectedOptionId
   const showGauge = closed || hasVoted
-  const totalCount = item.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0)
-  const hasImageOptions = item.voteOptions.some(opt => opt.optionImage)
+  const totalCount = useMemo(() => 
+    item.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0),
+    [item.voteOptions]
+  )
+  const hasImageOptions = useMemo(() => 
+    item.voteOptions.some(opt => opt.optionImage),
+    [item.voteOptions]
+  )
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>()
 
-  // optionButton 전체 width를 관리 (이미지 옵션 게이지 width 계산용)
   const [optionWidth, setOptionWidth] = useState(0);
   const imageWidth = 100;
 
-  // 각 옵션별 게이지 애니메이션 값 관리
   const animatedWidthsRef = useRef<{ [key: number]: any }>({});
+  
   useEffect(() => {
     item.voteOptions.forEach(opt => {
       if (opt.optionImage) {
         if (!animatedWidthsRef.current[opt.id]) {
-          animatedWidthsRef.current[opt.id] = new RNAnimated.Value(0);
+          const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
+          const targetWidth = optionWidth > 0 ? (optionWidth - imageWidth) * (percentage / 100) : 0;
+          animatedWidthsRef.current[opt.id] = new RNAnimated.Value(targetWidth);
+          RNAnimated.timing(animatedWidthsRef.current[opt.id], {
+            toValue: targetWidth,
+            duration: 300,
+            useNativeDriver: false,
+          }).start();
         }
-        const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
-        const targetWidth = optionWidth > 0 ? (optionWidth - imageWidth) * (percentage / 100) : 0;
-        RNAnimated.timing(animatedWidthsRef.current[opt.id], {
-          toValue: targetWidth,
-          duration: 600,
-          useNativeDriver: false,
-        }).start();
       }
     });
   }, [item.voteOptions, totalCount, optionWidth]);
 
-  const handleImageLoad = useCallback(() => {
-    onImageLoad(item.voteId);
-  }, [item.voteId, onImageLoad]);
+  const handleVotePress = useCallback((optionId: number) => {
+    if (!closed && selectedOptionId !== optionId) {
+      onVote(item.voteId, optionId);
+    }
+  }, [closed, selectedOptionId, onVote, item.voteId]);
+
+  const handleLikePress = useCallback(() => {
+    onToggleLike(item.voteId);
+  }, [onToggleLike, item.voteId]);
+
+  const handleBookmarkPress = useCallback(() => {
+    onToggleBookmark(item.voteId);
+  }, [onToggleBookmark, item.voteId]);
+
+  const handleCommentPress = useCallback(() => {
+    onCommentPress(item.voteId);
+  }, [onCommentPress, item.voteId]);
+
+  const handleStatisticsPress = useCallback(() => {
+    onStatisticsPress(item);
+  }, [onStatisticsPress, item]);
+
+  const handleUserPress = useCallback(() => {
+    navigation.navigate("UserPageScreen", { userId: item.userId });
+  }, [navigation, item.userId]);
 
   return (
     <Animated.View
@@ -234,16 +260,21 @@ const VoteItem = React.memo(({
       <View style={styles.userInfoRow}>
         <Image
           source={{
-            uri:
-              item.profileImage === "default.jpg"
-                ? `${IMAGE_BASE_URL}/images/default.png`
-                : item.profileImage,
+            uri: !item.profileImage || item.profileImage === 'default.jpg'
+              ? `${IMAGE_BASE_URL}/images/default.png`
+              : item.profileImage.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
+                ? item.profileImage.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
+                : item.profileImage.startsWith('http')
+                  ? item.profileImage
+                  : `${IMAGE_BASE_URL}${item.profileImage}`,
           }}
           style={styles.profileImage}
+          progressiveRenderingEnabled={true}
+          fadeDuration={0}
         />
         <View>
           <TouchableOpacity
-            onPress={() => navigation.navigate("UserPageScreen", { userId: item.userId })}
+            onPress={handleUserPress}
             activeOpacity={0.7}
           >
             <Text style={styles.nickname}>{item.name}</Text>
@@ -272,20 +303,11 @@ const VoteItem = React.memo(({
 
       {item.images.length > 0 && (
         <View style={styles.imageContainer}>
-          {!isImageLoaded && (
-            <View style={[styles.voteImage, { backgroundColor: '#E2E8F0' }]} />
-          )}
-          <Image
-            source={{ 
-              uri: item.images[0].imageUrl.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
-                ? item.images[0].imageUrl.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
-                : item.images[0].imageUrl.startsWith('http')
-                  ? item.images[0].imageUrl
-                  : `${IMAGE_BASE_URL}${item.images[0].imageUrl}`
-            }}
-            style={[styles.voteImage, { display: isImageLoaded ? 'flex' : 'none' }]}
-            onLoad={() => onImageLoad(item.voteId)}
-          />
+          {item.images.map((img) => (
+            <View key={img.id} style={styles.imageWrapper}>
+              {renderImage(img.imageUrl, styles.image)}
+            </View>
+          ))}
         </View>
       )}
 
@@ -306,23 +328,12 @@ const VoteItem = React.memo(({
                       styles.optionButton,
                       isSelected && styles.selectedOptionButton,
                     ]}
-                    onPress={() => onVote(item.voteId, opt.id)}
+                    onPress={() => handleVotePress(opt.id)}
                     disabled={closed || isSelected}
                     activeOpacity={0.7}
                     onLayout={e => setOptionWidth(e.nativeEvent.layout.width)}
                   >
-                    <Image
-                      source={{ 
-                        uri: opt.optionImage.includes('votey-image.s3.ap-northeast-2.amazonaws.com') 
-                          ? opt.optionImage.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
-                          : opt.optionImage.startsWith('http') 
-                            ? opt.optionImage 
-                            : `${IMAGE_BASE_URL}${opt.optionImage}`
-                      }}
-                      style={styles.leftOptionImage}
-                      resizeMode="cover"
-                      onLoad={handleImageLoad}
-                    />
+                    {renderImage(opt.optionImage, styles.leftOptionImage)}
                     {showGauge && gaugeWidthAnim && (
                       <RNAnimated.View
                         style={[
@@ -372,7 +383,7 @@ const VoteItem = React.memo(({
                     isSelected && styles.selectedOptionButton,
                     opt.optionImage && styles.optionButtonWithImage,
                   ]}
-                  onPress={() => onVote(item.voteId, opt.id)}
+                  onPress={() => handleVotePress(opt.id)}
                   disabled={closed || isSelected}
                   activeOpacity={0.7}
                 >
@@ -409,7 +420,7 @@ const VoteItem = React.memo(({
       <View style={styles.reactionRow}>
         <TouchableOpacity
           style={styles.reactionItem}
-          onPress={() => onToggleLike(item.voteId)}
+          onPress={handleLikePress}
           activeOpacity={0.7}
         >
           <Feather 
@@ -427,7 +438,7 @@ const VoteItem = React.memo(({
 
         <TouchableOpacity
           style={styles.reactionItem}
-          onPress={() => onCommentPress(item.voteId)}
+          onPress={handleCommentPress}
           activeOpacity={0.7}
         >
           <Feather name="message-circle" size={22} color="#718096" />
@@ -436,7 +447,7 @@ const VoteItem = React.memo(({
 
         <TouchableOpacity
           style={styles.reactionItem}
-          onPress={() => onToggleBookmark(item.voteId)}
+          onPress={handleBookmarkPress}
           activeOpacity={0.7}
         >
           <Feather 
@@ -448,7 +459,7 @@ const VoteItem = React.memo(({
 
         <TouchableOpacity
           style={styles.reactionItem}
-          onPress={() => onStatisticsPress(item)}
+          onPress={handleStatisticsPress}
           activeOpacity={0.7}
         >
           <Feather name="bar-chart-2" size={20} color="#718096" />
@@ -456,7 +467,17 @@ const VoteItem = React.memo(({
       </View>
     </Animated.View>
   )
-})
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.item.voteId === nextProps.item.voteId &&
+    prevProps.item.selectedOptionId === nextProps.item.selectedOptionId &&
+    prevProps.item.isLiked === nextProps.item.isLiked &&
+    prevProps.item.isBookmarked === nextProps.item.isBookmarked &&
+    prevProps.item.likeCount === nextProps.item.likeCount &&
+    prevProps.item.commentCount === nextProps.item.commentCount &&
+    prevProps.animatedWidths === nextProps.animatedWidths
+  );
+});
 
 const CommentModal = React.memo(({ 
   visible, 
@@ -611,9 +632,10 @@ const MainScreen: React.FC = () => {
   const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('region')
   const [animatedWidths, setAnimatedWidths] = useState<Record<string, number>>({})
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [loadedImages, setLoadedImages] = useState<Set<number>>(new Set())
-  const [isAllImagesLoaded, setIsAllImagesLoaded] = useState(false)
-  const [isInitialLoading, setIsInitialLoading] = useState(true)
+  const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set())
+  const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set())
+  const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set())
+  const [imageCache, setImageCache] = useState<Record<string, boolean>>({})
 
   const isFocused = useIsFocused()
   const isFirstLoad = useRef(true);
@@ -639,17 +661,24 @@ const MainScreen: React.FC = () => {
 
   useEffect(() => {
     if (isFirstLoad.current) {
-      setIsInitialLoading(true);
       fetchInitialVotes();
       isFirstLoad.current = false;
     }
   }, []);
 
-  useEffect(() => {
-    if (!isLoading && votes.length > 0) {
-      setIsInitialLoading(false);
-    }
-  }, [isLoading, votes.length]);
+  const updateSelectedOptions = useCallback((voteId: number, optionId: number) => {
+    setSelectedOptions(prev => {
+      if (prev[voteId] === optionId) return prev;
+      return { ...prev, [voteId]: optionId };
+    });
+  }, []);
+
+  const updateImageCache = useCallback((imageUrl: string) => {
+    setImageCache(prev => {
+      if (prev[imageUrl]) return prev;
+      return { ...prev, [imageUrl]: true };
+    });
+  }, []);
 
   const handleVote = useCallback(async (voteId: number, optionId: number) => {
     try {
@@ -659,24 +688,20 @@ const MainScreen: React.FC = () => {
         return
       }
 
-      setSelectedOptions((prev) => ({
-        ...prev,
-        [voteId]: optionId,
-      }))
-      
+      updateSelectedOptions(voteId, optionId)
       await selectVoteOption(voteId, optionId)
       await updateVoteById(voteId)
       
     } catch (error) {
       console.error("투표 실패:", error)
       Alert.alert("에러", "투표 중 오류가 발생했습니다.")
-      setSelectedOptions((prev) => {
+      setSelectedOptions(prev => {
         const newState = { ...prev }
         delete newState[voteId]
         return newState
       })
     }
-  }, [updateVoteById])
+  }, [updateVoteById, updateSelectedOptions])
 
   const handleToggleLike = useCallback(async (voteId: number) => {
     try {
@@ -725,40 +750,68 @@ const MainScreen: React.FC = () => {
     setShowStatisticsModal(true)
   }, [])
 
-  const handleImageLoad = useCallback((voteId: number) => {
-    setLoadedImages(prev => {
+  const preloadImages = useCallback((imageUrls: string[]) => {
+    imageUrls.forEach(url => {
+      if (!preloadedImages.has(url)) {
+        Image.prefetch(url)
+          .then(() => {
+            setPreloadedImages(prev => new Set([...prev, url]));
+          })
+          .catch(() => {});
+      }
+    });
+  }, [preloadedImages]);
+
+  const handleImageLoadStart = useCallback((imageUrl: string) => {
+    setLoadingImages(prev => {
       const newSet = new Set(prev);
-      newSet.add(voteId);
+      newSet.add(imageUrl);
       return newSet;
     });
   }, []);
 
-  useEffect(() => {
-    if (votes.length > 0) {
-      const totalImages = votes.reduce((count, vote) => {
-        return count + vote.images.length + vote.voteOptions.filter(opt => opt.optionImage).length;
-      }, 0);
-      
-      if (loadedImages.size === totalImages) {
-        setIsAllImagesLoaded(true);
-      } else {
-        setIsAllImagesLoaded(false);
-      }
-    }
-  }, [votes, loadedImages]);
+  const handleImageLoadEnd = useCallback((imageUrl: string) => {
+    setLoadingImages(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(imageUrl);
+      return newSet;
+    });
+    setImageCache(prev => ({ ...prev, [imageUrl]: true }));
+  }, []);
 
-  const renderHeader = useCallback(() => (
-    <View style={styles.header}>
-      <Text style={styles.headerTitle}>VoteY</Text>
-      <TouchableOpacity onPress={() => Alert.alert("알림", "알림 기능 준비 중입니다.")}>
-        <Feather name="bell" size={24} color="#2D3748" />
-      </TouchableOpacity>
-    </View>
-  ), [])
+  const renderImage = useCallback((imageUrl: string, style: any) => {
+    const isCached = imageCache[imageUrl];
+    const isLoading = loadingImages.has(imageUrl);
+    const isPreloaded = preloadedImages.has(imageUrl);
+
+    return (
+      <View style={[styles.imageWrapper, style]}>
+        <Image
+          source={{ 
+            uri: imageUrl.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
+              ? imageUrl.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
+              : imageUrl.startsWith('http')
+                ? imageUrl
+                : `${IMAGE_BASE_URL}${imageUrl}`
+          }}
+          style={[styles.image, isCached && styles.cachedImage]}
+          resizeMode="cover"
+          onLoadStart={() => handleImageLoadStart(imageUrl)}
+          onLoadEnd={() => handleImageLoadEnd(imageUrl)}
+          onError={() => handleImageLoadEnd(imageUrl)}
+          progressiveRenderingEnabled={true}
+          fadeDuration={0}
+        />
+        {isLoading && !isPreloaded && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="small" color="#1499D9" />
+          </View>
+        )}
+      </View>
+    );
+  }, [imageCache, loadingImages, preloadedImages, handleImageLoadStart, handleImageLoadEnd]);
 
   const renderItem = useCallback(({ item }: { item: VoteResponse }) => {
-    const isImageLoaded = loadedImages.has(item.voteId);
-    
     return (
       <VoteItem
         item={item}
@@ -769,11 +822,10 @@ const MainScreen: React.FC = () => {
         onCommentPress={handleCommentPress}
         onStatisticsPress={handleStatisticsPress}
         animatedWidths={animatedWidths}
-        onImageLoad={handleImageLoad}
-        isImageLoaded={isImageLoaded}
+        renderImage={renderImage}
       />
     );
-  }, [currentUsername, handleVote, handleToggleLike, handleToggleBookmark, handleCommentPress, handleStatisticsPress, animatedWidths, handleImageLoad, loadedImages]);
+  }, [currentUsername, handleVote, handleToggleLike, handleToggleBookmark, handleCommentPress, handleStatisticsPress, animatedWidths, renderImage]);
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -804,17 +856,63 @@ const MainScreen: React.FC = () => {
     }, [route.params])
   );
 
+  const renderHeader = useCallback(() => (
+    <View style={styles.header}>
+      <Text style={styles.headerTitle}>VoteY</Text>
+      <TouchableOpacity onPress={() => Alert.alert("알림", "알림 기능 준비 중입니다.")}>
+        <Feather name="bell" size={24} color="#2D3748" />
+      </TouchableOpacity>
+    </View>
+  ), []);
+
+  const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: any[] }) => {
+    const imageUrls = viewableItems
+      .flatMap(item => [
+        ...item.item.images.map((img: any) => img.imageUrl),
+        ...item.item.voteOptions
+          .filter((opt: any) => opt.optionImage)
+          .map((opt: any) => opt.optionImage)
+      ])
+      .filter(Boolean);
+    
+    preloadImages(imageUrls);
+  }, [preloadImages]);
+
+  const flatListProps = useMemo(() => ({
+    onViewableItemsChanged,
+    viewabilityConfig: {
+      itemVisiblePercentThreshold: 50,
+      minimumViewTime: 100,
+    },
+  }), [onViewableItemsChanged]);
+
   return (
     <SafeAreaView style={styles.safeArea}>
+      {refreshing && (
+        <View style={styles.refreshIndicator}>
+          <ActivityIndicator size="small" color="#1499D9" />
+          <Text style={styles.refreshText}>새로고침 중...</Text>
+        </View>
+      )}
       <FlatList
         ref={flatListRef}
-        data={votes}
+        data={isLoading ? [] : votes}
         keyExtractor={(item, index) => item.voteId?.toString() || `skeleton-${index}`}
         renderItem={renderItem}
         contentContainerStyle={styles.container}
         ListHeaderComponent={renderHeader}
         onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.5}
+        onEndReachedThreshold={0.2}
+        windowSize={3}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={3}
+        initialNumToRender={3}
+        updateCellsBatchingPeriod={50}
+        maintainVisibleContentPosition={{
+          minIndexForVisible: 0,
+          autoscrollToTopThreshold: 10,
+        }}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -825,11 +923,15 @@ const MainScreen: React.FC = () => {
           />
         }
         ListEmptyComponent={
-          isInitialLoading ? (
+          isLoading ? (
             <View style={styles.loadingContainer}>
-              {Array(5).fill(null).map((_, index) => (
+              {[1, 2, 3].map((_, index) => (
                 <SkeletonLoader key={index} />
               ))}
+            </View>
+          ) : votes.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>아직 투표가 없습니다.</Text>
             </View>
           ) : null
         }
@@ -837,23 +939,12 @@ const MainScreen: React.FC = () => {
           isLoadingMore ? (
             <View style={styles.footerLoadingContainer}>
               <ActivityIndicator size="small" color="#1499D9" />
-              <Text style={styles.footerLoadingText}>
-                더 많은 투표 불러오는 중...
-              </Text>
-            </View>
-          ) : !hasMore && votes.length > 0 ? (
-            <View style={styles.noMoreContainer}>
-              <Text style={styles.noMoreText}>모든 투표를 불러왔습니다</Text>
+              <Text style={styles.footerLoadingText}>더 많은 투표 불러오는 중...</Text>
             </View>
           ) : null
         }
         showsVerticalScrollIndicator={false}
-        maintainVisibleContentPosition={{
-          minIndexForVisible: 0,
-        }}
-        removeClippedSubviews={true}
-        maxToRenderPerBatch={5}
-        windowSize={5}
+        {...flatListProps}
       />
 
       <CommentModal
@@ -983,7 +1074,7 @@ const styles = StyleSheet.create({
     borderRadius: 0,
     overflow: 'hidden',
   },
-  voteImage: {
+  image: {
     width: '100%',
     aspectRatio: 1,
     backgroundColor: '#eee',
@@ -1200,93 +1291,93 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   skeletonItem: {
-    backgroundColor: '#F7F7F7',
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    marginBottom: 0,
+    borderRadius: 0,
     padding: 0,
-    marginTop: 10,
-    marginBottom: 16,
-    width: '100%',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginHorizontal: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
   skeletonHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
     padding: 12,
-    paddingLeft: 0,
+    gap: 8,
   },
   skeletonAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#CBD5E0',
-    marginRight: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E2E8F0',
   },
   skeletonUserInfo: {
     flex: 1,
-    alignItems: 'flex-start',
   },
   skeletonText: {
     height: 14,
-    backgroundColor: '#CBD5E0',
+    backgroundColor: '#E2E8F0',
     borderRadius: 7,
     marginBottom: 4,
+    width: '80%',
   },
-  skeletonTitle: {
-    height: 20,
-    backgroundColor: '#CBD5E0',
-    borderRadius: 8,
-    marginBottom: 8,
-    width: '100%',
-    marginHorizontal: 0,
-  },
-  skeletonMetaContainer: {
+  skeletonMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
-    paddingHorizontal: 0,
+    gap: 8,
+    paddingHorizontal: 12,
+    marginBottom: 2,
   },
   skeletonCategory: {
-    width: 60,
-    height: 20,
-    backgroundColor: '#CBD5E0',
-    borderRadius: 8,
-    marginRight: 8,
+    width: 80,
+    height: 14,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 7,
   },
   skeletonDate: {
     width: 80,
     height: 14,
-    backgroundColor: '#CBD5E0',
+    backgroundColor: '#E2E8F0',
     borderRadius: 7,
   },
+  skeletonTitle: {
+    height: 24,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
+    marginBottom: 8,
+    width: '90%',
+    marginHorizontal: 12,
+  },
   skeletonContent: {
-    height: 32,
-    backgroundColor: '#CBD5E0',
+    height: 20,
+    backgroundColor: '#E2E8F0',
     borderRadius: 8,
     marginBottom: 8,
+    width: '90%',
+    marginHorizontal: 12,
+  },
+  skeletonImage: {
     width: '100%',
-    paddingHorizontal: 0,
+    aspectRatio: 1,
+    backgroundColor: '#E2E8F0',
+    marginBottom: 8,
   },
   skeletonOptions: {
+    paddingHorizontal: 12,
     gap: 8,
-    paddingHorizontal: 0,
   },
   skeletonOption: {
     height: 44,
-    backgroundColor: '#CBD5E0',
+    backgroundColor: '#E2E8F0',
     borderRadius: 8,
     width: '100%',
-    marginBottom: 4,
   },
   skeletonReactions: {
     height: 28,
-    backgroundColor: '#CBD5E0',
+    backgroundColor: '#E2E8F0',
     borderRadius: 8,
     marginTop: 8,
-    width: '100%',
-    paddingHorizontal: 0,
+    marginHorizontal: 12,
+    width: '90%',
   },
   footerLoadingContainer: {
     paddingVertical: 20,
@@ -1345,6 +1436,63 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     width: '100%',
     zIndex: 2,
+  },
+  skeleton: {
+    backgroundColor: '#E2E8F0',
+  },
+  skeletonReaction: {
+    width: 24,
+    height: 24,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 40,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#718096',
+    fontWeight: '500',
+  },
+  refreshIndicator: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  refreshText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#1499D9',
+    fontWeight: '500',
+  },
+  imageWrapper: {
+    position: 'relative',
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 0,
+    overflow: 'hidden',
+    backgroundColor: '#E2E8F0',
+  },
+  cachedImage: {
+    opacity: 1,
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 })
 

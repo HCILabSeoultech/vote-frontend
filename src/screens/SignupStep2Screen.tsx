@@ -10,16 +10,18 @@ import {
   SafeAreaView,
   ScrollView,
   Modal,
-  FlatList
+  FlatList,
+  ActivityIndicator
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import ImageCropPicker from 'react-native-image-crop-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import InputField from '../components/InputField';
 import Button from '../components/Button';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/AppNavigator';
-import { SERVER_URL } from '../constant/config';
+import { SERVER_URL, IMAGE_BASE_URL } from '../constant/config';
 
 type Props = {
   navigation: StackNavigationProp<RootStackParamList, 'SignupStep2Screen'>;
@@ -58,6 +60,7 @@ const SignupStep2Screen: React.FC<Props> = ({ navigation, route }) => {
   const [address, setAddress] = useState('');
   const [showAddressPicker, setShowAddressPicker] = useState(false);
   const [tempBirthdate, setTempBirthdate] = useState(new Date());
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -82,25 +85,27 @@ const SignupStep2Screen: React.FC<Props> = ({ navigation, route }) => {
 
   const handleImageSelect = async () => {
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'images',
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 1,
+      const image = await ImageCropPicker.openPicker({
+        width: 300,
+        height: 300,
+        cropping: true,
+        cropperCircleOverlay: true,
+        mediaType: 'photo',
+        compressImageQuality: 0.8,
       });
 
-      if (!result.canceled) {
-        const uri = result.assets[0].uri;
+      if (image) {
+        setIsUploading(true);
         if (userDataState.profileImage && userDataState.profileImage !== 'default.jpg') {
           await deleteImageFromS3(userDataState.profileImage);
         }
-        setProfileImagePreview(uri);
+        setProfileImagePreview(image.path);
 
         const formData = new FormData();
         formData.append('file', {
-          uri,
+          uri: image.path,
           name: 'profile.jpg',
-          type: 'image/jpeg',
+          type: image.mime,
         } as any);
 
         const response = await fetch(`${SERVER_URL}/image/upload`, {
@@ -118,8 +123,12 @@ const SignupStep2Screen: React.FC<Props> = ({ navigation, route }) => {
         const imageUrl = await response.text();
         setUserData(prev => ({ ...prev, profileImage: imageUrl }));
       }
-    } catch (e) {
-      Alert.alert('이미지 업로드 실패', '프로필 이미지 업로드 중 오류가 발생했습니다.');
+    } catch (e: any) {
+      if (e.message !== 'User cancelled image selection') {
+        Alert.alert('이미지 업로드 실패', '프로필 이미지 업로드 중 오류가 발생했습니다.');
+      }
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -195,7 +204,23 @@ const SignupStep2Screen: React.FC<Props> = ({ navigation, route }) => {
             <TouchableOpacity onPress={handleImageSelect} style={styles.imageContainer}>
               {profileImagePreview ? (
                 <View>
-                  <Image source={{ uri: userDataState.profileImage }} style={styles.image} />
+                  <Image 
+                    source={{ 
+                      uri: userDataState.profileImage 
+                        ? (userDataState.profileImage.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
+                            ? userDataState.profileImage.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
+                            : userDataState.profileImage.startsWith('http')
+                              ? userDataState.profileImage
+                              : `${IMAGE_BASE_URL}${userDataState.profileImage}`)
+                        : `${IMAGE_BASE_URL}/images/default.png`
+                    }} 
+                    style={styles.image} 
+                  />
+                  {isUploading && (
+                    <View style={styles.loadingOverlay}>
+                      <ActivityIndicator size="large" color="#1499D9" />
+                    </View>
+                  )}
                   <TouchableOpacity
                     style={styles.removeButton}
                     onPress={async () => {
@@ -431,7 +456,7 @@ const styles = StyleSheet.create({
   },
   placeholderText: {
     color: '#A0AEC0',
-    fontSize: 12,
+    fontSize: 10,
     textAlign: 'center',
     paddingHorizontal: 10,
     letterSpacing: 0.5,
@@ -633,6 +658,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     letterSpacing: 0.5,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 50,
   },
 });
 

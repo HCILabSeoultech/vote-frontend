@@ -23,7 +23,7 @@ import { getStoragePosts } from '../api/storage';
 import { toggleLike, toggleBookmark } from '../api/reaction';
 import { getVoteById, selectVoteOption } from '../api/post';
 import { VoteResponse } from '../types/Vote';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { Feather } from '@expo/vector-icons'
@@ -45,20 +45,31 @@ const STORAGE_TYPES = [
 type StorageType = 'voted' | 'liked' | 'bookmarked';
 type NavigationProp = StackNavigationProp<RootStackParamList, 'CommentScreen'>;
 
-// 게이지 애니메이션 컴포넌트 (메인페이지와 동일)
+interface ImageType {
+  imageUrl: string;
+}
+
+interface VoteOptionType {
+  optionImage: string | null;
+}
+
+// 게이지 애니메이션 컴포넌트 최적화
 const VoteOptionGauge = ({ percentage, isSelected }: { percentage: number; isSelected: boolean }) => {
-  const widthAnim = useRef(new RNAnimated.Value(0)).current;
+  const widthAnim = useRef(new RNAnimated.Value(percentage)).current;
+  
   useEffect(() => {
     RNAnimated.timing(widthAnim, {
       toValue: percentage,
-      duration: 600,
+      duration: 300,
       useNativeDriver: false,
     }).start();
   }, [percentage]);
+
   const animatedWidth = widthAnim.interpolate({
     inputRange: [0, 100],
     outputRange: ['0%', '100%'],
   });
+
   return (
     <RNAnimated.View
       style={[
@@ -73,24 +84,27 @@ const VoteOptionGauge = ({ percentage, isSelected }: { percentage: number; isSel
   );
 };
 
-// 스켈레톤 UI 컴포넌트 (실제 피드와 비슷하게)
-const SkeletonLoader = () => {
-  const opacity = useSharedValue(0.5)
+// 스켈레톤 UI 컴포넌트 최적화
+const SkeletonLoader = React.memo(() => {
+  const opacity = useSharedValue(0.5);
+  
   useEffect(() => {
     opacity.value = withRepeat(
       withSequence(
-        withTiming(0.8, { duration: 800 }),
-        withTiming(0.5, { duration: 800 })
+        withTiming(0.8, { duration: 600 }),
+        withTiming(0.5, { duration: 600 })
       ),
       -1,
       true
-    )
-  }, [])
+    );
+  }, []);
+
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
-  }))
+  }));
+
   return (
-    <Animated.View entering={FadeIn.duration(400)}>
+    <Animated.View entering={FadeIn.duration(100)}>
       <Animated.View style={[styles.skeletonItem, animatedStyle]}>
         <View style={styles.skeletonHeader}>
           <View style={styles.skeletonAvatar} />
@@ -113,8 +127,8 @@ const SkeletonLoader = () => {
         <View style={styles.skeletonReactions} />
       </Animated.View>
     </Animated.View>
-  )
-}
+  );
+});
 
 interface ApiError {
   response?: {
@@ -250,6 +264,8 @@ const StorageScreen: React.FC = () => {
   const [page, setPage] = useState(0);
   const [isLast, setIsLast] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isSkeletonLoading, setIsSkeletonLoading] = useState(true);
+  const [isInitialLoad, setIsInitialLoad] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({});
   const navigation = useNavigation<NavigationProp>();
   const [refreshing, setRefreshing] = useState(false);
@@ -265,18 +281,9 @@ const StorageScreen: React.FC = () => {
   const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('region');
   
   // 각 탭의 스크롤 위치를 저장하는 상태 추가
-  const [scrollPositions, setScrollPositions] = useState<{
-    voted: number;
-    liked: number;
-    bookmarked: number;
-  }>({
-    voted: 0,
-    liked: 0,
-    bookmarked: 0
-  });
-
-  // FlatList ref 추가
+  const [scrollPosition, setScrollPosition] = useState(0);
   const flatListRef = useRef<FlatList>(null);
+  const prevVotesLength = useRef(0);
 
   // 각 탭의 데이터를 저장할 상태 추가
   const [cachedData, setCachedData] = useState<{
@@ -317,36 +324,139 @@ const StorageScreen: React.FC = () => {
   const [commentModalVoteId, setCommentModalVoteId] = useState<number | null>(null);
   const [statisticsModalVoteId, setStatisticsModalVoteId] = useState<number | null>(null);
 
-  const [imageSizes, setImageSizes] = useState<Record<number, { width: number; height: number }>>({});
+  // 이미지 캐시 최적화
+  const imageCache = useRef<Record<string, boolean>>({});
+  const loadingImages = useRef<Set<string>>(new Set());
+  const preloadedImages = useRef<Set<string>>(new Set());
+  const loadedImages = useRef<Set<string>>(new Set());
+  const imageBatchSize = 10; // 배치 크기 증가
+  const imageCacheTimeout = useRef<NodeJS.Timeout>();
 
-  const insets = useSafeAreaInsets();
+  // 이미지 URL 처리 최적화
+  const processImageUrl = useCallback((url: string) => {
+    if (!url) return '';
+    if (url.startsWith('http')) return url;
+    return `${IMAGE_BASE_URL}${url}`;
+  }, []);
 
-  const handleTabChange = (value: StorageType) => {
+  // 이미지 프리로딩 최적화
+  const preloadImages = useCallback((imageUrls: string[]) => {
+    const urlsToLoad = imageUrls
+      .filter(url => url && !preloadedImages.current.has(url))
+      .map(processImageUrl)
+      .filter(Boolean);
+
+    if (urlsToLoad.length === 0) return;
+
+    // 이미지 배치 로딩 - 병렬 처리
+    const batches = [];
+    for (let i = 0; i < urlsToLoad.length; i += imageBatchSize) {
+      batches.push(urlsToLoad.slice(i, i + imageBatchSize));
+    }
+
+    // 모든 배치를 병렬로 처리
+    Promise.all(
+      batches.map(batch => 
+        Promise.all(
+          batch.map(url => {
+            if (!preloadedImages.current.has(url)) {
+              return Image.prefetch(url)
+                .then(() => {
+                  preloadedImages.current.add(url);
+                  imageCache.current[url] = true;
+                })
+                .catch(() => {});
+            }
+            return Promise.resolve();
+          })
+        )
+      )
+    ).catch(() => {});
+  }, [processImageUrl]);
+
+  // 이미지 렌더링 최적화
+  const renderImage = useCallback((imageUrl: string, style: any) => {
+    if (!imageUrl) return null;
+
+    const processedUrl = processImageUrl(imageUrl);
+    const isCached = imageCache.current[processedUrl];
+    const isLoading = loadingImages.current.has(processedUrl);
+    const isPreloaded = preloadedImages.current.has(processedUrl);
+    const isLoaded = loadedImages.current.has(processedUrl);
+
+    // 이미지가 캐시되어 있으면 즉시 렌더링
+    if (isCached) {
+      return (
+        <View style={[styles.imageWrapper, style]}>
+          <Image
+            source={{ uri: processedUrl }}
+            style={[styles.image, styles.cachedImage]}
+            resizeMode="cover"
+            fadeDuration={0}
+          />
+        </View>
+      );
+    }
+
+    return (
+      <View style={[styles.imageWrapper, style]}>
+        <Image
+          source={{ uri: processedUrl }}
+          style={[styles.image, isCached && styles.cachedImage]}
+          resizeMode="cover"
+          onLoadStart={() => loadingImages.current.add(processedUrl)}
+          onLoadEnd={() => {
+            loadingImages.current.delete(processedUrl);
+            imageCache.current[processedUrl] = true;
+            loadedImages.current.add(processedUrl);
+          }}
+          onError={() => loadingImages.current.delete(processedUrl)}
+          progressiveRenderingEnabled={true}
+          fadeDuration={0}
+        />
+        {isLoading && !isPreloaded && !isLoaded && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="small" color="#1499D9" />
+          </View>
+        )}
+      </View>
+    );
+  }, [processImageUrl]);
+
+  const handleTabChange = useCallback((value: StorageType) => {
     setStorageType(value);
     // 캐시된 데이터로 상태 업데이트
     setVotes(cachedData[value]);
     setPage(cachedPages[value]);
     setIsLast(cachedIsLast[value]);
     
+    // 이미지 프리로딩 실행
+    const imageUrls = cachedData[value]
+      .flatMap(item => [
+        ...item.images.map((img: ImageType) => img.imageUrl),
+        ...item.voteOptions
+          .filter((opt: VoteOptionType) => opt.optionImage !== null)
+          .map((opt: VoteOptionType) => opt.optionImage as string)
+      ])
+      .filter(Boolean);
+    
+    preloadImages(imageUrls);
+    
     // 새로운 탭의 저장된 스크롤 위치로 이동
     setTimeout(() => {
       flatListRef.current?.scrollToOffset({
-        offset: scrollPositions[value],
+        offset: scrollPosition,
         animated: false
       });
     }, 0);
-  };
+  }, [cachedData, cachedPages, cachedIsLast, scrollPosition, preloadImages]);
 
   // 스크롤 이벤트 핸들러
-  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const currentOffset = event.nativeEvent.contentOffset.y;
-    setScrollPositions(prev => ({
-      ...prev,
-      [storageType]: currentOffset
-    }));
-  }, [storageType]);
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    setScrollPosition(event.nativeEvent.contentOffset.y);
+  };
 
-  // 화면이 처음 마운트될 때만 모든 데이터를 가져옴
+  // 초기 데이터 로드
   useFocusEffect(
     React.useCallback(() => {
       const loadAllData = async () => {
@@ -355,6 +465,7 @@ const StorageScreen: React.FC = () => {
         }
 
         setLoading(true);
+        setIsSkeletonLoading(true);
         
         try {
           const [votedRes, likedRes, bookmarkedRes] = await Promise.all([
@@ -396,7 +507,28 @@ const StorageScreen: React.FC = () => {
             bookmarked: bookmarkedRes?.totalElements || 0
           });
 
+          // 모든 탭의 이미지 프리로딩 - 병렬 처리
+          const allImageUrls = [
+            ...votedRes?.content || [],
+            ...likedRes?.content || [],
+            ...bookmarkedRes?.content || []
+          ].flatMap(item => [
+            ...item.images.map((img: ImageType) => img.imageUrl),
+            ...item.voteOptions
+              .filter((opt: VoteOptionType) => opt.optionImage !== null)
+              .map((opt: VoteOptionType) => opt.optionImage as string)
+          ]).filter(Boolean);
+
+          // 이미지 프리로딩 시작
+          preloadImages(allImageUrls);
+
           setHasInitialLoad(true);
+          setIsInitialLoad(true);
+          
+          // 스켈레톤 로딩 완료 후 약간의 지연을 두고 게이지 애니메이션 시작
+          setTimeout(() => {
+            setIsSkeletonLoading(false);
+          }, 300);
         } catch (err) {
           console.error('[초기 데이터 로드 에러]', err);
         } finally {
@@ -407,7 +539,9 @@ const StorageScreen: React.FC = () => {
       loadAllData();
       
       return () => {
-        // cleanup
+        if (imageCacheTimeout.current) {
+          clearTimeout(imageCacheTimeout.current);
+        }
       };
     }, [hasInitialLoad])
   );
@@ -423,9 +557,14 @@ const StorageScreen: React.FC = () => {
     try {
       const res = await getStoragePosts(storageType, nextPage);
       if (res && res.content) {
-        const newVotes = nextPage === 0 ? res.content : [...cachedData[storageType], ...res.content];
+        prevVotesLength.current = votes.length;
+        
+        // 기존 데이터와 새 데이터를 합치되, 중복 제거
+        const newVotes = nextPage === 0 ? res.content : [...votes, ...res.content];
         const uniqueNewVotes = uniqueVotes(newVotes);
         const pageNumber = typeof res.page === 'number' ? res.page : 0;
+        
+        // 캐시 업데이트
         setCachedData(prev => {
           const updated = { ...prev, [storageType]: uniqueNewVotes };
           return updated;
@@ -438,6 +577,8 @@ const StorageScreen: React.FC = () => {
           const updated = { ...prev, [storageType]: res.last };
           return updated;
         });
+        
+        // 현재 상태 업데이트
         setVotes(uniqueNewVotes);
         setPage(pageNumber + 1);
         setIsLast(res.last);
@@ -465,7 +606,8 @@ const StorageScreen: React.FC = () => {
     }
   };
 
-  const onRefresh = async () => {
+  // 새로고침 시에도 이미지 캐시 유지
+  const onRefresh = useCallback(async () => {
     if (refreshing) {
       return;
     }
@@ -475,6 +617,8 @@ const StorageScreen: React.FC = () => {
       if (res && res.content) {
         const uniqueContent = uniqueVotes(res.content);
         const pageNumber = typeof res.page === 'number' ? res.page : 0;
+        
+        // 캐시 업데이트
         setCachedData(prev => {
           const updated = { ...prev, [storageType]: uniqueContent };
           return updated;
@@ -487,9 +631,23 @@ const StorageScreen: React.FC = () => {
           const updated = { ...prev, [storageType]: res.last };
           return updated;
         });
+        
         setVotes(uniqueContent);
         setPage(pageNumber + 1);
         setIsLast(res.last);
+        
+        // 새로 로드된 이미지 프리로딩
+        const newImageUrls = uniqueContent
+          .flatMap(item => [
+            ...item.images.map((img: ImageType) => img.imageUrl),
+            ...item.voteOptions
+              .filter((opt: VoteOptionType) => opt.optionImage !== null)
+              .map((opt: VoteOptionType) => opt.optionImage as string)
+          ])
+          .filter(Boolean);
+        
+        preloadImages(newImageUrls);
+        
         await fetchAllCounts();
       }
     } catch (err) {
@@ -497,7 +655,7 @@ const StorageScreen: React.FC = () => {
     } finally {
       setRefreshing(false);
     }
-  };
+  }, [refreshing, storageType, fetchAllCounts, preloadImages]);
 
   // 유틸리티 함수 메모이제이션
   const isVoteClosed = useCallback((finishTime: string) => {
@@ -613,6 +771,50 @@ const StorageScreen: React.FC = () => {
     return item.voteId ? `vote-${item.voteId}` : `vote-skeleton-${index}`;
   }, []);
 
+  const optionWidthRef = useRef<Record<number, number>>({});
+  const gaugeWidthAnims = useRef<Record<number, RNAnimated.Value>>({});
+  const imageWidth = 100;
+
+  // 스켈레톤 로딩 완료 후 게이지 애니메이션 시작
+  useEffect(() => {
+    if (isInitialLoad && !isSkeletonLoading) {
+      const newGaugeAnims: Record<number, RNAnimated.Value> = {};
+      const newOptionWidths: Record<number, number> = {};
+
+      votes.forEach(item => {
+        const totalCount = item.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0);
+        item.voteOptions.forEach((opt, index) => {
+          if (opt.optionImage) {
+            if (!gaugeWidthAnims.current[opt.id]) {
+              const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
+              const optionWidth = optionWidthRef.current[opt.id] || 0;
+              if (optionWidth > 0) {
+                const targetWidth = (optionWidth - imageWidth) * (percentage / 100);
+                newGaugeAnims[opt.id] = new RNAnimated.Value(targetWidth);
+                newOptionWidths[opt.id] = optionWidth;
+                
+                setTimeout(() => {
+                  RNAnimated.timing(newGaugeAnims[opt.id], {
+                    toValue: targetWidth,
+                    duration: 300,
+                    useNativeDriver: false,
+                  }).start();
+                }, 100 + (index * 50));
+              }
+            }
+          }
+        });
+      });
+
+      Object.entries(newGaugeAnims).forEach(([id, value]) => {
+        gaugeWidthAnims.current[Number(id)] = value;
+      });
+      Object.entries(newOptionWidths).forEach(([id, width]) => {
+        optionWidthRef.current[Number(id)] = width;
+      });
+    }
+  }, [isInitialLoad, isSkeletonLoading, votes]);
+
   const VoteOptionItem = useMemo(() => React.memo(({ 
     option, 
     isSelected, 
@@ -629,20 +831,34 @@ const StorageScreen: React.FC = () => {
     closed: boolean 
   }) => {
     const [optionWidth, setOptionWidth] = useState(0);
-    const imageWidth = 100;
-    const gaugeWidth = optionWidth > 0 ? (optionWidth - imageWidth) * (percentage / 100) : 0;
 
-    // 게이지 애니메이션 (이미지 옵션)
-    const gaugeAnim = useRef(new RNAnimated.Value(0)).current;
     useEffect(() => {
-      if (showGauge && option.optionImage) {
-        RNAnimated.timing(gaugeAnim, {
-          toValue: gaugeWidth,
-          duration: 600,
+      if (optionWidth > 0) {
+        optionWidthRef.current[option.id] = optionWidth;
+        // 옵션 너비가 측정되면 즉시 게이지 너비 설정
+        const totalCount = option.voteCount + option.voteOptions?.reduce((sum: number, opt: any) => sum + opt.voteCount, 0) || 0;
+        const percentage = totalCount > 0 ? Math.round((option.voteCount / totalCount) * 100) : 0;
+        const targetWidth = (optionWidth - imageWidth) * (percentage / 100);
+        if (!gaugeWidthAnims.current[option.id]) {
+          gaugeWidthAnims.current[option.id] = new RNAnimated.Value(targetWidth);
+        }
+      }
+    }, [optionWidth, option.id, option.voteCount]);
+
+    const handleVote = useCallback(() => {
+      onPress();
+      // 투표 시 애니메이션 효과
+      if (optionWidth > 0) {
+        const totalCount = option.voteCount + option.voteOptions?.reduce((sum: number, opt: any) => sum + opt.voteCount, 0) || 0;
+        const newPercentage = totalCount > 0 ? Math.round((option.voteCount / totalCount) * 100) : 0;
+        const targetWidth = (optionWidth - imageWidth) * (newPercentage / 100);
+        RNAnimated.timing(gaugeWidthAnims.current[option.id], {
+          toValue: targetWidth,
+          duration: 300,
           useNativeDriver: false,
         }).start();
       }
-    }, [gaugeWidth, showGauge, option.optionImage]);
+    }, [onPress, optionWidth, option.id, option.voteCount]);
 
     return (
       <View style={[styles.optionWrapper, option.optionImage && styles.imageOptionWrapper]}>
@@ -652,19 +868,19 @@ const StorageScreen: React.FC = () => {
             option.optionImage && isSelected && styles.optionButtonWithImage,
             isSelected && styles.selectedOptionButton,
           ]}
-          onPress={onPress}
+          onPress={handleVote}
           disabled={closed || isSelected}
           activeOpacity={0.7}
           onLayout={option.optionImage ? (e) => setOptionWidth(e.nativeEvent.layout.width) : undefined}
         >
           {/* 이미지 옵션: 게이지 바 */}
-          {option.optionImage && showGauge && (
+          {option.optionImage && showGauge && gaugeWidthAnims.current[option.id] && (
             <RNAnimated.View
               style={[
                 styles.gaugeBar,
                 {
                   left: imageWidth,
-                  width: gaugeAnim,
+                  width: gaugeWidthAnims.current[option.id],
                   backgroundColor: isSelected ? '#4299E1' : '#E2E8F0',
                   opacity: 0.3,
                   position: 'absolute',
@@ -818,34 +1034,11 @@ const StorageScreen: React.FC = () => {
 
         {item.images.length > 0 && (
           <View style={styles.imageContainer}>
-            {item.images.map((img) => {
-              const onLoad = (e: any) => {
-                const { width: imgW, height: imgH } = e.nativeEvent.source;
-                setImageSizes(prev => ({
-                  ...prev,
-                  [img.id]: { width: imgW, height: imgH }
-                }));
-              };
-              // 기본 비율(16:9)로 먼저 보여주고, 실제 크기 알면 교체
-              const aspectRatio = imageSizes[img.id]
-                ? imageSizes[img.id].width / imageSizes[img.id].height
-                : 16 / 9;
-              return (
-                <Image
-                  key={img.id}
-                  source={{
-                    uri: img.imageUrl.includes('votey-image.s3.ap-northeast-2.amazonaws.com') 
-                      ? img.imageUrl.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
-                      : img.imageUrl.startsWith('http') 
-                        ? img.imageUrl 
-                        : `${IMAGE_BASE_URL}${img.imageUrl}`
-                  }}
-                  style={[styles.image, { aspectRatio }]}
-                  resizeMode="cover"
-                  onLoad={onLoad}
-                />
-              );
-            })}
+            {item.images.map((img) => (
+              <View key={img.id} style={styles.imageWrapper}>
+                {renderImage(img.imageUrl, styles.imageContent)}
+              </View>
+            ))}
           </View>
         )}
 
@@ -857,7 +1050,7 @@ const StorageScreen: React.FC = () => {
               
               return (
                 <VoteOptionItem
-                  key={opt.id}
+                  key={`vote-option-${item.voteId}-${opt.id}`}
                   option={opt}
                   isSelected={isSelected}
                   showGauge={showGauge}
@@ -888,7 +1081,7 @@ const StorageScreen: React.FC = () => {
     handleCommentPress,
     handleStatisticsPress,
     navigation,
-    imageSizes
+    renderImage
   ]);
 
   const renderTabs = useCallback(() => (
@@ -948,52 +1141,82 @@ const StorageScreen: React.FC = () => {
     </View>
   ), [activeStatTab]);
 
+  const insets = useSafeAreaInsets();
+
+  // FlatList 최적화
+  const flatListProps = useMemo(() => ({
+    ref: flatListRef,
+    data: votes,
+    keyExtractor: (item: VoteResponse) => `vote-${item.voteId}`,
+    renderItem: renderItem,
+    onScroll: handleScroll,
+    scrollEventThrottle: 16,
+    onEndReached: () => {
+      if (!loading && !isLast) {
+        loadPosts(page);
+      }
+    },
+    onEndReachedThreshold: 0.2,
+    refreshControl: (
+      <RefreshControl
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        colors={["#1499D9"]}
+        tintColor="#1499D9"
+        progressViewOffset={10}
+      />
+    ),
+    removeClippedSubviews: true,
+    maxToRenderPerBatch: 5,
+    windowSize: 5,
+    updateCellsBatchingPeriod: 50,
+    initialNumToRender: 10,
+    maintainVisibleContentPosition: {
+      minIndexForVisible: 0,
+      autoscrollToTopThreshold: null,
+    },
+    ListFooterComponent: loading && votes.length > 0 ? (
+      <View style={styles.footerLoading}>
+        <ActivityIndicator size="small" color="#1499D9" />
+        <Text style={styles.loadingText}>불러오는 중...</Text>
+      </View>
+    ) : null,
+    ListEmptyComponent: () => (
+      isSkeletonLoading ? (
+        <View style={styles.skeletonContainer}>
+          {Array(3).fill(0).map((_, index) => (
+            <SkeletonLoader key={`skeleton-${index}`} />
+          ))}
+        </View>
+      ) : <EmptyState storageType={storageType} loading={loading} />
+    ),
+    contentContainerStyle: [
+      styles.container,
+      votes.length === 0 && !loading && styles.emptyListContainer,
+    ],
+    showsVerticalScrollIndicator: false,
+    onViewableItemsChanged: ({ viewableItems }: { viewableItems: any[] }) => {
+      const imageUrls = viewableItems
+        .flatMap(item => [
+          ...item.item.images.map((img: ImageType) => img.imageUrl),
+          ...item.item.voteOptions
+            .filter((opt: VoteOptionType) => opt.optionImage !== null)
+            .map((opt: VoteOptionType) => opt.optionImage as string)
+        ])
+        .filter(Boolean);
+      
+      preloadImages(imageUrls);
+    },
+    viewabilityConfig: {
+      itemVisiblePercentThreshold: 50,
+      minimumViewTime: 100,
+    },
+  }), [loading, votes, refreshing, page, isLast, storageType, scrollPosition, renderItem]);
+
   return (
     <View style={[styles.safeArea, { paddingTop: insets.top }]}>
       {renderTabs()}
-      <FlatList
-        ref={flatListRef}
-        data={loading ? [] : votes}
-        keyExtractor={keyExtractor}
-        renderItem={renderItem}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-        onEndReached={() => {
-          if (!loading && !isLast) {
-            loadPosts(page);
-          }
-        }}
-        onEndReachedThreshold={0.5}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={["#1499D9"]}
-            tintColor="#1499D9"
-          />
-        }
-        removeClippedSubviews={true}
-        maxToRenderPerBatch={10}
-        windowSize={5}
-        updateCellsBatchingPeriod={100}
-        initialNumToRender={10}
-        ListFooterComponent={
-          loading && votes.length > 0 ? (
-            <View style={styles.footerLoading}>
-              <ActivityIndicator size="small" color="#1499D9" />
-              <Text style={styles.loadingText}>불러오는 중...</Text>
-            </View>
-          ) : null
-        }
-        ListEmptyComponent={() => (
-          loading ? <SkeletonLoader /> : <EmptyState storageType={storageType} loading={loading} />
-        )}
-        contentContainerStyle={[
-          styles.container,
-          votes.length === 0 && !loading && styles.emptyListContainer,
-        ]}
-        showsVerticalScrollIndicator={false}
-      />
+      <FlatList {...flatListProps} />
 
       {commentModalVoteId && (
         <Modal
@@ -1079,13 +1302,11 @@ const StorageScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: { 
     flex: 1, 
-    backgroundColor: '#fff' 
+    backgroundColor: '#FFFFFF' 
   },
   container: { 
-    padding: 0,
-    paddingBottom: 0,
     flexGrow: 1,
-    backgroundColor: '#fff',
+    paddingBottom: 20,
   },
   tabContainer: {
     backgroundColor: '#FFFFFF',
@@ -1142,13 +1363,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    marginTop: 12,
-    color: '#1499D9',
+    marginLeft: 8,
     fontSize: 14,
+    color: '#718096',
+    fontWeight: '500',
   },
   footerLoading: {
-    padding: 16,
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 20,
+    backgroundColor: 'transparent',
   },
   emptyContainer: {
     flex: 1,
@@ -1334,7 +1559,7 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     height: '100%',
-    borderRadius: 0,
+    borderRadius: 8,
     zIndex: 1,
   },
   responseCountText: {
@@ -1377,9 +1602,11 @@ const styles = StyleSheet.create({
   activeReactionText: {
     color: '#FF4B6E',
   },
-  emptyListContainer: { 
-    flex: 1, 
-    backgroundColor: '#F7FAFC' 
+  emptyListContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 300,
   },
   createdAtText: {
     fontSize: 12,
@@ -1452,26 +1679,38 @@ const styles = StyleSheet.create({
   statisticsContent: {
     flex: 1,
   },
-  // 스켈레톤 UI 스타일
+  skeletonContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
   skeletonItem: {
     backgroundColor: '#FFFFFF',
-    marginBottom: 0,
-    borderRadius: 0,
-    padding: 0,
+    marginBottom: 12,
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 4,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   skeletonHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    gap: 8,
+    marginBottom: 12,
   },
   skeletonAvatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
     backgroundColor: '#E2E8F0',
+    marginRight: 12,
   },
   skeletonUserInfo: {
     flex: 1,
@@ -1486,21 +1725,20 @@ const styles = StyleSheet.create({
   skeletonMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    marginBottom: 2,
+    marginBottom: 8,
   },
   skeletonCategory: {
     width: 80,
-    height: 14,
+    height: 20,
     backgroundColor: '#E2E8F0',
-    borderRadius: 7,
+    borderRadius: 10,
+    marginRight: 8,
   },
   skeletonDate: {
-    width: 80,
-    height: 14,
+    width: 100,
+    height: 20,
     backgroundColor: '#E2E8F0',
-    borderRadius: 7,
+    borderRadius: 10,
   },
   skeletonTitle: {
     height: 24,
@@ -1508,39 +1746,34 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 8,
     width: '90%',
-    marginHorizontal: 12,
   },
   skeletonContent: {
     height: 20,
     backgroundColor: '#E2E8F0',
-    borderRadius: 8,
-    marginBottom: 8,
+    borderRadius: 10,
+    marginBottom: 12,
     width: '90%',
-    marginHorizontal: 12,
   },
   skeletonImage: {
     width: '100%',
     aspectRatio: 1,
     backgroundColor: '#E2E8F0',
-    marginBottom: 8,
+    borderRadius: 12,
+    marginBottom: 12,
   },
   skeletonOptions: {
-    paddingHorizontal: 12,
-    gap: 8,
+    marginBottom: 12,
   },
   skeletonOption: {
     height: 44,
     backgroundColor: '#E2E8F0',
     borderRadius: 8,
-    width: '100%',
+    marginBottom: 8,
   },
   skeletonReactions: {
     height: 28,
     backgroundColor: '#E2E8F0',
     borderRadius: 8,
-    marginTop: 8,
-    marginHorizontal: 12,
-    width: '90%',
   },
   optionTextContainer: {
     width: '100%',
@@ -1563,6 +1796,45 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     backgroundColor: '#E6F0FF',
     borderRadius: 8,
+  },
+  imageWrapper: {
+    width: '100%',
+    aspectRatio: 1,
+    backgroundColor: '#eee',
+    borderRadius: 0,
+  },
+  cachedImage: {
+    opacity: 1,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+  },
+  imageContent: {
+    width: '100%',
+    aspectRatio: 1,
+    backgroundColor: '#eee',
+    borderRadius: 8,
+  },
+  itemShadow: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginVertical: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
 });
 

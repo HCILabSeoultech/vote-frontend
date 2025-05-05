@@ -113,7 +113,7 @@ const VoteOptionGauge = ({ percentage, isSelected }: { percentage: number; isSel
   useEffect(() => {
     RNAnimated.timing(widthAnim, {
       toValue: percentage,
-      duration: 600,
+      duration: 300,
       useNativeDriver: false,
     }).start();
   }, [percentage]);
@@ -178,7 +178,7 @@ const MyPageScreen: React.FC = () => {
             const targetWidth = (optionWidth - imageWidth) * (percentage / 100);
             RNAnimated.timing(gaugeWidthAnims.current[opt.id], {
               toValue: targetWidth,
-              duration: 600,
+              duration: 300,
               useNativeDriver: false,
             }).start();
           }

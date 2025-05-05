@@ -81,7 +81,7 @@ const VoteOptionGauge = ({ percentage, isSelected, width, imageWidth = 0 }: { pe
     const targetWidth = width > 0 ? (width - imageWidth) * (percentage / 100) : 0;
     RNAnimated.timing(widthAnim, {
       toValue: targetWidth,
-      duration: 900,
+      duration: 300,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
     }).start();
@@ -410,23 +410,20 @@ const UserPageScreen: React.FC = () => {
 
         {item.images.length > 0 && (
           <View style={styles.imageContainer}>
-            {!loadedImages.has(item.voteId) && (
-              <View style={[styles.image, { backgroundColor: '#E2E8F0' }]} />
-            )}
-            {loadedImages.has(item.voteId) && (
+            {item.images.map((img) => (
               <Image
+                key={img.id}
                 source={{ 
-                  uri: item.images[0].imageUrl.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
-                    ? item.images[0].imageUrl.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
-                    : item.images[0].imageUrl.startsWith('http')
-                      ? item.images[0].imageUrl
-                      : `${IMAGE_BASE_URL}${item.images[0].imageUrl}`
+                  uri: img.imageUrl.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
+                    ? img.imageUrl.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
+                    : img.imageUrl.startsWith('http')
+                      ? img.imageUrl
+                      : `${IMAGE_BASE_URL}${img.imageUrl}`
                 }}
                 style={styles.image}
                 resizeMode="cover"
-                onLoad={() => handleImageLoad(item.voteId)}
               />
-            )}
+            ))}
           </View>
         )}
 

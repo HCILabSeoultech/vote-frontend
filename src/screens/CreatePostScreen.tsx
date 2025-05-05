@@ -40,9 +40,7 @@ const formatToLocalDateTimeString = (date: Date) => {
   const day = String(date.getDate()).padStart(2, '0');
   const hour = String(date.getHours()).padStart(2, '0');
   const minute = String(date.getMinutes()).padStart(2, '0');
-  const second = String(date.getSeconds()).padStart(2, '0');
-  const millisecond = String(date.getMilliseconds()).padStart(3, '0');
-  return `${year}-${month}-${day}T${hour}:${minute}:${second}.${millisecond}`;
+  return `${year}-${month}-${day}T${hour}:${minute}:00.000`;
 };
 
 const deleteImageFromS3 = async (imageUrl: string) => {
@@ -64,7 +62,14 @@ const CreatePostScreen: React.FC = () => {
   const [content, setContent] = useState('');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [categoryId, setCategoryId] = useState<number | null>(null);
-  const [finishTime, setFinishTime] = useState(new Date());
+  const [finishTime, setFinishTime] = useState(() => {
+    const now = new Date();
+    // 현재 시간에서 24시간 후를 기본값으로 설정
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    // 시간을 0시 0분 0초로 설정
+    tomorrow.setHours(0, 0, 0, 0);
+    return tomorrow;
+  });
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [options, setOptions] = useState<{ text: string; image: string | null }[]>([
     { text: '', image: null },
@@ -88,7 +93,7 @@ const CreatePostScreen: React.FC = () => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: 'images',
       allowsEditing: true,
       quality: 1,
     });
@@ -141,7 +146,7 @@ const CreatePostScreen: React.FC = () => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: 'images',
       allowsEditing: true,
       quality: 1,
     });
@@ -601,9 +606,20 @@ const CreatePostScreen: React.FC = () => {
           value={finishTime}
           mode="datetime"
           display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          minimumDate={new Date()}
           onChange={(_, date) => {
             setShowDatePicker(false);
-            if (date) setFinishTime(date);
+            if (date) {
+              // 선택된 날짜가 현재보다 이전이면 기본 마감일(내일 0시)로 설정
+              const now = new Date();
+              if (date < now) {
+                const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+                tomorrow.setHours(0, 0, 0, 0);
+                setFinishTime(tomorrow);
+              } else {
+                setFinishTime(date);
+              }
+            }
           }}
         />
       )}
