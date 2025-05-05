@@ -48,6 +48,10 @@ const SkeletonLoader = () => {
 
   return (
     <ScrollView style={styles.container}>
+      <Animated.View style={[styles.headerContainer, animatedStyle]}>
+        <View style={styles.skeletonTitle} />
+        <View style={styles.skeletonSubtitle} />
+      </Animated.View>
       
       <Animated.View style={[styles.chartContainer, animatedStyle]}>
         <View style={styles.skeletonChart} />
@@ -216,7 +220,7 @@ const GenderStatistics = ({ voteId }: Props) => {
         {datasets.map(({ gender, total, details }, index) => (
           <Animated.View
             key={gender}
-            entering={SlideInRight.delay(index * 100).springify()}
+            entering={FadeIn.delay(300 + (index * 100)).duration(600)}
             style={[
               styles.genderSection,
               selectedGender === gender && styles.selectedGenderSection
@@ -248,7 +252,7 @@ const GenderStatistics = ({ voteId }: Props) => {
       </View>
 
       <Animated.View
-        entering={FadeIn.delay(600).duration(800)}
+        entering={FadeIn.delay(800).duration(600)}
         style={styles.aiAnalysis}
       >
         <Text style={styles.aiAnalysisTitle}>AI 분석 결과</Text>
@@ -403,12 +407,18 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: '#333',
   },
-  skeletonChartTitle: {
-    height: 20,
+  skeletonTitle: {
+    height: 24,
+    width: '60%',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  skeletonSubtitle: {
+    height: 18,
     width: '40%',
     backgroundColor: '#E2E8F0',
     borderRadius: 4,
-    marginBottom: 16,
   },
   skeletonChart: {
     height: 220,

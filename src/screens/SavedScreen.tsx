@@ -14,6 +14,8 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import Animated, { SlideInDown, FadeIn, useAnimatedStyle, withRepeat, withTiming, withSequence, useSharedValue } from 'react-native-reanimated';
 import { Animated as RNAnimated } from 'react-native';
@@ -74,12 +76,12 @@ const VoteOptionGauge = ({ percentage, isSelected }: { percentage: number; isSel
 
 // 스켈레톤 UI 컴포넌트 (실제 피드와 비슷하게)
 const SkeletonLoader = () => {
-  const opacity = useSharedValue(0.3)
+  const opacity = useSharedValue(0.5)
   useEffect(() => {
     opacity.value = withRepeat(
       withSequence(
-        withTiming(0.5, { duration: 800 }),
-        withTiming(0.3, { duration: 800 })
+        withTiming(0.8, { duration: 800 }),
+        withTiming(0.5, { duration: 800 })
       ),
       -1,
       true
@@ -89,26 +91,28 @@ const SkeletonLoader = () => {
     opacity: opacity.value,
   }))
   return (
-    <Animated.View style={[styles.skeletonItem, animatedStyle]} entering={FadeIn.duration(400)}>
-      <View style={styles.skeletonHeader}>
-        <View style={styles.skeletonAvatar} />
-        <View style={styles.skeletonUserInfo}>
-          <View style={styles.skeletonText} />
-          <View style={[styles.skeletonText, { width: '60%' }]} />
+    <Animated.View entering={FadeIn.duration(400)}>
+      <Animated.View style={[styles.skeletonItem, animatedStyle]}>
+        <View style={styles.skeletonHeader}>
+          <View style={styles.skeletonAvatar} />
+          <View style={styles.skeletonUserInfo}>
+            <View style={styles.skeletonText} />
+            <View style={[styles.skeletonText, { width: '60%' }]} />
+          </View>
         </View>
-      </View>
-      <View style={styles.skeletonMetaRow}>
-        <View style={styles.skeletonCategory} />
-        <View style={styles.skeletonDate} />
-      </View>
-      <View style={styles.skeletonTitle} />
-      <View style={styles.skeletonContent} />
-      <View style={styles.skeletonImage} />
-      <View style={styles.skeletonOptions}>
-        <View style={styles.skeletonOption} />
-        <View style={styles.skeletonOption} />
-      </View>
-      <View style={styles.skeletonReactions} />
+        <View style={styles.skeletonMetaRow}>
+          <View style={styles.skeletonCategory} />
+          <View style={styles.skeletonDate} />
+        </View>
+        <View style={styles.skeletonTitle} />
+        <View style={styles.skeletonContent} />
+        <View style={styles.skeletonImage} />
+        <View style={styles.skeletonOptions}>
+          <View style={styles.skeletonOption} />
+          <View style={styles.skeletonOption} />
+        </View>
+        <View style={styles.skeletonReactions} />
+      </Animated.View>
     </Animated.View>
   )
 }
@@ -261,6 +265,20 @@ const StorageScreen: React.FC = () => {
   const [selectedVoteForStats, setSelectedVoteForStats] = useState<number | null>(null);
   const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('region');
   
+  // 각 탭의 스크롤 위치를 저장하는 상태 추가
+  const [scrollPositions, setScrollPositions] = useState<{
+    voted: number;
+    liked: number;
+    bookmarked: number;
+  }>({
+    voted: 0,
+    liked: 0,
+    bookmarked: 0
+  });
+
+  // FlatList ref 추가
+  const flatListRef = useRef<FlatList>(null);
+
   // 각 탭의 데이터를 저장할 상태 추가
   const [cachedData, setCachedData] = useState<{
     voted: VoteResponse[];
@@ -310,7 +328,24 @@ const StorageScreen: React.FC = () => {
     setVotes(cachedData[value]);
     setPage(cachedPages[value]);
     setIsLast(cachedIsLast[value]);
+    
+    // 새로운 탭의 저장된 스크롤 위치로 이동
+    setTimeout(() => {
+      flatListRef.current?.scrollToOffset({
+        offset: scrollPositions[value],
+        animated: false
+      });
+    }, 0);
   };
+
+  // 스크롤 이벤트 핸들러
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const currentOffset = event.nativeEvent.contentOffset.y;
+    setScrollPositions(prev => ({
+      ...prev,
+      [storageType]: currentOffset
+    }));
+  }, [storageType]);
 
   // 화면이 처음 마운트될 때만 모든 데이터를 가져옴
   useFocusEffect(
@@ -532,6 +567,7 @@ const StorageScreen: React.FC = () => {
     }
     
     setStatisticsModalVoteId(voteId);
+    setSelectedVoteForStats(voteId);
   }, [votes]);
 
   const handleVote = useCallback(async (voteId: number, optionId: number) => {
@@ -734,10 +770,7 @@ const StorageScreen: React.FC = () => {
     const hasImageOptions = item.voteOptions.some(opt => opt.optionImage);
 
     return (
-      <Animated.View
-        entering={FadeIn.duration(400).delay(index * 50)}
-        style={styles.voteItem}
-      >
+      <View style={styles.voteItem}>
         <View style={styles.userInfoRow}>
           <View style={styles.userInfoLeft}>
             <Image
@@ -831,7 +864,7 @@ const StorageScreen: React.FC = () => {
 
         <View style={styles.divider} />
         {renderReactions(item)}
-      </Animated.View>
+      </View>
     );
   }, [
     isVoteClosed,
@@ -908,9 +941,12 @@ const StorageScreen: React.FC = () => {
     <View style={[styles.safeArea, { paddingTop: insets.top }]}>
       {renderTabs()}
       <FlatList
+        ref={flatListRef}
         data={loading ? [] : votes}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
         onEndReached={() => {
           if (!loading && !isLast) {
             loadPosts(page);
@@ -970,6 +1006,8 @@ const StorageScreen: React.FC = () => {
             <View style={styles.modalContainer}>
               <CommentScreen
                 route={{
+                  key: 'comment-modal',
+                  name: 'CommentScreen',
                   params: {
                     voteId: commentModalVoteId
                   }
@@ -1350,7 +1388,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
   modalContainer: {
-    height: '75%',
+    height: '85%',
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,

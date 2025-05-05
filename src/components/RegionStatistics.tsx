@@ -59,6 +59,10 @@ const SkeletonLoader = () => {
 
   return (
     <ScrollView style={styles.container}>
+      <Animated.View style={[styles.headerContainer, animatedStyle]}>
+        <View style={styles.skeletonTitle} />
+        <View style={styles.skeletonSubtitle} />
+      </Animated.View>
       
       <Animated.View style={[styles.chartContainer, animatedStyle]}>
         <View style={styles.skeletonChart} />
@@ -230,7 +234,7 @@ const RegionStatistics = ({ voteId }: Props) => {
         {datasets.map(({ region, total, details }, index) => (
           <Animated.View
             key={region}
-            entering={SlideInRight.delay(index * 100).springify()}
+            entering={FadeIn.delay(300 + (index * 100)).duration(600)}
             style={[
               styles.regionSection,
               selectedRegion === region && styles.selectedRegionSection
@@ -260,7 +264,7 @@ const RegionStatistics = ({ voteId }: Props) => {
       </View>
 
       <Animated.View
-        entering={FadeIn.delay(600).duration(800)}
+        entering={FadeIn.delay(800).duration(600)}
         style={styles.aiAnalysis}
       >
         <Text style={styles.aiAnalysisTitle}>AI 분석 결과</Text>
@@ -491,6 +495,19 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 10,
     alignItems: 'center',
+  },
+  skeletonTitle: {
+    height: 24,
+    width: '60%',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  skeletonSubtitle: {
+    height: 18,
+    width: '40%',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
   },
 });
 

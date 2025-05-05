@@ -21,7 +21,7 @@ export type RootStackParamList = {
   SignupStep1Screen: undefined;
   SignupStep2Screen: { userData: Partial<UserData> };
   SignupStep3Screen: { userData: Partial<UserData> };
-  Main: undefined;
+  Main: { refresh?: boolean };
   ReuploadVoteScreen: { voteId: number };
   SingleVoteScreen: { voteId: number };
   UserPageScreen: { userId: number };

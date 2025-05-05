@@ -21,7 +21,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage"
 import { selectVoteOption } from "../api/post"
 import { toggleLike, toggleBookmark } from "../api/reaction"
 import type { VoteResponse } from "../types/Vote"
-import { useIsFocused, useNavigation } from "@react-navigation/native"
+import { useIsFocused, useNavigation, useFocusEffect, useRoute, RouteProp } from "@react-navigation/native"
 import type { StackNavigationProp } from "@react-navigation/stack"
 import type { RootStackParamList } from "../navigation/AppNavigator"
 import { jwtDecode } from "jwt-decode"
@@ -59,28 +59,27 @@ const SkeletonLoader = React.memo(() => {
   }))
 
   return (
-    <Animated.View 
-      style={[styles.skeletonItem, animatedStyle]}
-      entering={FadeIn.duration(400)}
-    >
-      <View style={styles.skeletonHeader}>
-        <View style={styles.skeletonAvatar} />
-        <View style={styles.skeletonUserInfo}>
-          <View style={styles.skeletonText} />
-          <View style={[styles.skeletonText, { width: '60%' }]} />
+    <Animated.View entering={FadeIn.duration(400)}>
+      <Animated.View style={[styles.skeletonItem, animatedStyle]}>
+        <View style={styles.skeletonHeader}>
+          <View style={styles.skeletonAvatar} />
+          <View style={styles.skeletonUserInfo}>
+            <View style={[styles.skeletonText, { width: '40%' }]} />
+            <View style={[styles.skeletonText, { width: '30%' }]} />
+          </View>
         </View>
-      </View>
-      <View style={styles.skeletonTitle} />
-      <View style={styles.skeletonMetaContainer}>
-        <View style={styles.skeletonCategory} />
-        <View style={styles.skeletonDate} />
-      </View>
-      <View style={styles.skeletonContent} />
-      <View style={styles.skeletonOptions}>
-        <View style={styles.skeletonOption} />
-        <View style={styles.skeletonOption} />
-      </View>
-      <View style={styles.skeletonReactions} />
+        <View style={styles.skeletonTitle} />
+        <View style={styles.skeletonMetaContainer}>
+          <View style={styles.skeletonCategory} />
+          <View style={styles.skeletonDate} />
+        </View>
+        <View style={styles.skeletonContent} />
+        <View style={styles.skeletonOptions}>
+          <View style={styles.skeletonOption} />
+          <View style={styles.skeletonOption} />
+        </View>
+        <View style={styles.skeletonReactions} />
+      </Animated.View>
     </Animated.View>
   )
 })
@@ -476,6 +475,8 @@ const CommentModal = React.memo(({
         <View style={styles.modalContainer}>
           <CommentScreen
             route={{
+              key: 'comment-modal',
+              name: 'CommentScreen',
               params: {
                 voteId
               }
@@ -600,9 +601,13 @@ const MainScreen: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [loadedImages, setLoadedImages] = useState<Set<number>>(new Set())
   const [isAllImagesLoaded, setIsAllImagesLoaded] = useState(false)
+  const [isInitialLoading, setIsInitialLoading] = useState(true)
 
   const isFocused = useIsFocused()
   const isFirstLoad = useRef(true);
+  const flatListRef = useRef<FlatList>(null);
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<RootStackParamList, 'Main'>>();
 
   useEffect(() => {
     const fetchUserFromToken = async () => {
@@ -622,10 +627,17 @@ const MainScreen: React.FC = () => {
 
   useEffect(() => {
     if (isFirstLoad.current) {
+      setIsInitialLoading(true);
       fetchInitialVotes();
       isFirstLoad.current = false;
     }
   }, []);
+
+  useEffect(() => {
+    if (!isLoading && votes.length > 0) {
+      setIsInitialLoading(false);
+    }
+  }, [isLoading, votes.length]);
 
   const handleVote = useCallback(async (voteId: number, optionId: number) => {
     try {
@@ -760,9 +772,21 @@ const MainScreen: React.FC = () => {
     }
   }, [isLoadingMore, hasMore, fetchNextPage])
 
+  useFocusEffect(
+    useCallback(() => {
+      if (route.params?.refresh) {
+        handleRefresh();
+        setTimeout(() => {
+          flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+        }, 100);
+      }
+    }, [route.params])
+  );
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <FlatList
+        ref={flatListRef}
         data={votes}
         keyExtractor={(item, index) => item.voteId?.toString() || `skeleton-${index}`}
         renderItem={renderItem}
@@ -780,7 +804,7 @@ const MainScreen: React.FC = () => {
           />
         }
         ListEmptyComponent={
-          isLoading || !isAllImagesLoaded ? (
+          isInitialLoading ? (
             <View style={styles.loadingContainer}>
               {Array(5).fill(null).map((_, index) => (
                 <SkeletonLoader key={index} />
@@ -1101,7 +1125,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
   modalContainer: {
-    height: '75%',
+    height: '85%',
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
@@ -1163,83 +1187,85 @@ const styles = StyleSheet.create({
     width: '100%',
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    marginHorizontal: 0,
   },
   skeletonHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
     padding: 12,
+    paddingLeft: 0,
   },
   skeletonAvatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#E2E8F0',
-    marginRight: 10,
+    backgroundColor: '#CBD5E0',
+    marginRight: 8,
   },
   skeletonUserInfo: {
     flex: 1,
+    alignItems: 'flex-start',
   },
   skeletonText: {
     height: 14,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#CBD5E0',
     borderRadius: 7,
     marginBottom: 4,
-    width: '80%',
   },
   skeletonTitle: {
     height: 20,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#CBD5E0',
     borderRadius: 8,
     marginBottom: 8,
-    width: '90%',
-    marginHorizontal: 12,
+    width: '100%',
+    marginHorizontal: 0,
   },
   skeletonMetaContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 0,
   },
   skeletonCategory: {
     width: 60,
     height: 20,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#CBD5E0',
     borderRadius: 8,
     marginRight: 8,
   },
   skeletonDate: {
     width: 80,
     height: 14,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#CBD5E0',
     borderRadius: 7,
   },
   skeletonContent: {
     height: 32,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#CBD5E0',
     borderRadius: 8,
     marginBottom: 8,
     width: '100%',
-    paddingHorizontal: 12,
+    paddingHorizontal: 0,
   },
   skeletonOptions: {
     gap: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 0,
   },
   skeletonOption: {
     height: 44,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#CBD5E0',
     borderRadius: 8,
     width: '100%',
     marginBottom: 4,
   },
   skeletonReactions: {
     height: 28,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#CBD5E0',
     borderRadius: 8,
     marginTop: 8,
     width: '100%',
-    paddingHorizontal: 12,
+    paddingHorizontal: 0,
   },
   footerLoadingContainer: {
     paddingVertical: 20,

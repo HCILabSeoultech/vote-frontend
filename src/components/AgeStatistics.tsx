@@ -78,12 +78,17 @@ const SkeletonLoader = () => {
 
   return (
     <ScrollView style={styles.container}>
+      <Animated.View style={[styles.headerContainer, animatedStyle]}>
+        <View style={styles.skeletonTitle} />
+        <View style={styles.skeletonSubtitle} />
+      </Animated.View>
       
       <Animated.View style={[styles.chartContainer, animatedStyle]}>
         <View style={styles.skeletonChart} />
       </Animated.View>
       
       <View style={styles.statsContainer}>
+        <View style={styles.skeletonStatsTitle} />
         {[1, 2, 3, 4].map((index) => (
           <Animated.View key={index} style={[styles.ageSection, animatedStyle]}>
             <View style={styles.ageHeader}>
@@ -253,10 +258,11 @@ const AgeStatistics: React.FC<AgeStatisticsProps> = ({ voteId }) => {
       </Animated.View>
 
       <View style={styles.statsContainer}>
+        <Text style={styles.statsTitle}>상세 통계</Text>
         {datasets.map(({ age, total, details }, index) => (
           <Animated.View
             key={age}
-            entering={SlideInRight.delay(index * 100).springify()}
+            entering={FadeIn.delay(300 + (index * 100)).duration(600)}
             style={[
               styles.ageSection,
               selectedAge === age && styles.selectedAgeSection
@@ -286,7 +292,7 @@ const AgeStatistics: React.FC<AgeStatisticsProps> = ({ voteId }) => {
       </View>
 
       <Animated.View
-        entering={FadeIn.delay(600).duration(800)}
+        entering={FadeIn.delay(800).duration(600)}
         style={styles.aiAnalysis}
       >
         <Text style={styles.aiAnalysisTitle}>AI 분석 결과</Text>
@@ -465,12 +471,18 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: '#2D3748',
   },
-  skeletonChartTitle: {
-    height: 20,
+  skeletonTitle: {
+    height: 24,
+    width: '60%',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  skeletonSubtitle: {
+    height: 18,
     width: '40%',
     backgroundColor: '#E2E8F0',
     borderRadius: 4,
-    marginBottom: 16,
   },
   skeletonChart: {
     height: 220,
@@ -516,6 +528,18 @@ const styles = StyleSheet.create({
     borderColor: '#4299E1',
     borderWidth: 2,
     backgroundColor: '#F7FAFC',
+  },
+  statsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+  skeletonStatsTitle: {
+    height: 20,
+    width: '40%',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+    marginBottom: 16,
   },
 });
 

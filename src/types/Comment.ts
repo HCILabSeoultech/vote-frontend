@@ -1,4 +1,4 @@
-export type Comment = {
+export interface Comment {
     id: number;
     userId: number;
     username: string;
@@ -9,4 +9,5 @@ export type Comment = {
     isLiked: boolean;
     parentId: number | null;
     replies?: Comment[];
+    name: string;
   }

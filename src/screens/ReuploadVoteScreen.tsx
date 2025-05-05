@@ -58,7 +58,7 @@ const ReuploadVoteScreen: React.FC = () => {
         finishTime: formatToLocalDateTimeString(finishTime),
       });
       Alert.alert('재업로드 완료', '게시물이 성공적으로 재업로드되었습니다.', [
-        { text: '확인', onPress: () => navigation.navigate('Main') },
+        { text: '확인', onPress: () => navigation.navigate('Main', { refresh: true }) },
       ]);
     } catch (error) {
       console.error('재업로드 실패:', error);

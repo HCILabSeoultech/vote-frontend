@@ -276,9 +276,19 @@ const CreatePostScreen: React.FC = () => {
       setFinishTime(new Date());
       setStep(1);
 
-      Alert.alert('작성 완료', `게시물 ID: ${result.postId}`, [
-        { text: '확인', onPress: () => navigation.navigate('홈') },
-      ]);
+      Alert.alert(
+        '투표가 생성되었습니다',
+        '',
+        [
+          {
+            text: '확인',
+            onPress: () => {
+              navigation.navigate('홈', { refresh: true });
+            },
+          },
+        ],
+        { cancelable: false }
+      );
     } catch {
       Alert.alert('작성 실패', '게시물 작성 중 오류 발생');
     }
