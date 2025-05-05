@@ -19,7 +19,7 @@ import { useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { TabParamList } from '../types/TabParam';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { SERVER_URL } from '../constant/config';
+import { SERVER_URL, IMAGE_BASE_URL } from '../constant/config';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -118,8 +118,14 @@ const CreatePostScreen: React.FC = () => {
           throw new Error('이미지 업로드 실패');
         }
 
-        const imageUrl = await uploadRes.text();
-        setImageUrl(imageUrl);
+        const uploadedImageUrl = await uploadRes.text();
+        // S3 URL을 CloudFront URL로 변환
+        const cloudFrontUrl = uploadedImageUrl.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
+          ? uploadedImageUrl.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
+          : uploadedImageUrl.startsWith('http')
+            ? uploadedImageUrl
+            : `${IMAGE_BASE_URL}${uploadedImageUrl}`;
+        setImageUrl(cloudFrontUrl);
       } catch (err) {
         console.error('Image upload error:', err);
         Alert.alert('이미지 업로드 실패');
@@ -165,10 +171,16 @@ const CreatePostScreen: React.FC = () => {
           throw new Error('이미지 업로드 실패');
         }
 
-        const imageUrl = await uploadRes.text();
-        console.log('Uploaded option image URL:', imageUrl);
+        const uploadedImageUrl = await uploadRes.text();
+        // S3 URL을 CloudFront URL로 변환
+        const cloudFrontUrl = uploadedImageUrl.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
+          ? uploadedImageUrl.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
+          : uploadedImageUrl.startsWith('http')
+            ? uploadedImageUrl
+            : `${IMAGE_BASE_URL}${uploadedImageUrl}`;
+        
         const newOptions = [...options];
-        newOptions[index].image = imageUrl;
+        newOptions[index].image = cloudFrontUrl;
         setOptions(newOptions);
       } catch (err) {
         console.error('Option image upload error:', err);

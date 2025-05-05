@@ -31,9 +31,8 @@ import RegionStatistics from "../components/RegionStatistics"
 import AgeStatistics from "../components/AgeStatistics"
 import GenderStatistics from "../components/GenderStatistics"
 
-import { SERVER_URL } from "../constant/config"
+import { SERVER_URL, IMAGE_BASE_URL } from "../constant/config"
 
-const IMAGE_BASE_URL = `${SERVER_URL}`
 const { width } = Dimensions.get("window")
 
 interface JwtPayload {
@@ -178,7 +177,8 @@ const VoteItem = React.memo(({
   onCommentPress,
   onStatisticsPress,
   animatedWidths,
-  onImageLoad
+  onImageLoad,
+  isImageLoaded
 }: {
   item: VoteResponse;
   currentUsername: string | null;
@@ -189,6 +189,7 @@ const VoteItem = React.memo(({
   onStatisticsPress: (vote: VoteResponse) => void;
   animatedWidths: Record<string, number>;
   onImageLoad: (voteId: number) => void;
+  isImageLoaded: boolean;
 }) => {
   const closed = isVoteClosed(item.finishTime)
   const selectedOptionId = item.selectedOptionId
@@ -235,7 +236,7 @@ const VoteItem = React.memo(({
           source={{
             uri:
               item.profileImage === "default.jpg"
-                ? "https://votey-image.s3.ap-northeast-2.amazonaws.com/images/default.png"
+                ? `${IMAGE_BASE_URL}/images/default.png`
                 : item.profileImage,
           }}
           style={styles.profileImage}
@@ -271,15 +272,20 @@ const VoteItem = React.memo(({
 
       {item.images.length > 0 && (
         <View style={styles.imageContainer}>
-          {item.images.map((img) => (
-            <Image
-              key={img.id}
-              source={{ uri: img.imageUrl }}
-              style={styles.image}
-              resizeMode="cover"
-              onLoad={handleImageLoad}
-            />
-          ))}
+          {!isImageLoaded && (
+            <View style={[styles.voteImage, { backgroundColor: '#E2E8F0' }]} />
+          )}
+          <Image
+            source={{ 
+              uri: item.images[0].imageUrl.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
+                ? item.images[0].imageUrl.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
+                : item.images[0].imageUrl.startsWith('http')
+                  ? item.images[0].imageUrl
+                  : `${IMAGE_BASE_URL}${item.images[0].imageUrl}`
+            }}
+            style={[styles.voteImage, { display: isImageLoaded ? 'flex' : 'none' }]}
+            onLoad={() => onImageLoad(item.voteId)}
+          />
         </View>
       )}
 
@@ -306,7 +312,13 @@ const VoteItem = React.memo(({
                     onLayout={e => setOptionWidth(e.nativeEvent.layout.width)}
                   >
                     <Image
-                      source={{ uri: opt.optionImage }}
+                      source={{ 
+                        uri: opt.optionImage.includes('votey-image.s3.ap-northeast-2.amazonaws.com') 
+                          ? opt.optionImage.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
+                          : opt.optionImage.startsWith('http') 
+                            ? opt.optionImage 
+                            : `${IMAGE_BASE_URL}${opt.optionImage}`
+                      }}
                       style={styles.leftOptionImage}
                       resizeMode="cover"
                       onLoad={handleImageLoad}
@@ -727,7 +739,11 @@ const MainScreen: React.FC = () => {
         return count + vote.images.length + vote.voteOptions.filter(opt => opt.optionImage).length;
       }, 0);
       
-      setIsAllImagesLoaded(loadedImages.size === totalImages);
+      if (loadedImages.size === totalImages) {
+        setIsAllImagesLoaded(true);
+      } else {
+        setIsAllImagesLoaded(false);
+      }
     }
   }, [votes, loadedImages]);
 
@@ -740,19 +756,24 @@ const MainScreen: React.FC = () => {
     </View>
   ), [])
 
-  const renderItem = useCallback(({ item }: { item: VoteResponse }) => (
-    <VoteItem
-      item={item}
-      currentUsername={currentUsername}
-      onVote={handleVote}
-      onToggleLike={handleToggleLike}
-      onToggleBookmark={handleToggleBookmark}
-      onCommentPress={handleCommentPress}
-      onStatisticsPress={handleStatisticsPress}
-      animatedWidths={animatedWidths}
-      onImageLoad={handleImageLoad}
-    />
-  ), [currentUsername, handleVote, handleToggleLike, handleToggleBookmark, handleCommentPress, handleStatisticsPress, animatedWidths, handleImageLoad])
+  const renderItem = useCallback(({ item }: { item: VoteResponse }) => {
+    const isImageLoaded = loadedImages.has(item.voteId);
+    
+    return (
+      <VoteItem
+        item={item}
+        currentUsername={currentUsername}
+        onVote={handleVote}
+        onToggleLike={handleToggleLike}
+        onToggleBookmark={handleToggleBookmark}
+        onCommentPress={handleCommentPress}
+        onStatisticsPress={handleStatisticsPress}
+        animatedWidths={animatedWidths}
+        onImageLoad={handleImageLoad}
+        isImageLoaded={isImageLoaded}
+      />
+    );
+  }, [currentUsername, handleVote, handleToggleLike, handleToggleBookmark, handleCommentPress, handleStatisticsPress, animatedWidths, handleImageLoad, loadedImages]);
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -962,7 +983,7 @@ const styles = StyleSheet.create({
     borderRadius: 0,
     overflow: 'hidden',
   },
-  image: {
+  voteImage: {
     width: '100%',
     aspectRatio: 1,
     backgroundColor: '#eee',

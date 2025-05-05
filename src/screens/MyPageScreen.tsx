@@ -32,9 +32,8 @@ import AgeStatistics from '../components/AgeStatistics';
 import GenderStatistics from '../components/GenderStatistics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { SERVER_URL } from '../constant/config';
+import { SERVER_URL, IMAGE_BASE_URL } from '../constant/config';
 
-const IMAGE_BASE_URL = `${SERVER_URL}`;
 const { width } = Dimensions.get('window');
 
 const TABS = [
@@ -392,9 +391,13 @@ const MyPageScreen: React.FC = () => {
         <View style={styles.userInfoRow}>
           <Image
             source={{
-              uri: item.profileImage === 'default.jpg'
-                ? "https://votey-image.s3.ap-northeast-2.amazonaws.com/images/default.png"
-                : item.profileImage,
+              uri: !item.profileImage || item.profileImage === 'default.jpg'
+                ? `${IMAGE_BASE_URL}/images/default.png`
+                : item.profileImage.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
+                  ? item.profileImage.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
+                  : item.profileImage.startsWith('http')
+                    ? item.profileImage
+                    : `${IMAGE_BASE_URL}${item.profileImage}`,
             }}
             style={styles.profileImageSmall}
           />
@@ -453,7 +456,13 @@ const MyPageScreen: React.FC = () => {
             {item.images.map((img) => (
               <Image
                 key={img.id}
-                source={{ uri: img.imageUrl }}
+                source={{ 
+                  uri: img.imageUrl.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
+                    ? img.imageUrl.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
+                    : img.imageUrl.startsWith('http')
+                      ? img.imageUrl
+                      : `${IMAGE_BASE_URL}${img.imageUrl}`
+                }}
                 style={styles.image}
                 resizeMode="cover"
               />
@@ -483,7 +492,13 @@ const MyPageScreen: React.FC = () => {
                       }}
                     >
                       <Image
-                        source={{ uri: opt.optionImage }}
+                        source={{ 
+                          uri: opt.optionImage.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
+                            ? opt.optionImage.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
+                            : opt.optionImage.startsWith('http')
+                              ? opt.optionImage
+                              : `${IMAGE_BASE_URL}${opt.optionImage}`
+                        }}
                         style={styles.leftOptionImage}
                         resizeMode="cover"
                       />
@@ -644,8 +659,12 @@ const MyPageScreen: React.FC = () => {
             <Image
               source={{
                 uri: isDefault
-                  ? "https://votey-image.s3.ap-northeast-2.amazonaws.com/images/default.png"
-                  : profile.profileImage,
+                  ? `${IMAGE_BASE_URL}/images/default.png`
+                  : profile.profileImage.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
+                    ? profile.profileImage.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
+                    : profile.profileImage.startsWith('http')
+                      ? profile.profileImage
+                      : `${IMAGE_BASE_URL}${profile.profileImage}`,
               }}
               style={styles.profileImage}
             />

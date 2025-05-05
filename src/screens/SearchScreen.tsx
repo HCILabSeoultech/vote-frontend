@@ -32,9 +32,8 @@ import MainLogo from '../../assets/mainlogo.svg'
 import DefaultVoteImage from '../components/DefaultVoteImage'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { SERVER_URL } from "../constant/config"
+import { SERVER_URL, IMAGE_BASE_URL } from "../constant/config"
 
-const IMAGE_BASE_URL = `${SERVER_URL}`
 const { width } = Dimensions.get("window")
 
 const categories = [
@@ -532,10 +531,13 @@ const SearchScreen: React.FC = () => {
         >
           <Image
             source={{
-              uri:
-                item.profileImage === "default.jpg"
-                  ? "https://votey-image.s3.ap-northeast-2.amazonaws.com/images/default.png"
-                  : item.profileImage,
+              uri: item.profileImage === "default.jpg"
+                ? `${IMAGE_BASE_URL}/images/default.png`
+                : item.profileImage.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
+                  ? item.profileImage.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
+                  : item.profileImage.startsWith('http')
+                    ? item.profileImage
+                    : `${IMAGE_BASE_URL}${item.profileImage}`,
             }}
             style={styles.userProfileImage}
           />

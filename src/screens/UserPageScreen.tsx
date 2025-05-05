@@ -33,9 +33,8 @@ import AgeStatistics from '../components/AgeStatistics';
 import GenderStatistics from '../components/GenderStatistics';
 import { Animated as RNAnimated } from 'react-native';
 
-import { SERVER_URL } from '../constant/config';
+import { SERVER_URL, IMAGE_BASE_URL } from '../constant/config';
 
-const IMAGE_BASE_URL = `${SERVER_URL}`;
 const { width } = Dimensions.get('window');
 
 const SkeletonLoader = () => {
@@ -124,6 +123,7 @@ const UserPageScreen: React.FC = () => {
   const [imageSizes, setImageSizes] = useState<Record<number, { width: number; height: number }>>({});
   const optionWidthRef = React.useRef<Record<number, number>>({});
   const gaugeAnimRef = React.useRef<Record<number, RNAnimated.Value>>({});
+  const [loadedImages, setLoadedImages] = useState<Set<number>>(new Set());
 
   const isFocused = useIsFocused();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'CommentScreen'>>();
@@ -323,6 +323,14 @@ const UserPageScreen: React.FC = () => {
     }
   }, [userId]);
 
+  const handleImageLoad = useCallback((voteId: number) => {
+    setLoadedImages(prev => {
+      const newSet = new Set(prev);
+      newSet.add(voteId);
+      return newSet;
+    });
+  }, []);
+
   const renderItem = ({ item, index }: { item: VoteResponse, index: number }) => {
     const closed = isVoteClosed(item.finishTime);
     const selectedOptionId = item.selectedOptionId ?? selectedOptions[item.voteId];
@@ -370,7 +378,7 @@ const UserPageScreen: React.FC = () => {
             <Image
               source={{
                 uri: item.profileImage === 'default.jpg'
-                  ? "https://votey-image.s3.ap-northeast-2.amazonaws.com/images/default.png"
+                  ? `${IMAGE_BASE_URL}/images/default.png`
                   : item.profileImage,
               }}
               style={styles.profileImageSmall}
@@ -402,14 +410,23 @@ const UserPageScreen: React.FC = () => {
 
         {item.images.length > 0 && (
           <View style={styles.imageContainer}>
-            {item.images.map((img) => (
+            {!loadedImages.has(item.voteId) && (
+              <View style={[styles.image, { backgroundColor: '#E2E8F0' }]} />
+            )}
+            {loadedImages.has(item.voteId) && (
               <Image
-                key={img.id}
-                source={{ uri: img.imageUrl.startsWith('http') ? img.imageUrl : `${IMAGE_BASE_URL}${img.imageUrl}` }}
+                source={{ 
+                  uri: item.images[0].imageUrl.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
+                    ? item.images[0].imageUrl.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
+                    : item.images[0].imageUrl.startsWith('http')
+                      ? item.images[0].imageUrl
+                      : `${IMAGE_BASE_URL}${item.images[0].imageUrl}`
+                }}
                 style={styles.image}
                 resizeMode="cover"
+                onLoad={() => handleImageLoad(item.voteId)}
               />
-            ))}
+            )}
           </View>
         )}
 
@@ -440,9 +457,16 @@ const UserPageScreen: React.FC = () => {
                       }}
                     >
                       <Image
-                        source={{ uri: opt.optionImage.startsWith('http') ? opt.optionImage : `${IMAGE_BASE_URL}${opt.optionImage}` }}
-                        style={styles.leftOptionImage}
+                        source={{ 
+                          uri: opt.optionImage.includes('votey-image.s3.ap-northeast-2.amazonaws.com') 
+                            ? opt.optionImage.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
+                            : opt.optionImage.startsWith('http') 
+                              ? opt.optionImage 
+                              : `${IMAGE_BASE_URL}${opt.optionImage}`
+                        }}
+                        style={[styles.leftOptionImage, { display: loadedImages.has(item.voteId) ? 'flex' : 'none' }]}
                         resizeMode="cover"
+                        onLoad={() => handleImageLoad(item.voteId)}
                       />
                       {showGauge && (
                         <VoteOptionGauge
@@ -604,7 +628,7 @@ const UserPageScreen: React.FC = () => {
             <Image
               source={{
                 uri: isDefault
-                  ? "https://votey-image.s3.ap-northeast-2.amazonaws.com/images/default.png"
+                  ? `${IMAGE_BASE_URL}/images/default.png`
                   : profile.profileImage,
               }}
               style={styles.profileImage}
@@ -750,6 +774,8 @@ const UserPageScreen: React.FC = () => {
             <View style={styles.modalContainer}>
               <CommentScreen
                 route={{
+                  key: 'comment-modal',
+                  name: 'CommentScreen',
                   params: {
                     voteId: selectedVoteId
                   }

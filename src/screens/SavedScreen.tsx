@@ -32,9 +32,8 @@ import RegionStatistics from '../components/RegionStatistics';
 import AgeStatistics from '../components/AgeStatistics';
 import GenderStatistics from '../components/GenderStatistics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SERVER_URL } from '../constant/config';
+import { SERVER_URL, IMAGE_BASE_URL } from '../constant/config';
 
-const IMAGE_BASE_URL = `${SERVER_URL}`;
 const { width } = Dimensions.get('window');
 
 const STORAGE_TYPES = [
@@ -684,7 +683,13 @@ const StorageScreen: React.FC = () => {
           {/* 이미지 */}
           {option.optionImage && (
             <Image
-              source={{ uri: option.optionImage.startsWith('http') ? option.optionImage : `${IMAGE_BASE_URL}${option.optionImage}` }}
+              source={{
+                uri: option.optionImage.includes('votey-image.s3.ap-northeast-2.amazonaws.com') 
+                  ? option.optionImage.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
+                  : option.optionImage.startsWith('http') 
+                    ? option.optionImage 
+                    : `${IMAGE_BASE_URL}${option.optionImage}`
+              }}
               style={styles.leftOptionImage}
               resizeMode="cover"
             />
@@ -776,7 +781,7 @@ const StorageScreen: React.FC = () => {
             <Image
               source={{
                 uri: item.profileImage === 'default.jpg'
-                  ? "https://votey-image.s3.ap-northeast-2.amazonaws.com/images/default.png"
+                  ? `${IMAGE_BASE_URL}/images/default.png`
                   : item.profileImage,
               }}
               style={styles.profileImage}
@@ -828,7 +833,13 @@ const StorageScreen: React.FC = () => {
               return (
                 <Image
                   key={img.id}
-                  source={{ uri: img.imageUrl }}
+                  source={{
+                    uri: img.imageUrl.includes('votey-image.s3.ap-northeast-2.amazonaws.com') 
+                      ? img.imageUrl.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
+                      : img.imageUrl.startsWith('http') 
+                        ? img.imageUrl 
+                        : `${IMAGE_BASE_URL}${img.imageUrl}`
+                  }}
                   style={[styles.image, { aspectRatio }]}
                   resizeMode="cover"
                   onLoad={onLoad}
