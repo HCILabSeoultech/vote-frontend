@@ -247,6 +247,31 @@ const VoteItem = React.memo(({
     navigation.navigate("UserPageScreen", { userId: item.userId });
   }, [navigation, item.userId]);
 
+  // 이미지 옵션 게이지 바 width 계산 함수
+  const getGaugeWidth = (percentage: number) => {
+    return optionWidth > 0 ? optionWidth * (percentage / 100) : 0;
+  };
+
+  // 이미지 옵션별 게이지 width Animated.Value 관리
+  const gaugeWidthAnimRef = useRef<{ [key: number]: any }>({});
+  useEffect(() => {
+    item.voteOptions.forEach(opt => {
+      if (opt.optionImage) {
+        const optPercentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
+        if (!gaugeWidthAnimRef.current[opt.id]) {
+          gaugeWidthAnimRef.current[opt.id] = new RNAnimated.Value(getGaugeWidth(optPercentage));
+        }
+        const targetWidth = getGaugeWidth(optPercentage);
+        RNAnimated.timing(gaugeWidthAnimRef.current[opt.id], {
+          toValue: targetWidth,
+          duration: 300,
+          useNativeDriver: false,
+        }).start();
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.voteOptions, totalCount, optionWidth]);
+
   return (
     <Animated.View
       entering={FadeIn.duration(400).delay((item.voteId % 10) * 50)}
@@ -315,7 +340,6 @@ const VoteItem = React.memo(({
             const animatedWidth = animatedWidths[animationKey] || percentage
 
             if (opt.optionImage) {
-              const gaugeWidthAnim = animatedWidthsRef.current[opt.id];
               return (
                 <View key={opt.id} style={[styles.optionWrapper, styles.imageOptionWrapper]}>
                   <TouchableOpacity
@@ -326,32 +350,36 @@ const VoteItem = React.memo(({
                     onPress={() => handleVotePress(opt.id)}
                     disabled={closed || isSelected}
                     activeOpacity={0.7}
-                    onLayout={e => setOptionWidth(e.nativeEvent.layout.width)}
                   >
                     {renderImage(opt.optionImage, styles.leftOptionImage)}
-                    {showGauge && gaugeWidthAnim && (
-                      <RNAnimated.View
-                        style={[
-                          styles.gaugeBar,
-                          {
-                            left: imageWidth,
-                            width: gaugeWidthAnim,
-                            backgroundColor: isSelected ? "#4299E1" : "#E2E8F0",
-                            opacity: 0.3,
-                            position: 'absolute',
-                            top: 0,
-                            height: '100%',
-                            zIndex: 1,
-                          },
-                        ]}
-                      />
-                    )}
-                    <View style={styles.rightContent}>
+                    <View
+                      style={styles.rightContent}
+                      onLayout={e => setOptionWidth(e.nativeEvent.layout.width)}
+                    >
+                      {/* 게이지 바 */}
+                      {showGauge && (
+                        <RNAnimated.View
+                          style={[
+                            styles.gaugeBar,
+                            {
+                              left: 0,
+                              width: gaugeWidthAnimRef.current[opt.id] || 0,
+                              backgroundColor: isSelected ? "#4299E1" : "#E2E8F0",
+                              opacity: 0.3,
+                              position: 'absolute',
+                              top: 0,
+                              height: '100%',
+                              zIndex: 1,
+                            },
+                          ]}
+                        />
+                      )}
                       <View style={styles.textAndPercentRow}>
                         <Text style={[
                           styles.optionButtonText,
                           isSelected && styles.selectedOptionText,
-                          showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
+                          showGauge && { color: isSelected ? "#2C5282" : "#4A5568" },
+                          { marginLeft: 12 }
                         ]}>
                           {opt.content}
                         </Text>
@@ -389,7 +417,8 @@ const VoteItem = React.memo(({
                     <Text style={[
                       styles.optionButtonText,
                       isSelected && styles.selectedOptionText,
-                      showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
+                      showGauge && { color: isSelected ? "#2C5282" : "#4A5568" },
+                      { marginLeft: 12 }
                     ]}>
                       {opt.content}
                     </Text>
@@ -1388,7 +1417,7 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: 0,
     backgroundColor: '#111',
-    marginRight: 12,
+    marginRight: 0,
   },
   rightContent: {
     flex: 1,
