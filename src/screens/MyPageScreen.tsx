@@ -259,6 +259,268 @@ const MemoizedProfileImage = React.memo(({ uri, style }: { uri: string; style: a
   return prevProps.uri === nextProps.uri;
 });
 
+// PostItem 컴포넌트를 분리하고 React.memo로 감싸기
+const PostItem = React.memo(({ 
+  item, 
+  onVote, 
+  onToggleLike, 
+  onToggleBookmark, 
+  onCommentPress, 
+  onStatisticsPress, 
+  onDeleteVote,
+  navigation,
+  formatCreatedAt,
+  isVoteClosed,
+  selectedOptions
+}: {
+  item: VoteResponse;
+  onVote: (voteId: number, optionId: number) => void;
+  onToggleLike: (voteId: number) => void;
+  onToggleBookmark: (voteId: number) => void;
+  onCommentPress: (voteId: number) => void;
+  onStatisticsPress: (voteId: number) => void;
+  onDeleteVote: (voteId: number) => void;
+  navigation: NavigationProp;
+  formatCreatedAt: (dateString: string) => string;
+  isVoteClosed: (finishTime: string) => boolean;
+  selectedOptions: Record<number, number>;
+}) => {
+  const closed = isVoteClosed(item.finishTime);
+  const selectedOptionId = item.selectedOptionId ?? selectedOptions[item.voteId];
+  const hasVoted = !!selectedOptionId;
+  const showGauge = closed || hasVoted;
+  const totalCount = item.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0);
+  const hasImageOptions = item.voteOptions.some(opt => opt.optionImage);
+
+  return (
+    <View style={styles.voteItem}>
+      <View style={styles.userInfoRow}>
+        <Image
+          source={{
+            uri: !item.profileImage || item.profileImage === 'default.jpg'
+              ? `${IMAGE_BASE_URL}/images/default.png`
+              : item.profileImage.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
+                ? item.profileImage.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
+                : item.profileImage.startsWith('http')
+                  ? item.profileImage
+                  : `${IMAGE_BASE_URL}${item.profileImage}`,
+          }}
+          style={styles.profileImageSmall}
+        />
+        <View>
+          <Text style={styles.nickname}>{item.name}</Text>
+          <Text style={styles.createdAtText}>{formatCreatedAt(item.createdAt)}</Text>
+        </View>
+        <View style={{ flex: 1 }} />
+        {closed && (
+          <TouchableOpacity
+            onPress={() => navigation.navigate('ReuploadVoteScreen', { voteId: item.voteId })}
+            style={[styles.pointContainer, { backgroundColor: '#EBF8FF', minWidth: 70, paddingHorizontal: 8 }]}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.pointLabel, { color: '#3182CE' }]}>재업로드</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          onPress={() =>
+            Alert.alert('삭제 확인', '정말 삭제하시겠습니까?', [
+              { text: '취소', style: 'cancel' },
+              {
+                text: '삭제',
+                style: 'destructive',
+                onPress: () => onDeleteVote(item.voteId),
+              },
+            ])
+          }
+          style={[styles.pointContainer, { backgroundColor: '#FFF5F5' }]}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.pointLabel, { color: '#E53E3E' }]}>삭제</Text>
+        </TouchableOpacity>
+      </View>
+
+      <Text style={styles.title}>{item.title}</Text>
+
+      {item.content && (
+        <Text numberOfLines={2} style={styles.content}>{item.content}</Text>
+      )}
+
+      {item.images.length > 0 && (
+        <View style={styles.imageContainer}>
+          {item.images.map((img) => (
+            <Image
+              key={img.id}
+              source={{ 
+                uri: img.imageUrl.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
+                  ? img.imageUrl.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
+                  : img.imageUrl.startsWith('http')
+                    ? img.imageUrl
+                    : `${IMAGE_BASE_URL}${img.imageUrl}`
+              }}
+              style={styles.image}
+              resizeMode="cover"
+            />
+          ))}
+        </View>
+      )}
+
+      {item.voteOptions.length > 0 && (
+        <View style={styles.optionContainer}>
+          {item.voteOptions.map((opt) => {
+            const isSelected = selectedOptionId === opt.id;
+            const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
+            if (opt.optionImage) {
+              return (
+                <View key={opt.id} style={styles.optionWrapper}>
+                  <TouchableOpacity
+                    style={[
+                      styles.optionButton,
+                      styles.optionButtonWithImage,
+                      isSelected && styles.selectedOptionButton,
+                    ]}
+                    onPress={() => onVote(item.voteId, opt.id)}
+                    disabled={closed || isSelected}
+                    activeOpacity={0.7}
+                  >
+                    <Image
+                      source={{ 
+                        uri: opt.optionImage.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
+                          ? opt.optionImage.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
+                          : opt.optionImage.startsWith('http')
+                            ? opt.optionImage
+                            : `${IMAGE_BASE_URL}${opt.optionImage}`
+                      }}
+                      style={styles.leftOptionImage}
+                      resizeMode="cover"
+                    />
+                    {showGauge && (
+                      <VoteOptionGauge percentage={percentage} isSelected={isSelected} />
+                    )}
+                    <View style={styles.rightContent}>
+                      <View style={styles.textAndPercentRow}>
+                        <Text style={[
+                          styles.optionButtonText,
+                          isSelected && styles.selectedOptionText,
+                          showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
+                        ]}>
+                          {opt.content}
+                        </Text>
+                        {showGauge && (
+                          <Text style={[
+                            styles.percentageText,
+                            isSelected && styles.selectedPercentageText
+                          ]}>
+                            {percentage}%
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              );
+            }
+            return (
+              <View key={opt.id} style={styles.optionWrapper}>
+                <TouchableOpacity
+                  style={[
+                    styles.optionButton,
+                    closed && styles.closedOptionButton,
+                    isSelected && styles.selectedOptionButton,
+                  ]}
+                  onPress={() => onVote(item.voteId, opt.id)}
+                  disabled={closed || isSelected}
+                  activeOpacity={0.7}
+                >
+                  {showGauge && (
+                    <VoteOptionGauge percentage={percentage} isSelected={isSelected} />
+                  )}
+                  <View style={styles.optionTextContainer}>
+                    <Text style={[
+                      styles.optionButtonText,
+                      isSelected && styles.selectedOptionText,
+                      showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
+                    ]}>
+                      {opt.content}
+                    </Text>
+                    {showGauge && (
+                      <Text style={[
+                        styles.percentageText,
+                        isSelected && styles.selectedPercentageText
+                      ]}>
+                        {percentage}%
+                      </Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              </View>
+            )
+          })}
+          {showGauge && totalCount > 0 && (
+            <Text style={styles.responseCountText}>{totalCount}명 참여</Text>
+          )}
+        </View>
+      )}
+
+      <View style={styles.divider} />
+
+      <View style={styles.reactionRow}>
+        <TouchableOpacity 
+          style={styles.reactionItem} 
+          onPress={() => onToggleLike(item.voteId)}
+          activeOpacity={0.7}
+        >
+          <Feather 
+            name={item.isLiked ? "heart" : "heart"} 
+            size={22} 
+            color={item.isLiked ? "#FF4B6E" : "#718096"} 
+          />
+          <Text style={[
+            styles.reactionText,
+            item.isLiked && styles.activeReactionText
+          ]}>
+            {item.likeCount}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.reactionItem}
+          onPress={() => onCommentPress(item.voteId)}
+          activeOpacity={0.7}
+        >
+          <Feather name="message-circle" size={22} color="#718096" />
+          <Text style={styles.reactionText}>{item.commentCount}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.reactionItem} 
+          onPress={() => onToggleBookmark(item.voteId)}
+          activeOpacity={0.7}
+        >
+          <Feather 
+            name={item.isBookmarked ? "bookmark" : "bookmark"} 
+            size={22} 
+            color={item.isBookmarked ? "#1499D9" : "#718096"} 
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.reactionItem} 
+          onPress={() => onStatisticsPress(item.voteId)}
+          activeOpacity={0.7}
+        >
+          <Feather name="bar-chart-2" size={20} color="#718096" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}, (prevProps, nextProps) => {
+  // 최적화를 위한 비교 함수
+  return (
+    prevProps.item === nextProps.item &&
+    prevProps.selectedOptions[prevProps.item.voteId] === nextProps.selectedOptions[nextProps.item.voteId]
+  );
+});
+
 const MyPageScreen: React.FC = () => {
   const [profile, setProfile] = useState<any>(null);
   const [posts, setPosts] = useState<VoteResponse[]>([]);
@@ -509,7 +771,7 @@ const MyPageScreen: React.FC = () => {
             const targetWidth = (optionWidth - imageWidth) * (percentage / 100);
             RNAnimated.timing(gaugeWidthAnims.current[opt.id], {
               toValue: targetWidth,
-              duration: 300,
+              duration: 400,
               useNativeDriver: false,
             }).start();
           }
@@ -621,282 +883,22 @@ const MyPageScreen: React.FC = () => {
     setStatisticsModalVoteId(voteId);
   }, [posts]);
 
-  const renderPost = useCallback(({ item, index }: { item: VoteResponse, index: number }) => {
-    const closed = isVoteClosed(item.finishTime);
-    const selectedOptionId = item.selectedOptionId ?? selectedOptions[item.voteId];
-    const hasVoted = !!selectedOptionId;
-    const showGauge = closed || hasVoted;
-    const totalCount = item.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0);
-    const hasImageOptions = item.voteOptions.some(opt => opt.optionImage);
-
-    const formatDate = (dateString: string) => {
-      const finishDate = new Date(dateString)
-      const now = new Date()
-      const diffTime = finishDate.getTime() - now.getTime()
-      const diffMinutes = Math.floor(diffTime / (1000 * 60))
-      const diffHours = Math.floor(diffTime / (1000 * 60 * 60))
-      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
-      if (diffTime > 0) {
-        if (diffMinutes < 60) return `${diffMinutes}분 후 마감`;
-        if (diffHours < 24) {
-          const remainingMinutes = diffMinutes % 60;
-          return `${diffHours}시간 ${remainingMinutes}분 후 마감`;
-        }
-        if (diffDays <= 7) {
-          const remainingHours = diffHours % 24;
-          return `${diffDays}일 ${remainingHours}시간 후 마감`;
-        }
-        return finishDate.toLocaleDateString("ko-KR");
-        }
-      return '';
-    };
-
-    return (
-      <View style={styles.voteItem}>
-        <View style={styles.userInfoRow}>
-          <Image
-            source={{
-              uri: !item.profileImage || item.profileImage === 'default.jpg'
-                ? `${IMAGE_BASE_URL}/images/default.png`
-                : item.profileImage.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
-                  ? item.profileImage.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
-                  : item.profileImage.startsWith('http')
-                    ? item.profileImage
-                    : `${IMAGE_BASE_URL}${item.profileImage}`,
-            }}
-            style={styles.profileImageSmall}
-          />
-          <View>
-            <Text style={styles.nickname}>{item.name}</Text>
-            <Text style={styles.createdAtText}>{formatCreatedAt(item.createdAt)}</Text>
-          </View>
-          <View style={{ flex: 1 }} />
-          {closed && (
-            <TouchableOpacity
-              onPress={() => navigation.navigate('ReuploadVoteScreen', { voteId: item.voteId })}
-              style={[styles.pointContainer, { backgroundColor: '#EBF8FF', minWidth: 70, paddingHorizontal: 8 }]}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.pointLabel, { color: '#3182CE' }]}>재업로드</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            onPress={() =>
-              Alert.alert('삭제 확인', '정말 삭제하시겠습니까?', [
-                { text: '취소', style: 'cancel' },
-                {
-                  text: '삭제',
-                  style: 'destructive',
-                  onPress: () => handleDeleteVote(item.voteId),
-                },
-              ])
-            }
-            style={[styles.pointContainer, { backgroundColor: '#FFF5F5' }]}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.pointLabel, { color: '#E53E3E' }]}>삭제</Text>
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.title}>{item.title}</Text>
-
-        {item.content && (
-          <Text numberOfLines={2} style={styles.content}>{item.content}</Text>
-        )}
-
-        {item.images.length > 0 && (
-          <View style={styles.imageContainer}>
-            {item.images.map((img) => (
-              <Image
-                key={img.id}
-                source={{ 
-                  uri: img.imageUrl.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
-                    ? img.imageUrl.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
-                    : img.imageUrl.startsWith('http')
-                      ? img.imageUrl
-                      : `${IMAGE_BASE_URL}${img.imageUrl}`
-                }}
-                style={styles.image}
-                resizeMode="cover"
-              />
-            ))}
-          </View>
-        )}
-
-        {item.voteOptions.length > 0 && (
-          <View style={styles.optionContainer}>
-            {item.voteOptions.map((opt) => {
-              const isSelected = selectedOptionId === opt.id;
-              const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
-              if (opt.optionImage) {
-                return (
-                  <View key={opt.id} style={styles.optionWrapper}>
-                    <TouchableOpacity
-                      style={[
-                        styles.optionButton,
-                        styles.optionButtonWithImage,
-                        isSelected && styles.selectedOptionButton,
-                      ]}
-                      onPress={() => handleVote(item.voteId, opt.id)}
-                      disabled={closed || isSelected}
-                      activeOpacity={0.7}
-                      onLayout={e => {
-                        const optionWidth = e.nativeEvent.layout.width;
-                        optionWidthRef.current[opt.id] = optionWidth;
-                        const targetWidth = (optionWidth - imageWidth) * (percentage / 100);
-                        if (!gaugeWidthAnims.current[opt.id]) {
-                          gaugeWidthAnims.current[opt.id] = new RNAnimated.Value(targetWidth);
-                        } else {
-                          gaugeWidthAnims.current[opt.id].setValue(targetWidth);
-                        }
-                      }}
-                    >
-                      <Image
-                        source={{ 
-                          uri: opt.optionImage.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
-                            ? opt.optionImage.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
-                            : opt.optionImage.startsWith('http')
-                              ? opt.optionImage
-                              : `${IMAGE_BASE_URL}${opt.optionImage}`
-                        }}
-                        style={styles.leftOptionImage}
-                        resizeMode="cover"
-                      />
-                      {showGauge && optionWidthRef.current[opt.id] > 0 && (
-                        <RNAnimated.View
-                          style={[
-                            styles.gaugeBar,
-                            {
-                              left: imageWidth,
-                              width: gaugeWidthAnims.current[opt.id],
-                              backgroundColor: isSelected ? "#4299E1" : "#E2E8F0",
-                              opacity: 0.3,
-                              position: 'absolute',
-                              top: 0,
-                              height: '100%',
-                              zIndex: 1,
-                            },
-                          ]}
-                        />
-                      )}
-                      <View style={styles.rightContent}>
-                        <View style={styles.textAndPercentRow}>
-                          <Text style={[
-                            styles.optionButtonText,
-                            isSelected && styles.selectedOptionText,
-                            showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
-                          ]}>
-                            {opt.content}
-                          </Text>
-                          {showGauge && (
-                            <Text style={[
-                              styles.percentageText,
-                              isSelected && styles.selectedPercentageText
-                            ]}>
-                              {percentage}%
-                            </Text>
-                          )}
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  </View>
-                );
-              }
-              return (
-                <View key={opt.id} style={styles.optionWrapper}>
-                  <TouchableOpacity
-                    style={[
-                      styles.optionButton,
-                      closed && styles.closedOptionButton,
-                      isSelected && styles.selectedOptionButton,
-                    ]}
-                    onPress={() => handleVote(item.voteId, opt.id)}
-                    disabled={closed || isSelected}
-                    activeOpacity={0.7}
-                  >
-                    {showGauge && (
-                      <VoteOptionGauge percentage={percentage} isSelected={isSelected} />
-                    )}
-                    <View style={styles.optionTextContainer}>
-                      <Text style={[
-                        styles.optionButtonText,
-                        isSelected && styles.selectedOptionText,
-                        showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
-                      ]}>
-                        {opt.content}
-                      </Text>
-                      {showGauge && (
-                        <Text style={[
-                          styles.percentageText,
-                          isSelected && styles.selectedPercentageText
-                        ]}>
-                          {percentage}%
-                        </Text>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                </View>
-              )
-            })}
-            {showGauge && totalCount > 0 && (
-              <Text style={styles.responseCountText}>{totalCount}명 참여</Text>
-            )}
-          </View>
-        )}
-
-        <View style={styles.divider} />
-
-        <View style={styles.reactionRow}>
-          <TouchableOpacity 
-            style={styles.reactionItem} 
-            onPress={() => handleToggleLike(item.voteId)}
-            activeOpacity={0.7}
-          >
-            <Feather 
-              name={item.isLiked ? "heart" : "heart"} 
-              size={22} 
-              color={item.isLiked ? "#FF4B6E" : "#718096"} 
-            />
-            <Text style={[
-              styles.reactionText,
-              item.isLiked && styles.activeReactionText
-            ]}>
-              {item.likeCount}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.reactionItem}
-            onPress={() => handleCommentPress(item.voteId)}
-            activeOpacity={0.7}
-          >
-            <Feather name="message-circle" size={22} color="#718096" />
-            <Text style={styles.reactionText}>{item.commentCount}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.reactionItem} 
-            onPress={() => handleToggleBookmark(item.voteId)}
-            activeOpacity={0.7}
-          >
-            <Feather 
-              name={item.isBookmarked ? "bookmark" : "bookmark"} 
-              size={22} 
-              color={item.isBookmarked ? "#1499D9" : "#718096"} 
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.reactionItem} 
-            onPress={() => handleStatisticsPress(item.voteId)}
-            activeOpacity={0.7}
-          >
-            <Feather name="bar-chart-2" size={20} color="#718096" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }, [isVoteClosed, selectedOptions, handleVote, handleToggleLike, handleToggleBookmark, handleDeleteVote, handleCommentPress, handleStatisticsPress, formatCreatedAt, navigation]);
+  // renderPost 함수를 useCallback으로 최적화
+  const renderPost = useCallback(({ item }: { item: VoteResponse }) => (
+    <PostItem
+      item={item}
+      onVote={handleVote}
+      onToggleLike={handleToggleLike}
+      onToggleBookmark={handleToggleBookmark}
+      onCommentPress={handleCommentPress}
+      onStatisticsPress={handleStatisticsPress}
+      onDeleteVote={handleDeleteVote}
+      navigation={navigation}
+      formatCreatedAt={formatCreatedAt}
+      isVoteClosed={isVoteClosed}
+      selectedOptions={selectedOptions}
+    />
+  ), [handleVote, handleToggleLike, handleToggleBookmark, handleCommentPress, handleStatisticsPress, handleDeleteVote, navigation, formatCreatedAt, isVoteClosed, selectedOptions]);
 
   const renderHeader = () => {
     if (!profile || showSkeleton) return (
@@ -1056,10 +1058,6 @@ const MyPageScreen: React.FC = () => {
   }, [isLast, activeTab, page, fetchPosts]);
 
   const renderContent = () => {
-    if (showSkeleton) {
-      return <SkeletonLoader />;
-    }
-
     let data = [];
     let renderItem = undefined;
     let keyExtractor = undefined;
@@ -1160,106 +1158,111 @@ const MyPageScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { flex: 1, paddingTop: insets.top }]}>
-      {renderContent()}
-
-      {commentModalVoteId !== null && (
-        <Modal
-          visible={true}
-          transparent
-          statusBarTranslucent
-          animationType="slide"
-          onRequestClose={() => {
-            setCommentModalVoteId(null);
-          }}
-        >
-          <View style={styles.modalOverlay}>
-            <Pressable 
-              style={styles.modalBackground}
-              onPress={() => {
+    <SafeAreaView style={[styles.safeArea, { flex: 1, paddingTop: insets.top }]}> 
+      {showSkeleton ? (
+        <SkeletonLoader />
+      ) : (
+        <Animated.View entering={FadeIn.duration(400)} style={{ flex: 1 }}>
+          {renderContent()}
+          {commentModalVoteId !== null && (
+            <Modal
+              visible={true}
+              transparent
+              statusBarTranslucent
+              animationType="slide"
+              onRequestClose={() => {
                 setCommentModalVoteId(null);
               }}
             >
-              <View style={styles.modalBackdrop} />
-            </Pressable>
-            <View style={styles.modalContainer}>
-              <CommentScreen
-                route={{
-                  key: 'comment-modal',
-                  name: 'CommentScreen',
-                  params: {
-                    voteId: commentModalVoteId
-                  }
-                }}
-              />
-            </View>
-          </View>
-        </Modal>
-      )}
+              <View style={styles.modalOverlay}>
+                <Pressable 
+                  style={styles.modalBackground}
+                  onPress={() => {
+                    setCommentModalVoteId(null);
+                  }}
+                >
+                  <View style={styles.modalBackdrop} />
+                </Pressable>
+                <View style={styles.modalContainer}>
+                  <CommentScreen
+                    route={{
+                      key: 'comment-modal',
+                      name: 'CommentScreen',
+                      params: {
+                        voteId: commentModalVoteId
+                      }
+                    }}
+                  />
+                </View>
+              </View>
+            </Modal>
+          )}
 
-      {statisticsModalVoteId !== null && (
-      <Modal
-          visible={true}
-        transparent
-        statusBarTranslucent
-        animationType="slide"
-        onRequestClose={() => {
-            setStatisticsModalVoteId(null);
-        }}
-      >
-        <View style={styles.modalOverlay}>
-          <Pressable 
-            style={styles.modalBackground}
-            onPress={() => {
+          {statisticsModalVoteId !== null && (
+          <Modal
+              visible={true}
+            transparent
+            statusBarTranslucent
+            animationType="slide"
+            onRequestClose={() => {
                 setStatisticsModalVoteId(null);
             }}
           >
-            <View style={styles.modalBackdrop} />
-          </Pressable>
-          <View style={[styles.modalContainer, styles.statisticsModalContainer]}>
-            <View style={styles.statisticsHeader}>
-              <Text style={styles.statisticsTitle}>투표 통계</Text>
-              <TouchableOpacity 
+            <View style={styles.modalOverlay}>
+              <Pressable 
+                style={styles.modalBackground}
                 onPress={() => {
                     setStatisticsModalVoteId(null);
                 }}
-                style={styles.closeButton}
               >
-                <Feather name="x" size={24} color="#4A5568" />
-              </TouchableOpacity>
+                <View style={styles.modalBackdrop} />
+              </Pressable>
+              <View style={[styles.modalContainer, styles.statisticsModalContainer]}>
+                <View style={styles.statisticsHeader}>
+                  <Text style={styles.statisticsTitle}>투표 통계</Text>
+                  <TouchableOpacity 
+                    onPress={() => {
+                        setStatisticsModalVoteId(null);
+                    }}
+                    style={styles.closeButton}
+                  >
+                    <Feather name="x" size={24} color="#4A5568" />
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.statisticsTabContainer}>
+                  <TouchableOpacity
+                      style={[styles.statisticsTabButton, activeStatTab === 'region' && styles.activeStatisticsTab]}
+                    onPress={() => setActiveStatTab('region')}
+                  >
+                      <Text style={[styles.statisticsTabText, activeStatTab === 'region' && styles.activeStatisticsTabText]}>지역별</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                      style={[styles.statisticsTabButton, activeStatTab === 'age' && styles.activeStatisticsTab]}
+                    onPress={() => setActiveStatTab('age')}
+                  >
+                      <Text style={[styles.statisticsTabText, activeStatTab === 'age' && styles.activeStatisticsTabText]}>연령별</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                      style={[styles.statisticsTabButton, activeStatTab === 'gender' && styles.activeStatisticsTab]}
+                    onPress={() => setActiveStatTab('gender')}
+                  >
+                      <Text style={[styles.statisticsTabText, activeStatTab === 'gender' && styles.activeStatisticsTabText]}>성별</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.statisticsContent}>
+                    {statisticsModalVoteId && (
+                    <>
+                        {activeStatTab === 'region' && <RegionStatistics voteId={statisticsModalVoteId} />}
+                        {activeStatTab === 'age' && <AgeStatistics voteId={statisticsModalVoteId} />}
+                        {activeStatTab === 'gender' && <GenderStatistics voteId={statisticsModalVoteId} />}
+                    </>
+                  )}
+                </View>
+              </View>
             </View>
-            <View style={styles.statisticsTabContainer}>
-              <TouchableOpacity
-                  style={[styles.statisticsTabButton, activeStatTab === 'region' && styles.activeStatisticsTab]}
-                onPress={() => setActiveStatTab('region')}
-              >
-                  <Text style={[styles.statisticsTabText, activeStatTab === 'region' && styles.activeStatisticsTabText]}>지역별</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                  style={[styles.statisticsTabButton, activeStatTab === 'age' && styles.activeStatisticsTab]}
-                onPress={() => setActiveStatTab('age')}
-              >
-                  <Text style={[styles.statisticsTabText, activeStatTab === 'age' && styles.activeStatisticsTabText]}>연령별</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                  style={[styles.statisticsTabButton, activeStatTab === 'gender' && styles.activeStatisticsTab]}
-                onPress={() => setActiveStatTab('gender')}
-              >
-                  <Text style={[styles.statisticsTabText, activeStatTab === 'gender' && styles.activeStatisticsTabText]}>성별</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.statisticsContent}>
-                {statisticsModalVoteId && (
-                <>
-                    {activeStatTab === 'region' && <RegionStatistics voteId={statisticsModalVoteId} />}
-                    {activeStatTab === 'age' && <AgeStatistics voteId={statisticsModalVoteId} />}
-                    {activeStatTab === 'gender' && <GenderStatistics voteId={statisticsModalVoteId} />}
-                </>
-              )}
-            </View>
-          </View>
-        </View>
-      </Modal>
+          </Modal>
+          )}
+        </Animated.View>
       )}
     </SafeAreaView>
   );
@@ -1694,12 +1697,13 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     backgroundColor: '#CBD5E0',
+    marginLeft: 10,
   },
   skeletonItem: {
     backgroundColor: '#FFFFFF',
     marginBottom: 12,
     borderRadius: 0,
-    padding: 16,
+    padding: 8,
     marginHorizontal: 0,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
@@ -1725,7 +1729,7 @@ const styles = StyleSheet.create({
     height: 24,
     backgroundColor: '#CBD5E0',
     borderRadius: 12,
-    marginBottom: 8,
+    marginBottom: 6,
     width: '90%',
     marginHorizontal: 12,
   },
@@ -1733,7 +1737,7 @@ const styles = StyleSheet.create({
     height: 20,
     backgroundColor: '#CBD5E0',
     borderRadius: 8,
-    marginBottom: 8,
+    marginBottom: 6,
     width: '90%',
     marginHorizontal: 12,
   },
@@ -1746,13 +1750,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#CBD5E0',
     borderRadius: 8,
     width: '100%',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   skeletonReactions: {
     height: 28,
     backgroundColor: '#CBD5E0',
     borderRadius: 8,
-    marginTop: 8,
+    marginTop: 6,
     marginHorizontal: 12,
     width: '90%',
   },
