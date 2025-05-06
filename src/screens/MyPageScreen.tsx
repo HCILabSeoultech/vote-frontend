@@ -14,9 +14,9 @@ import {
   Pressable,
   ScrollView,
   RefreshControl,
-  Animated as RNAnimated,
+  Animated,
 } from 'react-native';
-import Animated, { FadeIn, FadeOut, useAnimatedStyle, withRepeat, withTiming, withSequence, useSharedValue } from 'react-native-reanimated';
+import { FadeIn, FadeOut, useAnimatedStyle, withRepeat, withTiming, withSequence, useSharedValue } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { getMyPage } from '../api/user';
@@ -138,10 +138,10 @@ const SkeletonLoader = () => {
 
 // 게이지 애니메이션 컴포넌트 (MainScreen과 동일)
 const VoteOptionGauge = ({ percentage, isSelected }: { percentage: number; isSelected: boolean }) => {
-  const widthAnim = useRef(new RNAnimated.Value(percentage)).current;
+  const widthAnim = useRef(new Animated.Value(percentage)).current;
 
   useEffect(() => {
-    RNAnimated.timing(widthAnim, {
+    Animated.timing(widthAnim, {
       toValue: percentage,
       duration: 300,
       useNativeDriver: false,
@@ -154,7 +154,7 @@ const VoteOptionGauge = ({ percentage, isSelected }: { percentage: number; isSel
   });
 
   return (
-    <RNAnimated.View
+    <Animated.View
       style={[
         styles.gaugeBar,
         {
@@ -535,6 +535,7 @@ const MyPageScreen: React.FC = () => {
   const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set());
   const [imageCache, setImageCache] = useState<Record<string, boolean>>({});
   const [showSkeleton, setShowSkeleton] = useState(true);
+  const [fadeAnim] = useState(new Animated.Value(0));
 
   const isFirstLoad = useRef(true);
   const flatListRef = useRef<FlatList>(null);
@@ -542,7 +543,7 @@ const MyPageScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
   const optionWidthRef = useRef<Record<number, number>>({});
-  const gaugeWidthAnims = useRef<Record<number, RNAnimated.Value>>({});
+  const gaugeWidthAnims = useRef<Record<number, Animated.Value>>({});
   const imageWidth = 100;
 
   // 데이터 캐시를 위한 ref
@@ -756,13 +757,13 @@ const MyPageScreen: React.FC = () => {
       item.voteOptions.forEach(opt => {
         if (opt.optionImage) {
           if (!gaugeWidthAnims.current[opt.id]) {
-            gaugeWidthAnims.current[opt.id] = new RNAnimated.Value(0);
+            gaugeWidthAnims.current[opt.id] = new Animated.Value(0);
           }
           const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
           const optionWidth = optionWidthRef.current[opt.id] || 0;
           if (optionWidth > 0) {
             const targetWidth = (optionWidth - imageWidth) * (percentage / 100);
-            RNAnimated.timing(gaugeWidthAnims.current[opt.id], {
+            Animated.timing(gaugeWidthAnims.current[opt.id], {
               toValue: targetWidth,
               duration: 400,
               useNativeDriver: false,
@@ -893,6 +894,18 @@ const MyPageScreen: React.FC = () => {
     />
   ), [handleVote, handleToggleLike, handleToggleBookmark, handleCommentPress, handleStatisticsPress, handleDeleteVote, navigation, formatCreatedAt, isVoteClosed, selectedOptions]);
 
+  // profileImageUri를 useMemo로 컴포넌트 최상단에서 선언
+  const isDefault = profile?.profileImage === 'default.jpg';
+  const profileImageUri = useMemo(() => {
+    if (!profile) return '';
+    if (isDefault) return `${IMAGE_BASE_URL}/images/default.png`;
+    if (profile.profileImage.includes('votey-image.s3.ap-northeast-2.amazonaws.com'))
+      return profile.profileImage.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL);
+    if (profile.profileImage.startsWith('http')) return profile.profileImage;
+    return `${IMAGE_BASE_URL}${profile.profileImage}`;
+  }, [profile, isDefault]);
+
+  // renderHeader에서는 useMemo를 사용하지 않고, profileImageUri만 사용
   const renderHeader = () => {
     if (!profile || showSkeleton) return (
       <View style={styles.loadingProfileContainer}>
@@ -912,24 +925,13 @@ const MyPageScreen: React.FC = () => {
         </View>
       </View>
     );
-    
-    const isDefault = profile.profileImage === 'default.jpg';
-    const profileImageUri = isDefault
-      ? `${IMAGE_BASE_URL}/images/default.png`
-      : profile.profileImage.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
-        ? profile.profileImage.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
-        : profile.profileImage.startsWith('http')
-          ? profile.profileImage
-          : `${IMAGE_BASE_URL}${profile.profileImage}`;
 
-    const memoizedProfileImageUri = useMemo(() => profileImageUri, [profileImageUri]);
-  
     return (
       <View style={styles.profileContainer}>
         <View style={styles.profileHeader}>
           <View style={styles.profileMainInfo}>
             <MemoizedProfileImage
-              uri={memoizedProfileImageUri}
+              uri={profileImageUri}
               style={styles.profileImage}
             />
             <View style={styles.profileInfo}>
@@ -1127,7 +1129,7 @@ const MyPageScreen: React.FC = () => {
     }));
 
     return (
-      <Animated.View entering={FadeIn.duration(300)}>
+      <Animated.View>
         <Animated.View 
           style={[styles.profileContainer, animatedStyle]}
         >
@@ -1150,13 +1152,126 @@ const MyPageScreen: React.FC = () => {
     );
   };
 
+  // 탭 버튼 렌더 함수
+  const renderTabs = useCallback(() => (
+    <View style={styles.tabContainer}>
+      <View style={styles.tabRow}>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'posts' && styles.activeTab]}
+          onPress={() => handleTabChange('posts')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.tabText, activeTab === 'posts' && styles.activeTabText]}>게시물</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'followers' && styles.activeTab]}
+          onPress={() => handleTabChange('followers')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.tabText, activeTab === 'followers' && styles.activeTabText]}>팔로워</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'following' && styles.activeTab]}
+          onPress={() => handleTabChange('following')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.tabText, activeTab === 'following' && styles.activeTabText]}>팔로잉</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={styles.tabIndicator}>
+        <Animated.View 
+          style={[
+            styles.tabIndicatorBar,
+            { 
+              left: activeTab === 'posts' ? '0%' : activeTab === 'followers' ? '33.333%' : '66.666%',
+              width: '33.333%'
+            }
+          ]} 
+        />
+      </View>
+    </View>
+  ), [activeTab, handleTabChange]);
+
+  // 빈 리스트 컴포넌트
+  const renderEmptyComponent = useCallback(() => (
+    <View style={styles.emptyContainer}>
+      <Text style={styles.emptyText}>게시물이 없습니다.</Text>
+      <Text style={styles.emptySubText}>새로운 투표를 만들어보세요!</Text>
+    </View>
+  ), []);
+
+  useEffect(() => {
+    if (!showSkeleton) {
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      fadeAnim.setValue(0);
+    }
+  }, [showSkeleton]);
+
   return (
     <SafeAreaView style={[styles.safeArea, { flex: 1, paddingTop: insets.top }]}> 
       {showSkeleton ? (
         <SkeletonLoader />
       ) : (
-        <Animated.View entering={FadeIn.duration(400)} style={{ flex: 1 }}>
-          {renderContent()}
+        <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
+          {renderHeader()}
+          <View style={{ flex: 1 }}>
+            <View style={{ display: activeTab === 'posts' ? 'flex' : 'none', flex: 1 }}>
+              <FlatList
+                ref={flatListRef}
+                data={posts}
+                renderItem={renderPost}
+                keyExtractor={(item) => item.voteId.toString()}
+                onEndReached={handleLoadMore}
+                onEndReachedThreshold={0.5}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                    colors={["#1499D9"]}
+                    tintColor="#1499D9"
+                  />
+                }
+                ListEmptyComponent={renderEmptyComponent}
+                contentContainerStyle={styles.container}
+                showsVerticalScrollIndicator={false}
+                removeClippedSubviews={false}
+                maxToRenderPerBatch={5}
+                windowSize={5}
+                updateCellsBatchingPeriod={50}
+                initialNumToRender={10}
+                maintainVisibleContentPosition={{
+                  minIndexForVisible: 0,
+                  autoscrollToTopThreshold: null,
+                }}
+                {...flatListProps}
+              />
+            </View>
+            <View style={{ display: activeTab === 'followers' ? 'flex' : 'none', flex: 1 }}>
+              <FlatList
+                data={followers}
+                renderItem={renderUser}
+                keyExtractor={(item) => `follower-${item.id}`}
+                contentContainerStyle={styles.container}
+                showsVerticalScrollIndicator={false}
+                removeClippedSubviews={false}
+              />
+            </View>
+            <View style={{ display: activeTab === 'following' ? 'flex' : 'none', flex: 1 }}>
+              <FlatList
+                data={following}
+                renderItem={renderUser}
+                keyExtractor={(item) => `following-${item.id}`}
+                contentContainerStyle={styles.container}
+                showsVerticalScrollIndicator={false}
+                removeClippedSubviews={false}
+              />
+            </View>
+          </View>
           {commentModalVoteId !== null && (
             <Modal
               visible={true}
@@ -1192,68 +1307,68 @@ const MyPageScreen: React.FC = () => {
           )}
 
           {statisticsModalVoteId !== null && (
-          <Modal
+            <Modal
               visible={true}
-            transparent
-            statusBarTranslucent
-            animationType="slide"
-            onRequestClose={() => {
+              transparent
+              statusBarTranslucent
+              animationType="slide"
+              onRequestClose={() => {
                 setStatisticsModalVoteId(null);
-            }}
-          >
-            <View style={styles.modalOverlay}>
-              <Pressable 
-                style={styles.modalBackground}
-                onPress={() => {
+              }}
+            >
+              <View style={styles.modalOverlay}>
+                <Pressable 
+                  style={styles.modalBackground}
+                  onPress={() => {
                     setStatisticsModalVoteId(null);
-                }}
-              >
-                <View style={styles.modalBackdrop} />
-              </Pressable>
-              <View style={[styles.modalContainer, styles.statisticsModalContainer]}>
-                <View style={styles.statisticsHeader}>
-                  <Text style={styles.statisticsTitle}>투표 통계</Text>
-                  <TouchableOpacity 
-                    onPress={() => {
+                  }}
+                >
+                  <View style={styles.modalBackdrop} />
+                </Pressable>
+                <View style={[styles.modalContainer, styles.statisticsModalContainer]}>
+                  <View style={styles.statisticsHeader}>
+                    <Text style={styles.statisticsTitle}>투표 통계</Text>
+                    <TouchableOpacity 
+                      onPress={() => {
                         setStatisticsModalVoteId(null);
-                    }}
-                    style={styles.closeButton}
-                  >
-                    <Feather name="x" size={24} color="#4A5568" />
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.statisticsTabContainer}>
-                  <TouchableOpacity
-                      style={[styles.statisticsTabButton, activeStatTab === 'region' && styles.activeStatisticsTab]}
-                    onPress={() => setActiveStatTab('region')}
-                  >
-                      <Text style={[styles.statisticsTabText, activeStatTab === 'region' && styles.activeStatisticsTabText]}>지역별</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                      style={[styles.statisticsTabButton, activeStatTab === 'age' && styles.activeStatisticsTab]}
-                    onPress={() => setActiveStatTab('age')}
-                  >
-                      <Text style={[styles.statisticsTabText, activeStatTab === 'age' && styles.activeStatisticsTabText]}>연령별</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                      style={[styles.statisticsTabButton, activeStatTab === 'gender' && styles.activeStatisticsTab]}
-                    onPress={() => setActiveStatTab('gender')}
-                  >
-                      <Text style={[styles.statisticsTabText, activeStatTab === 'gender' && styles.activeStatisticsTabText]}>성별</Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.statisticsContent}>
-                    {statisticsModalVoteId && (
-                    <>
-                        {activeStatTab === 'region' && <RegionStatistics voteId={statisticsModalVoteId} />}
-                        {activeStatTab === 'age' && <AgeStatistics voteId={statisticsModalVoteId} />}
-                        {activeStatTab === 'gender' && <GenderStatistics voteId={statisticsModalVoteId} />}
-                    </>
-                  )}
+                      }}
+                      style={styles.closeButton}
+                    >
+                      <Feather name="x" size={24} color="#4A5568" />
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.statisticsTabContainer}>
+                    <TouchableOpacity
+                        style={[styles.statisticsTabButton, activeStatTab === 'region' && styles.activeStatisticsTab]}
+                      onPress={() => setActiveStatTab('region')}
+                    >
+                        <Text style={[styles.statisticsTabText, activeStatTab === 'region' && styles.activeStatisticsTabText]}>지역별</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.statisticsTabButton, activeStatTab === 'age' && styles.activeStatisticsTab]}
+                      onPress={() => setActiveStatTab('age')}
+                    >
+                        <Text style={[styles.statisticsTabText, activeStatTab === 'age' && styles.activeStatisticsTabText]}>연령별</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.statisticsTabButton, activeStatTab === 'gender' && styles.activeStatisticsTab]}
+                      onPress={() => setActiveStatTab('gender')}
+                    >
+                        <Text style={[styles.statisticsTabText, activeStatTab === 'gender' && styles.activeStatisticsTabText]}>성별</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.statisticsContent}>
+                      {statisticsModalVoteId && (
+                      <>
+                          {activeStatTab === 'region' && <RegionStatistics voteId={statisticsModalVoteId} />}
+                          {activeStatTab === 'age' && <AgeStatistics voteId={statisticsModalVoteId} />}
+                          {activeStatTab === 'gender' && <GenderStatistics voteId={statisticsModalVoteId} />}
+                      </>
+                    )}
+                  </View>
                 </View>
               </View>
-            </View>
-          </Modal>
+            </Modal>
           )}
         </Animated.View>
       )}
@@ -1822,22 +1937,6 @@ const styles = StyleSheet.create({
     color: '#222',
     fontWeight: '600',
   },
-  userCardIntro: {
-    fontSize: 13,
-    color: '#888',
-    marginTop: 2,
-  },
-  userCardButton: {
-    backgroundColor: '#3182CE',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-  },
-  userCardButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
   leftOptionImage: {
     width: 100,
     height: 100,
@@ -1893,6 +1992,7 @@ const styles = StyleSheet.create({
     color: '#888',
     fontWeight: '500',
     marginTop: 4,
+    textAlign: 'right',
   },
   tabRow: {
     flexDirection: 'row',
