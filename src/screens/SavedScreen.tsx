@@ -91,8 +91,8 @@ const SkeletonLoader = React.memo(() => {
   useEffect(() => {
     opacity.value = withRepeat(
       withSequence(
-        withTiming(0.8, { duration: 600 }),
-        withTiming(0.5, { duration: 600 })
+        withTiming(0.9, { duration: 600 }),
+        withTiming(0.7, { duration: 600 })
       ),
       -1,
       true

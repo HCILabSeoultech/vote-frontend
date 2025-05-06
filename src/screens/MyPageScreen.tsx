@@ -54,6 +54,9 @@ type NavigationProp = StackNavigationProp<{
   ReuploadVoteScreen: { voteId: number };
 }>;
 
+// 전역 이미지 캐시 상태
+const profileImageCache = new Map<string, boolean>();
+
 // 스켈레톤 UI 컴포넌트
 const SkeletonLoader = () => {
   const opacity = useSharedValue(0.5);
@@ -61,8 +64,8 @@ const SkeletonLoader = () => {
   useEffect(() => {
     opacity.value = withRepeat(
       withSequence(
-        withTiming(0.8, { duration: 1000 }),
-        withTiming(0.5, { duration: 1000 })
+        withTiming(0.7, { duration: 600 }),
+        withTiming(0.9, { duration: 600 })
       ),
       -1,
       true
@@ -74,41 +77,65 @@ const SkeletonLoader = () => {
   }));
 
   return (
-    <Animated.View entering={FadeIn.duration(300)}>
-      <Animated.View style={[styles.skeletonContainer, animatedStyle]}>
-        {[1, 2, 3].map((_, index) => (
-          <View key={index} style={styles.skeletonPost}>
-            <View style={styles.skeletonPostHeader}>
-              <View style={styles.skeletonAvatar} />
-              <View style={styles.skeletonPostInfo}>
-                <View style={[styles.skeletonText, { width: '40%' }]} />
-                <View style={[styles.skeletonText, { width: '30%' }]} />
+    <ScrollView style={styles.skeletonContainer}>
+      <Animated.View style={[styles.skeletonContentWrapper, animatedStyle]}>
+        {/* 프로필 섹션 */}
+        <View style={styles.profileContainer}>
+          <View style={styles.profileHeader}>
+            <View style={styles.profileMainInfo}>
+              <View style={styles.skeletonProfileImage} />
+              <View style={styles.profileInfo}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={[styles.skeletonText, { width: '30%', height: 24 }]} />
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <View style={[styles.skeletonText, { width: 80, height: 32, borderRadius: 8 }]} />
+                    <View style={[styles.skeletonText, { width: 80, height: 32, borderRadius: 8 }]} />
+                  </View>
+                </View>
               </View>
             </View>
-            <View style={styles.skeletonPostContent}>
-              <View style={[styles.skeletonText, { width: '100%' }]} />
-              <View style={[styles.skeletonText, { width: '80%' }]} />
-            </View>
-            <View style={styles.skeletonOptions}>
-              <View style={[styles.skeletonOption, { width: '100%' }]} />
-              <View style={[styles.skeletonOption, { width: '100%' }]} />
-            </View>
-            <View style={styles.skeletonReactions}>
-              <View style={[styles.skeletonReaction, { width: 24 }]} />
-              <View style={[styles.skeletonReaction, { width: 24 }]} />
-              <View style={[styles.skeletonReaction, { width: 24 }]} />
-              <View style={[styles.skeletonReaction, { width: 24 }]} />
-            </View>
           </View>
+          <View style={styles.skeletonIntroduction}>
+            <View style={[styles.skeletonText, { width: '95%', height: 16 }]} />
+          </View>
+        </View>
+
+        {/* 탭 섹션 */}
+        <View style={[styles.tabContainer, { borderBottomWidth: 0 }]}>
+          <View style={styles.tabRow}>
+            <View style={styles.skeletonTab} />
+            <View style={styles.skeletonTab} />
+            <View style={styles.skeletonTab} />
+          </View>
+        </View>
+
+        {/* 게시물(글) 스켈레톤 - 메인페이지와 동일하게 */}
+        {[1, 2, 3].map((_, index) => (
+          <Animated.View key={index} style={[styles.skeletonItem, animatedStyle]}>
+            <View style={styles.skeletonHeader}>
+              <View style={styles.skeletonAvatar} />
+              <View style={styles.skeletonUserInfo}>
+                <View style={styles.skeletonText} />
+                <View style={[styles.skeletonText, { width: '60%' }]} />
+              </View>
+            </View>
+            <View style={styles.skeletonTitle} />
+            <View style={styles.skeletonContent} />
+            <View style={styles.skeletonOptions}>
+              <View style={styles.skeletonOption} />
+              <View style={styles.skeletonOption} />
+            </View>
+            <View style={styles.skeletonReactions} />
+          </Animated.View>
         ))}
       </Animated.View>
-    </Animated.View>
+    </ScrollView>
   );
 };
 
 // 게이지 애니메이션 컴포넌트 (MainScreen과 동일)
 const VoteOptionGauge = ({ percentage, isSelected }: { percentage: number; isSelected: boolean }) => {
-  const widthAnim = useRef(new RNAnimated.Value(0)).current;
+  const widthAnim = useRef(new RNAnimated.Value(percentage)).current;
 
   useEffect(() => {
     RNAnimated.timing(widthAnim, {
@@ -139,39 +166,98 @@ const VoteOptionGauge = ({ percentage, isSelected }: { percentage: number; isSel
 
 // 프로필 이미지 컴포넌트를 메모이제이션
 const MemoizedProfileImage = React.memo(({ uri, style }: { uri: string; style: any }) => {
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(profileImageCache.has(uri));
+  const [isError, setIsError] = useState(false);
   const imageRef = useRef<Image>(null);
 
   useEffect(() => {
-    // 이미지 프리로딩
-    Image.prefetch(uri)
-      .then(() => {
-        setIsLoaded(true);
-      })
-      .catch(() => {
-        setIsLoaded(true);
-      });
+    if (profileImageCache.has(uri)) {
+      return;
+    }
+
+    let isMounted = true;
+    
+    const loadImage = async () => {
+      try {
+        await Image.prefetch(uri);
+        if (isMounted) {
+          profileImageCache.set(uri, true);
+          setIsLoaded(true);
+          setIsError(false);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setIsError(true);
+          setIsLoaded(true);
+        }
+      }
+    };
+
+    loadImage();
+
+    return () => {
+      isMounted = false;
+    };
   }, [uri]);
 
+  const handleLoad = useCallback(() => {
+    profileImageCache.set(uri, true);
+    setIsLoaded(true);
+    setIsError(false);
+  }, [uri]);
+
+  const handleError = useCallback(() => {
+    setIsError(true);
+    setIsLoaded(true);
+  }, []);
+
+  if (profileImageCache.has(uri)) {
+    return (
+      <View style={[styles.profileImageContainer, style]}>
+        <Image
+          ref={imageRef}
+          source={{ 
+            uri: isError ? `${IMAGE_BASE_URL}/images/default.png` : uri,
+            cache: 'force-cache'
+          }}
+          style={styles.profileImage}
+          resizeMode="cover"
+          onError={handleError}
+          progressiveRenderingEnabled={true}
+          fadeDuration={0}
+        />
+      </View>
+    );
+  }
+
   return (
-    <Image
-      ref={imageRef}
-      source={{ 
-        uri,
-        cache: 'force-cache'
-      }}
-      style={[
-        styles.profileImage,
-        style,
-        !isLoaded && { opacity: 0 }
-      ]}
-      resizeMode="cover"
-      onLoad={() => setIsLoaded(true)}
-      progressiveRenderingEnabled={true}
-      fadeDuration={0}
-    />
+    <View style={[styles.profileImageContainer, style]}>
+      <Image
+        ref={imageRef}
+        source={{ 
+          uri: isError ? `${IMAGE_BASE_URL}/images/default.png` : uri,
+          cache: 'force-cache'
+        }}
+        style={[
+          styles.profileImage,
+          !isLoaded && { opacity: 0 }
+        ]}
+        resizeMode="cover"
+        onLoad={handleLoad}
+        onError={handleError}
+        progressiveRenderingEnabled={true}
+        fadeDuration={0}
+      />
+      {!isLoaded && (
+        <View style={[StyleSheet.absoluteFill, styles.loadingOverlay]}>
+          <ActivityIndicator size="small" color="#1499D9" />
+        </View>
+      )}
+    </View>
   );
-}, (prevProps, nextProps) => prevProps.uri === nextProps.uri);
+}, (prevProps, nextProps) => {
+  return prevProps.uri === nextProps.uri;
+});
 
 const MyPageScreen: React.FC = () => {
   const [profile, setProfile] = useState<any>(null);
@@ -192,6 +278,7 @@ const MyPageScreen: React.FC = () => {
   const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
   const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set());
   const [imageCache, setImageCache] = useState<Record<string, boolean>>({});
+  const [showSkeleton, setShowSkeleton] = useState(true);
 
   const isFirstLoad = useRef(true);
   const flatListRef = useRef<FlatList>(null);
@@ -273,7 +360,11 @@ const MyPageScreen: React.FC = () => {
             fetchPosts(0)
           ]);
         } finally {
-          setProfileLoading(false);
+          // 1초 후에 스켈레톤 UI를 숨깁니다
+          setTimeout(() => {
+            setProfileLoading(false);
+            setShowSkeleton(false);
+          }, 1000);
           isFirstLoad.current = false;
         }
       };
@@ -285,13 +376,17 @@ const MyPageScreen: React.FC = () => {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     setPostsLoading(true);
+    setShowSkeleton(true);
     try {
       await Promise.all([
         fetchProfile(),
         fetchPosts(0)
       ]);
     } finally {
-      setRefreshing(false);
+      setTimeout(() => {
+        setRefreshing(false);
+        setShowSkeleton(false);
+      }, 1000);
       isFirstLoad.current = false;
     }
   }, [fetchProfile, fetchPosts]);
@@ -603,18 +698,6 @@ const MyPageScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.metaRow}>
-          <View style={styles.categoryBadge}>
-            <Text style={styles.categoryText}>{item.categoryName}</Text>
-          </View>
-          <Text style={styles.dateText}>{formatDate(item.finishTime)}</Text>
-          {closed && (
-            <View style={[styles.categoryBadge, { backgroundColor: '#CBD5E0', marginLeft: 0 }]}>
-              <Text style={[styles.categoryText, { color: '#4A5568' }]}>마감됨</Text>
-            </View>
-          )}
-        </View>
-
         <Text style={styles.title}>{item.title}</Text>
 
         {item.content && (
@@ -658,7 +741,14 @@ const MyPageScreen: React.FC = () => {
                       disabled={closed || isSelected}
                       activeOpacity={0.7}
                       onLayout={e => {
-                        optionWidthRef.current[opt.id] = e.nativeEvent.layout.width;
+                        const optionWidth = e.nativeEvent.layout.width;
+                        optionWidthRef.current[opt.id] = optionWidth;
+                        const targetWidth = (optionWidth - imageWidth) * (percentage / 100);
+                        if (!gaugeWidthAnims.current[opt.id]) {
+                          gaugeWidthAnims.current[opt.id] = new RNAnimated.Value(targetWidth);
+                        } else {
+                          gaugeWidthAnims.current[opt.id].setValue(targetWidth);
+                        }
                       }}
                     >
                       <Image
@@ -672,7 +762,7 @@ const MyPageScreen: React.FC = () => {
                         style={styles.leftOptionImage}
                         resizeMode="cover"
                       />
-                      {showGauge && (
+                      {showGauge && optionWidthRef.current[opt.id] > 0 && (
                         <RNAnimated.View
                           style={[
                             styles.gaugeBar,
@@ -809,12 +899,20 @@ const MyPageScreen: React.FC = () => {
   }, [isVoteClosed, selectedOptions, handleVote, handleToggleLike, handleToggleBookmark, handleDeleteVote, handleCommentPress, handleStatisticsPress, formatCreatedAt, navigation]);
 
   const renderHeader = () => {
-    if (!profile) return (
+    if (!profile || showSkeleton) return (
       <View style={styles.loadingProfileContainer}>
-        <View style={styles.skeletonProfile}>
-          <View style={styles.skeletonProfileImage} />
-          <View style={styles.skeletonProfileInfo}>
-            <View style={styles.skeletonText} />
+        <View style={styles.profileHeader}>
+          <View style={styles.profileMainInfo}>
+            <View style={styles.skeletonProfileImage} />
+            <View style={styles.profileInfo}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={[styles.skeletonText, { width: '30%', height: 24 }]} />
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <View style={[styles.skeletonText, { width: 80, height: 32, borderRadius: 8 }]} />
+                  <View style={[styles.skeletonText, { width: 80, height: 32, borderRadius: 8 }]} />
+                </View>
+              </View>
+            </View>
           </View>
         </View>
       </View>
@@ -829,7 +927,6 @@ const MyPageScreen: React.FC = () => {
           ? profile.profileImage
           : `${IMAGE_BASE_URL}${profile.profileImage}`;
 
-    // 프로필 이미지 URI를 메모이제이션
     const memoizedProfileImageUri = useMemo(() => profileImageUri, [profileImageUri]);
   
     return (
@@ -842,7 +939,7 @@ const MyPageScreen: React.FC = () => {
             />
             <View style={styles.profileInfo}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1A202C', marginBottom: 4 }}>{profile.name}</Text>
+                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1A202C', marginBottom: 4 }}>{profile.name}</Text>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <TouchableOpacity
                     onPress={() => Alert.alert('알림', '프로필 수정 기능은 준비중입니다.')}
@@ -890,7 +987,7 @@ const MyPageScreen: React.FC = () => {
           </View>
         </View>
         {profile.introduction && (
-          <Text style={{ marginTop: 8, fontSize: 14, color: '#4A5568', lineHeight: 20, paddingHorizontal: 16 }}>{profile.introduction}</Text>
+          <Text numberOfLines={1} style={{ marginTop: 8, fontSize: 14, color: '#4A5568', lineHeight: 20, paddingHorizontal: 16 }}>{profile.introduction}</Text>
         )}
         <View style={styles.tabContainer}>
           <View style={styles.tabRow}>
@@ -922,18 +1019,20 @@ const MyPageScreen: React.FC = () => {
               </Text>
             </TouchableOpacity>
           </View>
-          <View style={styles.tabIndicator}>
-            <Animated.View 
-              style={[
-                styles.tabIndicatorBar,
-                { 
-                  left: activeTab === 'posts' ? '0%' : 
-                       activeTab === 'followers' ? '33.333%' : '66.666%',
-                  width: '33.333%'
-                }
-              ]} 
-            />
-          </View>
+          {!showSkeleton && (
+            <View style={styles.tabIndicator}>
+              <Animated.View 
+                style={[
+                  styles.tabIndicatorBar,
+                  { 
+                    left: activeTab === 'posts' ? '0%' : 
+                         activeTab === 'followers' ? '33.333%' : '66.666%',
+                    width: '33.333%'
+                  }
+                ]} 
+              />
+            </View>
+          )}
         </View>
       </View>
     );
@@ -957,6 +1056,10 @@ const MyPageScreen: React.FC = () => {
   }, [isLast, activeTab, page, fetchPosts]);
 
   const renderContent = () => {
+    if (showSkeleton) {
+      return <SkeletonLoader />;
+    }
+
     let data = [];
     let renderItem = undefined;
     let keyExtractor = undefined;
@@ -973,6 +1076,7 @@ const MyPageScreen: React.FC = () => {
       renderItem = renderUser;
       keyExtractor = (item: any) => `following-${item.id}`;
     }
+
     return (
       <FlatList
         data={data}
@@ -1036,10 +1140,18 @@ const MyPageScreen: React.FC = () => {
         <Animated.View 
           style={[styles.profileContainer, animatedStyle]}
         >
-          <View style={styles.skeletonProfile}>
-            <View style={styles.skeletonProfileImage} />
-            <View style={styles.skeletonProfileInfo}>
-              <View style={[styles.skeletonText, { width: '60%' }]} />
+          <View style={styles.profileHeader}>
+            <View style={styles.profileMainInfo}>
+              <View style={styles.skeletonProfileImage} />
+              <View style={styles.profileInfo}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={[styles.skeletonText, { width: '30%', height: 24 }]} />
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <View style={[styles.skeletonText, { width: 80, height: 32, borderRadius: 8 }]} />
+                    <View style={[styles.skeletonText, { width: 80, height: 32, borderRadius: 8 }]} />
+                  </View>
+                </View>
+              </View>
             </View>
           </View>
         </Animated.View>
@@ -1049,47 +1161,7 @@ const MyPageScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={[styles.safeArea, { flex: 1, paddingTop: insets.top }]}>
-      <FlatList
-        ref={flatListRef}
-        data={activeTab === 'posts' ? posts : activeTab === 'followers' ? followers : following}
-        renderItem={activeTab === 'posts' ? renderPost : renderUser}
-        keyExtractor={activeTab === 'posts' ? (item: VoteResponse) => item.voteId.toString() : (item: any) => `${activeTab}-${item.id}`}
-        onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.5}
-        ListEmptyComponent={null}
-        contentContainerStyle={styles.container}
-        style={{ flex: 1 }}
-        showsVerticalScrollIndicator={false}
-        removeClippedSubviews={true}
-        maxToRenderPerBatch={3}
-        windowSize={3}
-        initialNumToRender={3}
-        updateCellsBatchingPeriod={50}
-        maintainVisibleContentPosition={{
-          minIndexForVisible: 0,
-          autoscrollToTopThreshold: 10,
-        }}
-        scrollEventThrottle={16}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={["#1499D9"]}
-            tintColor="#1499D9"
-            progressViewOffset={10}
-          />
-        }
-        ListHeaderComponent={React.memo(() => (
-          <>
-            {profileLoading ? (
-              <ProfileSkeleton />
-            ) : (
-              renderHeader()
-            )}
-          </>
-        ))}
-        {...flatListProps}
-      />
+      {renderContent()}
 
       {commentModalVoteId !== null && (
         <Modal
@@ -1291,19 +1363,15 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   tabContainer: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
     backgroundColor: '#fff',
+    paddingHorizontal: 16,
   },
   tabButton: {
     flex: 1,
     paddingVertical: 12,
     alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
   },
   activeTab: {
-    borderBottomColor: '#3182CE',
   },
   tabText: {
     fontSize: 14,
@@ -1533,7 +1601,6 @@ const styles = StyleSheet.create({
   },
   tabIndicator: {
     height: 2,
-    backgroundColor: '#EDF2F7',
     position: 'relative',
   },
   tabIndicatorBar: {
@@ -1579,11 +1646,8 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
   },
   activeStatisticsTab: {
-    borderBottomColor: '#1499D9',
   },
   statisticsTabText: {
     fontSize: 15,
@@ -1598,148 +1662,143 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   skeletonContainer: {
-    padding: 16,
+    flex: 1,
+    backgroundColor: '#FFFFFF',
   },
-  skeletonProfile: {
+  skeletonContentWrapper: {
+    flex: 1,
+  },
+  skeletonProfileImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#CBD5E0',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  skeletonText: {
+    height: 16,
+    backgroundColor: '#CBD5E0',
+    borderRadius: 7,
+    marginBottom: 4,
+    width: '80%',
+  },
+  skeletonTab: {
+    height: 35,
+    backgroundColor: '#CBD5E0',
+    borderRadius: 8,
+    flex: 1,
+  },
+  skeletonAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#CBD5E0',
+  },
+  skeletonItem: {
+    backgroundColor: '#FFFFFF',
+    marginBottom: 12,
+    borderRadius: 0,
+    padding: 16,
+    marginHorizontal: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+    marginTop: 0,
+    marginLeft: -4,
+  },
+  skeletonHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
+    padding: 0,
+    gap: 8,
   },
-  skeletonProfileImage: {
+  skeletonUserInfo: {
+    flex: 1,
+  },
+  skeletonTitle: {
+    height: 24,
+    backgroundColor: '#CBD5E0',
+    borderRadius: 12,
+    marginBottom: 8,
+    width: '90%',
+    marginHorizontal: 12,
+  },
+  skeletonContent: {
+    height: 20,
+    backgroundColor: '#CBD5E0',
+    borderRadius: 8,
+    marginBottom: 8,
+    width: '90%',
+    marginHorizontal: 12,
+  },
+  skeletonOptions: {
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  skeletonOption: {
+    height: 44,
+    backgroundColor: '#CBD5E0',
+    borderRadius: 8,
+    width: '100%',
+    marginBottom: 8,
+  },
+  skeletonReactions: {
+    height: 28,
+    backgroundColor: '#CBD5E0',
+    borderRadius: 8,
+    marginTop: 8,
+    marginHorizontal: 12,
+    width: '90%',
+  },
+  skeletonIntroduction: {
+    marginTop: 8,
+    paddingHorizontal: 16,
+  },
+  loadingProfileContainer: {
+    padding: 16,
+  },
+  editButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#F7FAFC',
+  },
+  editButtonText: {
+    color: '#3182CE',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  imageWrapper: {
+    position: 'relative',
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 0,
+    overflow: 'hidden',
+    backgroundColor: '#E2E8F0',
+  },
+  cachedImage: {
+    opacity: 1,
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileImageContainer: {
+    position: 'relative',
     width: 80,
     height: 80,
     borderRadius: 40,
     backgroundColor: '#E2E8F0',
     borderWidth: 2,
     borderColor: '#FFFFFF',
-  },
-  skeletonProfileInfo: {
-    marginLeft: 16,
-    flex: 1,
-    gap: 8,
-  },
-  skeletonText: {
-    height: 16,
-    backgroundColor: '#E2E8F0',
-    borderRadius: 4,
-  },
-  skeletonTabs: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-    paddingHorizontal: 16,
-  },
-  skeletonTab: {
-    height: 40,
-    backgroundColor: '#E2E8F0',
-    borderRadius: 8,
-  },
-  skeletonPost: {
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    marginBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  skeletonPostHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  skeletonAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#E2E8F0',
-    marginRight: 12,
-  },
-  skeletonPostInfo: {
-    flex: 1,
-    gap: 4,
-  },
-  skeletonPostContent: {
-    gap: 8,
-    marginBottom: 16,
-  },
-  skeletonOptions: {
-    gap: 8,
-    marginBottom: 12,
-  },
-  skeletonOption: {
-    height: 60,
-    backgroundColor: '#E2E8F0',
-    borderRadius: 8,
-  },
-  skeletonReactions: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: 16,
-    gap: 16,
-  },
-  skeletonReaction: {
-    height: 24,
-    backgroundColor: '#E2E8F0',
-    borderRadius: 12,
-  },
-  skeletonFollower: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  skeletonFollowerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  skeletonFollowerInfo: {
-    marginLeft: 12,
-    flex: 1,
-    gap: 4,
-  },
-  imageContainer: { 
-    marginBottom: 0,
-    borderRadius: 0,
     overflow: 'hidden',
-  },
-  image: { 
-    width: '100%', 
-    height: undefined,
-    aspectRatio: 1,
-  },
-  closedOptionButton: {
-    backgroundColor: '#F7FAFC',
-    borderColor: '#E2E8F0',
-  },
-  selectedOptionButton: {
-    borderColor: '#3182CE',
-    borderWidth: 2,
-    backgroundColor: '#E6F0FF',
-    borderRadius: 8,
-  },
-  responseCountText: {
-    marginTop: 8,
-    fontSize: 13,
-    color: '#888',
-    textAlign: 'right',
-    fontWeight: '500',
-  },
-  tabRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 0,
-  },
-  gaugeBar: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    height: '100%',
-    borderRadius: 0,
-    zIndex: 1,
   },
   userCard: {
     flexDirection: 'row',
@@ -1804,71 +1863,45 @@ const styles = StyleSheet.create({
     zIndex: 2,
     paddingHorizontal: 12,
   },
-  refreshIndicator: {
-    paddingVertical: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    borderRadius: 12,
-    marginHorizontal: 16,
-    marginTop: 8,
-    flexDirection: 'row',
-    gap: 12,
+  closedOptionButton: {
+    backgroundColor: '#F7FAFC',
+    borderColor: '#E2E8F0',
   },
-  refreshText: {
-    marginLeft: 12,
-    fontSize: 14,
-    color: '#1499D9',
-    fontWeight: '500',
-  },
-  topIndicator: {
-    width: '100%',
+  gaugeBar: {
     position: 'absolute',
     left: 0,
-    zIndex: 100,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+    top: 0,
+    height: '100%',
+    borderRadius: 0,
+    zIndex: 1,
   },
-  topIndicatorText: {
-    marginLeft: 12,
-    fontSize: 15,
-    color: '#1499D9',
-    fontWeight: '600',
-  },
-  loadingProfileContainer: {
-    padding: 16,
-  },
-  editButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#F7FAFC',
-  },
-  editButtonText: {
-    color: '#3182CE',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  imageWrapper: {
-    position: 'relative',
-    width: '100%',
+  image: { 
+    width: '100%', 
+    height: undefined,
     aspectRatio: 1,
+  },
+  imageContainer: { 
+    marginBottom: 0,
     borderRadius: 0,
     overflow: 'hidden',
-    backgroundColor: '#E2E8F0',
   },
-  cachedImage: {
-    opacity: 1,
+  selectedOptionButton: {
+    borderColor: '#3182CE',
+    borderWidth: 2,
+    backgroundColor: '#E6F0FF',
+    borderRadius: 8,
   },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  responseCountText: {
+    fontSize: 14,
+    color: '#888',
+    fontWeight: '500',
+    marginTop: 4,
+  },
+  tabRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 0,
+    gap: 8,
   },
 });
 
