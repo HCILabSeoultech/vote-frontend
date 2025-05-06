@@ -137,6 +137,42 @@ const VoteOptionGauge = ({ percentage, isSelected }: { percentage: number; isSel
   );
 };
 
+// 프로필 이미지 컴포넌트를 메모이제이션
+const MemoizedProfileImage = React.memo(({ uri, style }: { uri: string; style: any }) => {
+  const [isLoaded, setIsLoaded] = useState(false);
+  const imageRef = useRef<Image>(null);
+
+  useEffect(() => {
+    // 이미지 프리로딩
+    Image.prefetch(uri)
+      .then(() => {
+        setIsLoaded(true);
+      })
+      .catch(() => {
+        setIsLoaded(true);
+      });
+  }, [uri]);
+
+  return (
+    <Image
+      ref={imageRef}
+      source={{ 
+        uri,
+        cache: 'force-cache'
+      }}
+      style={[
+        styles.profileImage,
+        style,
+        !isLoaded && { opacity: 0 }
+      ]}
+      resizeMode="cover"
+      onLoad={() => setIsLoaded(true)}
+      progressiveRenderingEnabled={true}
+      fadeDuration={0}
+    />
+  );
+}, (prevProps, nextProps) => prevProps.uri === nextProps.uri);
+
 const MyPageScreen: React.FC = () => {
   const [profile, setProfile] = useState<any>(null);
   const [posts, setPosts] = useState<VoteResponse[]>([]);
@@ -152,45 +188,52 @@ const MyPageScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('posts');
   const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('region');
   const [refreshing, setRefreshing] = useState(false);
-  const isFirstLoad = useRef(true);
-  const [animatedWidths, setAnimatedWidths] = useState<Record<string, number>>({});
+  const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
+  const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
+  const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set());
+  const [imageCache, setImageCache] = useState<Record<string, boolean>>({});
 
+  const isFirstLoad = useRef(true);
+  const flatListRef = useRef<FlatList>(null);
   const isFocused = useIsFocused();
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
-
   const optionWidthRef = useRef<Record<number, number>>({});
   const gaugeWidthAnims = useRef<Record<number, RNAnimated.Value>>({});
   const imageWidth = 100;
 
-  // 이미지 옵션 게이지 애니메이션 useEffect (posts가 바뀔 때마다)
+  // 데이터 캐시를 위한 ref
+  const cachedData = useRef<{
+    profile: any;
+    posts: VoteResponse[];
+    followers: any[];
+    following: any[];
+    lastLoadedTab: TabType | null;
+  }>({
+    profile: null,
+    posts: [],
+    followers: [],
+    following: [],
+    lastLoadedTab: null
+  });
+
+  // 탭 변경 시 데이터 유지
   useEffect(() => {
-    posts.forEach(item => {
-      const totalCount = item.voteOptions.reduce((sum, o) => sum + o.voteCount, 0);
-      item.voteOptions.forEach(opt => {
-        if (opt.optionImage) {
-          if (!gaugeWidthAnims.current[opt.id]) {
-            gaugeWidthAnims.current[opt.id] = new RNAnimated.Value(0);
-          }
-          const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
-          const optionWidth = optionWidthRef.current[opt.id] || 0;
-          if (optionWidth > 0) {
-            const targetWidth = (optionWidth - imageWidth) * (percentage / 100);
-            RNAnimated.timing(gaugeWidthAnims.current[opt.id], {
-              toValue: targetWidth,
-              duration: 300,
-              useNativeDriver: false,
-            }).start();
-          }
-        }
-      });
-    });
-  }, [posts]);
+    if (isFocused && cachedData.current.profile) {
+      setProfile(cachedData.current.profile);
+      setPosts(cachedData.current.posts);
+      setFollowers(cachedData.current.followers);
+      setFollowing(cachedData.current.following);
+      setProfileLoading(false);
+      setPostsLoading(false);
+    }
+  }, [isFocused]);
 
   const fetchProfile = useCallback(async () => {
     try {
       const res = await getMyPage(0);
       setProfile(res);
+      cachedData.current.profile = res;
     } catch (err) {
       Alert.alert('에러', '프로필 정보를 불러오지 못했습니다.');
     }
@@ -201,8 +244,13 @@ const MyPageScreen: React.FC = () => {
       const res = await getMyPage(nextPage);
       if (nextPage === 0) {
         setPosts(res.posts.content);
+        cachedData.current.posts = res.posts.content;
       } else {
-        setPosts(prev => [...prev, ...res.posts.content]);
+        setPosts(prev => {
+          const newPosts = [...prev, ...res.posts.content];
+          cachedData.current.posts = newPosts;
+          return newPosts;
+        });
       }
       setPage(res.posts.number + 1);
       setIsLast(res.posts.last);
@@ -231,7 +279,7 @@ const MyPageScreen: React.FC = () => {
       };
       loadInitialData();
     }
-  }, []); // mount 시에만 실행
+  }, []);
 
   // 새로고침
   const onRefresh = useCallback(async () => {
@@ -247,6 +295,133 @@ const MyPageScreen: React.FC = () => {
       isFirstLoad.current = false;
     }
   }, [fetchProfile, fetchPosts]);
+
+  // 탭 변경 핸들러
+  const handleTabChange = useCallback((value: TabType) => {
+    if (activeTab === value) return;
+    
+    // 이전 탭의 데이터 캐시
+    if (activeTab === 'posts') {
+      cachedData.current.posts = posts;
+    } else if (activeTab === 'followers') {
+      cachedData.current.followers = followers;
+    } else if (activeTab === 'following') {
+      cachedData.current.following = following;
+    }
+
+    setActiveTab(value);
+    cachedData.current.lastLoadedTab = value;
+  }, [activeTab, posts, followers, following]);
+
+  // 이미지 프리로딩 함수
+  const preloadImages = useCallback((imageUrls: string[]) => {
+    imageUrls.forEach(url => {
+      if (!preloadedImages.has(url)) {
+        Image.prefetch(url)
+          .then(() => {
+            setPreloadedImages(prev => new Set([...prev, url]));
+          })
+          .catch(() => {});
+      }
+    });
+  }, [preloadedImages]);
+
+  // 이미지 로딩 상태 관리
+  const handleImageLoadStart = useCallback((imageUrl: string) => {
+    setLoadingImages(prev => {
+      const newSet = new Set(prev);
+      newSet.add(imageUrl);
+      return newSet;
+    });
+  }, []);
+
+  const handleImageLoadEnd = useCallback((imageUrl: string) => {
+    setLoadingImages(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(imageUrl);
+      return newSet;
+    });
+    setImageCache(prev => ({ ...prev, [imageUrl]: true }));
+  }, []);
+
+  // 이미지 렌더링 최적화
+  const renderImage = useCallback((imageUrl: string, style: any) => {
+    const isCached = imageCache[imageUrl];
+    const isLoading = loadingImages.has(imageUrl);
+    const isPreloaded = preloadedImages.has(imageUrl);
+
+    return (
+      <View style={[styles.imageWrapper, style]}>
+        <Image
+          source={{ 
+            uri: imageUrl.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
+              ? imageUrl.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
+              : imageUrl.startsWith('http')
+                ? imageUrl
+                : `${IMAGE_BASE_URL}${imageUrl}`
+          }}
+          style={[styles.image, isCached && styles.cachedImage]}
+          resizeMode="cover"
+          onLoadStart={() => handleImageLoadStart(imageUrl)}
+          onLoadEnd={() => handleImageLoadEnd(imageUrl)}
+          onError={() => handleImageLoadEnd(imageUrl)}
+          progressiveRenderingEnabled={true}
+          fadeDuration={0}
+        />
+        {isLoading && !isPreloaded && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="small" color="#1499D9" />
+          </View>
+        )}
+      </View>
+    );
+  }, [imageCache, loadingImages, preloadedImages, handleImageLoadStart, handleImageLoadEnd]);
+
+  // 뷰어블 아이템 변경 감지
+  const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: any[] }) => {
+    const imageUrls = viewableItems
+      .flatMap(item => [
+        ...item.item.images.map((img: any) => img.imageUrl),
+        ...item.item.voteOptions
+          .filter((opt: any) => opt.optionImage)
+          .map((opt: any) => opt.optionImage)
+      ])
+      .filter(Boolean);
+    
+    preloadImages(imageUrls);
+  }, [preloadImages]);
+
+  const flatListProps = useMemo(() => ({
+    onViewableItemsChanged,
+    viewabilityConfig: {
+      itemVisiblePercentThreshold: 50,
+      minimumViewTime: 100,
+    },
+  }), [onViewableItemsChanged]);
+
+  // 이미지 옵션 게이지 애니메이션 useEffect (posts가 바뀔 때마다)
+  useEffect(() => {
+    posts.forEach(item => {
+      const totalCount = item.voteOptions.reduce((sum, o) => sum + o.voteCount, 0);
+      item.voteOptions.forEach(opt => {
+        if (opt.optionImage) {
+          if (!gaugeWidthAnims.current[opt.id]) {
+            gaugeWidthAnims.current[opt.id] = new RNAnimated.Value(0);
+          }
+          const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
+          const optionWidth = optionWidthRef.current[opt.id] || 0;
+          if (optionWidth > 0) {
+            const targetWidth = (optionWidth - imageWidth) * (percentage / 100);
+            RNAnimated.timing(gaugeWidthAnims.current[opt.id], {
+              toValue: targetWidth,
+              duration: 300,
+              useNativeDriver: false,
+            }).start();
+          }
+        }
+      });
+    });
+  }, [posts]);
 
   const isVoteClosed = useCallback((finishTime: string) => {
     const finish = new Date(finishTime)
@@ -340,11 +515,6 @@ const MyPageScreen: React.FC = () => {
   const handleCommentPress = useCallback((voteId: number) => {
     setCommentModalVoteId(voteId);
   }, []);
-
-  const handleTabChange = useCallback((value: TabType) => {
-    if (activeTab === value) return;
-    setActiveTab(value);
-  }, [activeTab]);
 
   const handleStatisticsPress = useCallback((voteId: number) => {
     const vote = posts.find(v => v.voteId === voteId);
@@ -651,21 +821,23 @@ const MyPageScreen: React.FC = () => {
     );
     
     const isDefault = profile.profileImage === 'default.jpg';
+    const profileImageUri = isDefault
+      ? `${IMAGE_BASE_URL}/images/default.png`
+      : profile.profileImage.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
+        ? profile.profileImage.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
+        : profile.profileImage.startsWith('http')
+          ? profile.profileImage
+          : `${IMAGE_BASE_URL}${profile.profileImage}`;
+
+    // 프로필 이미지 URI를 메모이제이션
+    const memoizedProfileImageUri = useMemo(() => profileImageUri, [profileImageUri]);
   
     return (
       <View style={styles.profileContainer}>
         <View style={styles.profileHeader}>
           <View style={styles.profileMainInfo}>
-            <Image
-              source={{
-                uri: isDefault
-                  ? `${IMAGE_BASE_URL}/images/default.png`
-                  : profile.profileImage.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
-                    ? profile.profileImage.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
-                    : profile.profileImage.startsWith('http')
-                      ? profile.profileImage
-                      : `${IMAGE_BASE_URL}${profile.profileImage}`,
-              }}
+            <MemoizedProfileImage
+              uri={memoizedProfileImageUri}
               style={styles.profileImage}
             />
             <View style={styles.profileInfo}>
@@ -817,6 +989,11 @@ const MyPageScreen: React.FC = () => {
         windowSize={10}
         initialNumToRender={5}
         updateCellsBatchingPeriod={50}
+        maintainVisibleContentPosition={{
+          minIndexForVisible: 0,
+          autoscrollToTopThreshold: 10,
+        }}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -831,6 +1008,7 @@ const MyPageScreen: React.FC = () => {
             {renderHeader()}
           </>
         )}
+        {...flatListProps}
       />
     );
   };
@@ -872,6 +1050,7 @@ const MyPageScreen: React.FC = () => {
   return (
     <SafeAreaView style={[styles.safeArea, { flex: 1, paddingTop: insets.top }]}>
       <FlatList
+        ref={flatListRef}
         data={activeTab === 'posts' ? posts : activeTab === 'followers' ? followers : following}
         renderItem={activeTab === 'posts' ? renderPost : renderUser}
         keyExtractor={activeTab === 'posts' ? (item: VoteResponse) => item.voteId.toString() : (item: any) => `${activeTab}-${item.id}`}
@@ -882,10 +1061,15 @@ const MyPageScreen: React.FC = () => {
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
         removeClippedSubviews={true}
-        maxToRenderPerBatch={5}
-        windowSize={10}
-        initialNumToRender={5}
+        maxToRenderPerBatch={3}
+        windowSize={3}
+        initialNumToRender={3}
         updateCellsBatchingPeriod={50}
+        maintainVisibleContentPosition={{
+          minIndexForVisible: 0,
+          autoscrollToTopThreshold: 10,
+        }}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -895,7 +1079,7 @@ const MyPageScreen: React.FC = () => {
             progressViewOffset={10}
           />
         }
-        ListHeaderComponent={() => (
+        ListHeaderComponent={React.memo(() => (
           <>
             {profileLoading ? (
               <ProfileSkeleton />
@@ -903,7 +1087,8 @@ const MyPageScreen: React.FC = () => {
               renderHeader()
             )}
           </>
-        )}
+        ))}
+        {...flatListProps}
       />
 
       {commentModalVoteId !== null && (
@@ -1667,6 +1852,23 @@ const styles = StyleSheet.create({
     color: '#3182CE',
     fontWeight: '600',
     fontSize: 14,
+  },
+  imageWrapper: {
+    position: 'relative',
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 0,
+    overflow: 'hidden',
+    backgroundColor: '#E2E8F0',
+  },
+  cachedImage: {
+    opacity: 1,
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

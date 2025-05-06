@@ -331,6 +331,9 @@ const StorageScreen: React.FC = () => {
   const loadedImages = useRef<Set<string>>(new Set());
   const imageBatchSize = 10; // 배치 크기 증가
   const imageCacheTimeout = useRef<NodeJS.Timeout>();
+  const [imagesLoaded, setImagesLoaded] = useState(false);
+  const totalImagesToLoad = useRef(0);
+  const loadedImagesCount = useRef(0);
 
   // 이미지 URL 처리 최적화
   const processImageUrl = useCallback((url: string) => {
@@ -339,7 +342,22 @@ const StorageScreen: React.FC = () => {
     return `${IMAGE_BASE_URL}${url}`;
   }, []);
 
-  // 이미지 프리로딩 최적화
+  // 이미지 로딩 상태 초기화 함수
+  const resetImageLoadingState = useCallback(() => {
+    setImagesLoaded(false);
+    loadedImagesCount.current = 0;
+    totalImagesToLoad.current = 0;
+  }, []);
+
+  // 이미지 로딩 완료 체크 함수
+  const checkAllImagesLoaded = useCallback(() => {
+    if (totalImagesToLoad.current > 0 && loadedImagesCount.current >= totalImagesToLoad.current) {
+      setImagesLoaded(true);
+      setIsSkeletonLoading(false);
+    }
+  }, []);
+
+  // 이미지 프리로딩 최적화 수정
   const preloadImages = useCallback((imageUrls: string[]) => {
     const urlsToLoad = imageUrls
       .filter(url => url && !preloadedImages.current.has(url))
@@ -347,6 +365,10 @@ const StorageScreen: React.FC = () => {
       .filter(Boolean);
 
     if (urlsToLoad.length === 0) return;
+
+    // 이미지 로딩 상태 초기화
+    resetImageLoadingState();
+    totalImagesToLoad.current = urlsToLoad.length;
 
     // 이미지 배치 로딩 - 병렬 처리
     const batches = [];
@@ -364,15 +386,20 @@ const StorageScreen: React.FC = () => {
                 .then(() => {
                   preloadedImages.current.add(url);
                   imageCache.current[url] = true;
+                  loadedImagesCount.current += 1;
+                  checkAllImagesLoaded();
                 })
-                .catch(() => {});
+                .catch(() => {
+                  loadedImagesCount.current += 1;
+                  checkAllImagesLoaded();
+                });
             }
             return Promise.resolve();
           })
         )
       )
     ).catch(() => {});
-  }, [processImageUrl]);
+  }, [processImageUrl, resetImageLoadingState, checkAllImagesLoaded]);
 
   // 이미지 렌더링 최적화
   const renderImage = useCallback((imageUrl: string, style: any) => {
@@ -456,7 +483,7 @@ const StorageScreen: React.FC = () => {
     setScrollPosition(event.nativeEvent.contentOffset.y);
   };
 
-  // 초기 데이터 로드
+  // 초기 데이터 로드 수정
   useFocusEffect(
     React.useCallback(() => {
       const loadAllData = async () => {
@@ -466,6 +493,7 @@ const StorageScreen: React.FC = () => {
 
         setLoading(true);
         setIsSkeletonLoading(true);
+        resetImageLoadingState();
         
         try {
           const [votedRes, likedRes, bookmarkedRes] = await Promise.all([
@@ -524,13 +552,9 @@ const StorageScreen: React.FC = () => {
 
           setHasInitialLoad(true);
           setIsInitialLoad(true);
-          
-          // 스켈레톤 로딩 완료 후 약간의 지연을 두고 게이지 애니메이션 시작
-          setTimeout(() => {
-            setIsSkeletonLoading(false);
-          }, 300);
         } catch (err) {
           console.error('[초기 데이터 로드 에러]', err);
+          setIsSkeletonLoading(false);
         } finally {
           setLoading(false);
         }
@@ -543,7 +567,7 @@ const StorageScreen: React.FC = () => {
           clearTimeout(imageCacheTimeout.current);
         }
       };
-    }, [hasInitialLoad])
+    }, [hasInitialLoad, resetImageLoadingState, preloadImages])
   );
 
   const loadPosts = async (nextPage = 0) => {
@@ -582,6 +606,25 @@ const StorageScreen: React.FC = () => {
         setVotes(uniqueNewVotes);
         setPage(pageNumber + 1);
         setIsLast(res.last);
+
+        // 10개 이후 새로 로드되는 글들도 게이지가 바로 차도록 setValue로 세팅
+        if (nextPage > 0) {
+          res.content.forEach((item: VoteResponse) => {
+            const totalCount = item.voteOptions.reduce((sum: number, opt: any) => sum + opt.voteCount, 0);
+            item.voteOptions.forEach((opt: any) => {
+              const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
+              const optionWidth = optionWidthRef.current[opt.id] || 0;
+              if (optionWidth > 0) {
+                const targetWidth = optionWidth * (percentage / 100);
+                if (!gaugeWidthAnims.current[opt.id]) {
+                  gaugeWidthAnims.current[opt.id] = new RNAnimated.Value(targetWidth);
+                } else {
+                  gaugeWidthAnims.current[opt.id].setValue(targetWidth);
+                }
+              }
+            });
+          });
+        }
       }
     } catch (err) {
       console.error('[API 에러]', err);
@@ -1182,7 +1225,7 @@ const StorageScreen: React.FC = () => {
       </View>
     ) : null,
     ListEmptyComponent: () => (
-      isSkeletonLoading ? (
+      isSkeletonLoading || !imagesLoaded ? (
         <View style={styles.skeletonContainer}>
           {Array(3).fill(0).map((_, index) => (
             <SkeletonLoader key={`skeleton-${index}`} />
@@ -1211,7 +1254,7 @@ const StorageScreen: React.FC = () => {
       itemVisiblePercentThreshold: 50,
       minimumViewTime: 100,
     },
-  }), [loading, votes, refreshing, page, isLast, storageType, scrollPosition, renderItem]);
+  }), [loading, votes, refreshing, page, isLast, storageType, scrollPosition, renderItem, isSkeletonLoading, imagesLoaded]);
 
   return (
     <View style={[styles.safeArea, { paddingTop: insets.top }]}>
@@ -1680,15 +1723,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   skeletonContainer: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 0,
     paddingVertical: 8,
+    paddingTop: -4,
   },
   skeletonItem: {
     backgroundColor: '#FFFFFF',
     marginBottom: 12,
-    borderRadius: 12,
+    borderRadius: 0,
     padding: 16,
-    marginHorizontal: 4,
+    marginHorizontal: 0,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
     shadowColor: '#000',
@@ -1699,6 +1743,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
+    marginTop: 0,
+    marginLeft: -4,
   },
   skeletonHeader: {
     flexDirection: 'row',
