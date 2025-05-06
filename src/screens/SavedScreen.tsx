@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -281,7 +281,11 @@ const StorageScreen: React.FC = () => {
   const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('region');
   
   // 각 탭의 스크롤 위치를 저장하는 상태 추가
-  const [scrollPosition, setScrollPosition] = useState(0);
+  const [scrollPositions, setScrollPositions] = useState<{ [key in StorageType]: number }>({
+    voted: 0,
+    liked: 0,
+    bookmarked: 0,
+  });
   const flatListRef = useRef<FlatList>(null);
   const prevVotesLength = useRef(0);
 
@@ -472,15 +476,16 @@ const StorageScreen: React.FC = () => {
     // 새로운 탭의 저장된 스크롤 위치로 이동
     setTimeout(() => {
       flatListRef.current?.scrollToOffset({
-        offset: scrollPosition,
+        offset: scrollPositions[value] || 0,
         animated: false
       });
     }, 0);
-  }, [cachedData, cachedPages, cachedIsLast, scrollPosition, preloadImages]);
+  }, [cachedData, cachedPages, cachedIsLast, scrollPositions, preloadImages]);
 
   // 스크롤 이벤트 핸들러
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    setScrollPosition(event.nativeEvent.contentOffset.y);
+    const y = event.nativeEvent.contentOffset.y;
+    setScrollPositions(prev => ({ ...prev, [storageType]: y }));
   };
 
   // 초기 데이터 로드 수정
@@ -496,11 +501,13 @@ const StorageScreen: React.FC = () => {
         resetImageLoadingState();
         
         try {
-          const [votedRes, likedRes, bookmarkedRes] = await Promise.all([
+          // 1초 대기와 API 병렬 처리
+          const [votedRes, likedRes, bookmarkedRes] = (await Promise.all([
             getStoragePosts('voted', 0),
             getStoragePosts('liked', 0),
-            getStoragePosts('bookmarked', 0)
-          ]);
+            getStoragePosts('bookmarked', 0),
+            new Promise(resolve => setTimeout(resolve, 1000)), // 1초 대기 추가
+          ])) as any[];
           
           // 각 탭의 데이터 캐시
           setCachedData({
@@ -874,19 +881,25 @@ const StorageScreen: React.FC = () => {
     closed: boolean 
   }) => {
     const [optionWidth, setOptionWidth] = useState(0);
+    // 이미지 옵션 게이지 width 애니메이션 값
+    const gaugeWidthAnim = useRef(new RNAnimated.Value(0)).current;
+    const [didInit, setDidInit] = useState(false);
 
-    useEffect(() => {
-      if (optionWidth > 0) {
-        optionWidthRef.current[option.id] = optionWidth;
-        // 옵션 너비가 측정되면 즉시 게이지 너비 설정
-        const totalCount = option.voteCount + option.voteOptions?.reduce((sum: number, opt: any) => sum + opt.voteCount, 0) || 0;
-        const percentage = totalCount > 0 ? Math.round((option.voteCount / totalCount) * 100) : 0;
+    useLayoutEffect(() => {
+      if (option.optionImage && optionWidth > 0) {
         const targetWidth = (optionWidth - imageWidth) * (percentage / 100);
-        if (!gaugeWidthAnims.current[option.id]) {
-          gaugeWidthAnims.current[option.id] = new RNAnimated.Value(targetWidth);
+        if (!didInit) {
+          gaugeWidthAnim.setValue(targetWidth);
+          setDidInit(true);
+        } else {
+          RNAnimated.timing(gaugeWidthAnim, {
+            toValue: targetWidth,
+            duration: 300,
+            useNativeDriver: false,
+          }).start();
         }
       }
-    }, [optionWidth, option.id, option.voteCount]);
+    }, [optionWidth, percentage, option.optionImage, didInit]);
 
     const handleVote = useCallback(() => {
       onPress();
@@ -895,7 +908,7 @@ const StorageScreen: React.FC = () => {
         const totalCount = option.voteCount + option.voteOptions?.reduce((sum: number, opt: any) => sum + opt.voteCount, 0) || 0;
         const newPercentage = totalCount > 0 ? Math.round((option.voteCount / totalCount) * 100) : 0;
         const targetWidth = (optionWidth - imageWidth) * (newPercentage / 100);
-        RNAnimated.timing(gaugeWidthAnims.current[option.id], {
+        RNAnimated.timing(gaugeWidthAnim, {
           toValue: targetWidth,
           duration: 300,
           useNativeDriver: false,
@@ -917,13 +930,13 @@ const StorageScreen: React.FC = () => {
           onLayout={option.optionImage ? (e) => setOptionWidth(e.nativeEvent.layout.width) : undefined}
         >
           {/* 이미지 옵션: 게이지 바 */}
-          {option.optionImage && showGauge && gaugeWidthAnims.current[option.id] && (
+          {option.optionImage && showGauge && gaugeWidthAnim && (
             <RNAnimated.View
               style={[
                 styles.gaugeBar,
                 {
                   left: imageWidth,
-                  width: gaugeWidthAnims.current[option.id],
+                  width: gaugeWidthAnim,
                   backgroundColor: isSelected ? '#4299E1' : '#E2E8F0',
                   opacity: 0.3,
                   position: 'absolute',
@@ -1034,84 +1047,86 @@ const StorageScreen: React.FC = () => {
     const hasImageOptions = item.voteOptions.some(opt => opt.optionImage);
 
     return (
-      <View style={styles.voteItem}>
-        <View style={styles.userInfoRow}>
-          <View style={styles.userInfoLeft}>
-            <Image
-              source={{
-                uri: item.profileImage === 'default.jpg'
-                  ? `${IMAGE_BASE_URL}/images/default.png`
-                  : item.profileImage,
-              }}
-              style={styles.profileImage}
-            />
-            <View>
-              <TouchableOpacity
-                onPress={() => navigation.navigate('UserPageScreen', { userId: item.userId })}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.nickname}>{item.name}</Text>
-              </TouchableOpacity>
-              <Text style={styles.createdAtText}>{formatCreatedAt(item.createdAt)}</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.metaContainer}>
-          <View style={styles.categoryBadge}>
-            <Text style={styles.categoryText}>{item.categoryName}</Text>
-          </View>
-          <Text style={styles.dateText}>{formatDate(item.finishTime)}</Text>
-          {closed && (
-            <View style={[styles.categoryBadge, { backgroundColor: '#CBD5E0', marginLeft: 0 }]}>
-              <Text style={[styles.categoryText, { color: '#4A5568' }]}>마감됨</Text>
-            </View>
-          )}
-        </View>
-
-        <Text style={styles.title}>{item.title}</Text>
-
-        {item.content && (
-          <Text numberOfLines={2} style={styles.content}>{item.content}</Text>
-        )}
-
-        {item.images.length > 0 && (
-          <View style={styles.imageContainer}>
-            {item.images.map((img) => (
-              <View key={img.id} style={styles.imageWrapper}>
-                {renderImage(img.imageUrl, styles.imageContent)}
+      <Animated.View entering={FadeIn.duration(400)}>
+        <View style={styles.voteItem}>
+          <View style={styles.userInfoRow}>
+            <View style={styles.userInfoLeft}>
+              <Image
+                source={{
+                  uri: item.profileImage === 'default.jpg'
+                    ? `${IMAGE_BASE_URL}/images/default.png`
+                    : item.profileImage,
+                }}
+                style={styles.profileImage}
+              />
+              <View>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('UserPageScreen', { userId: item.userId })}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.nickname}>{item.name}</Text>
+                </TouchableOpacity>
+                <Text style={styles.createdAtText}>{formatCreatedAt(item.createdAt)}</Text>
               </View>
-            ))}
+            </View>
           </View>
-        )}
 
-        {item.voteOptions.length > 0 && (
-          <View style={[styles.optionContainer, hasImageOptions && styles.imageOptionContainer]}>
-            {item.voteOptions.map((opt) => {
-              const isSelected = selectedOptionId === opt.id;
-              const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
-              
-              return (
-                <VoteOptionItem
-                  key={`vote-option-${item.voteId}-${opt.id}`}
-                  option={opt}
-                  isSelected={isSelected}
-                  showGauge={showGauge}
-                  percentage={percentage}
-                  onPress={() => handleVote(item.voteId, opt.id)}
-                  closed={closed}
-                />
-              );
-            })}
-            {showGauge && totalCount > 0 && (
-              <Text style={styles.responseCountText}>{totalCount}명 참여</Text>
+          <View style={styles.metaContainer}>
+            <View style={styles.categoryBadge}>
+              <Text style={styles.categoryText}>{item.categoryName}</Text>
+            </View>
+            <Text style={styles.dateText}>{formatDate(item.finishTime)}</Text>
+            {closed && (
+              <View style={[styles.categoryBadge, { backgroundColor: '#CBD5E0', marginLeft: 0 }]}>
+                <Text style={[styles.categoryText, { color: '#4A5568' }]}>마감됨</Text>
+              </View>
             )}
           </View>
-        )}
 
-        <View style={styles.divider} />
-        {renderReactions(item)}
-      </View>
+          <Text style={styles.title}>{item.title}</Text>
+
+          {item.content && (
+            <Text numberOfLines={2} style={styles.content}>{item.content}</Text>
+          )}
+
+          {item.images.length > 0 && (
+            <View style={styles.imageContainer}>
+              {item.images.map((img) => (
+                <View key={img.id} style={styles.imageWrapper}>
+                  {renderImage(img.imageUrl, styles.imageContent)}
+                </View>
+              ))}
+            </View>
+          )}
+
+          {item.voteOptions.length > 0 && (
+            <View style={[styles.optionContainer, hasImageOptions && styles.imageOptionContainer]}>
+              {item.voteOptions.map((opt) => {
+                const isSelected = selectedOptionId === opt.id;
+                const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
+                
+                return (
+                  <VoteOptionItem
+                    key={`vote-option-${item.voteId}-${opt.id}`}
+                    option={opt}
+                    isSelected={isSelected}
+                    showGauge={showGauge}
+                    percentage={percentage}
+                    onPress={() => handleVote(item.voteId, opt.id)}
+                    closed={closed}
+                  />
+                );
+              })}
+              {showGauge && totalCount > 0 && (
+                <Text style={styles.responseCountText}>{totalCount}명 참여</Text>
+              )}
+            </View>
+          )}
+
+          <View style={styles.divider} />
+          {renderReactions(item)}
+        </View>
+      </Animated.View>
     );
   }, [
     isVoteClosed,
@@ -1254,7 +1269,7 @@ const StorageScreen: React.FC = () => {
       itemVisiblePercentThreshold: 50,
       minimumViewTime: 100,
     },
-  }), [loading, votes, refreshing, page, isLast, storageType, scrollPosition, renderItem, isSkeletonLoading, imagesLoaded]);
+  }), [loading, votes, refreshing, page, isLast, storageType, scrollPositions, renderItem, isSkeletonLoading, imagesLoaded]);
 
   return (
     <View style={[styles.safeArea, { paddingTop: insets.top }]}>
@@ -1755,7 +1770,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#CBD5E0',
     marginRight: 12,
   },
   skeletonUserInfo: {
@@ -1763,7 +1778,7 @@ const styles = StyleSheet.create({
   },
   skeletonText: {
     height: 14,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#CBD5E0',
     borderRadius: 7,
     marginBottom: 4,
     width: '80%',
@@ -1776,26 +1791,26 @@ const styles = StyleSheet.create({
   skeletonCategory: {
     width: 80,
     height: 20,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#CBD5E0',
     borderRadius: 10,
     marginRight: 8,
   },
   skeletonDate: {
     width: 100,
     height: 20,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#CBD5E0',
     borderRadius: 10,
   },
   skeletonTitle: {
     height: 24,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#CBD5E0',
     borderRadius: 12,
     marginBottom: 8,
     width: '90%',
   },
   skeletonContent: {
     height: 20,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#CBD5E0',
     borderRadius: 10,
     marginBottom: 12,
     width: '90%',
@@ -1803,7 +1818,7 @@ const styles = StyleSheet.create({
   skeletonImage: {
     width: '100%',
     aspectRatio: 1,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#CBD5E0',
     borderRadius: 12,
     marginBottom: 12,
   },
@@ -1812,13 +1827,13 @@ const styles = StyleSheet.create({
   },
   skeletonOption: {
     height: 44,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#CBD5E0',
     borderRadius: 8,
     marginBottom: 8,
   },
   skeletonReactions: {
     height: 28,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#CBD5E0',
     borderRadius: 8,
   },
   optionTextContainer: {
