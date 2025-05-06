@@ -57,6 +57,9 @@ type NavigationProp = StackNavigationProp<{
 // 전역 이미지 캐시 상태
 const profileImageCache = new Map<string, boolean>();
 
+// Animated TouchableOpacity 생성
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
+
 // 스켈레톤 UI 컴포넌트
 const SkeletonLoader = () => {
   const opacity = useSharedValue(0.5);
@@ -374,8 +377,7 @@ const PostItem = React.memo(({
                 <View key={opt.id} style={styles.optionWrapper}>
                   <TouchableOpacity
                     style={[
-                      styles.optionButton,
-                      styles.optionButtonWithImage,
+                      styles.imageOptionRow,
                       isSelected && styles.selectedOptionButton,
                     ]}
                     onPress={() => onVote(item.voteId, opt.id)}
@@ -383,7 +385,7 @@ const PostItem = React.memo(({
                     activeOpacity={0.7}
                   >
                     <Image
-                      source={{ 
+                      source={{
                         uri: opt.optionImage.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
                           ? opt.optionImage.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
                           : opt.optionImage.startsWith('http')
@@ -393,26 +395,18 @@ const PostItem = React.memo(({
                       style={styles.leftOptionImage}
                       resizeMode="cover"
                     />
-                    {showGauge && (
+                    <View style={styles.imageOptionGaugeArea}>
                       <VoteOptionGauge percentage={percentage} isSelected={isSelected} />
-                    )}
-                    <View style={styles.rightContent}>
-                      <View style={styles.textAndPercentRow}>
+                      <View style={styles.imageOptionContentRow}>
                         <Text style={[
                           styles.optionButtonText,
                           isSelected && styles.selectedOptionText,
-                          showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
-                        ]}>
-                          {opt.content}
-                        </Text>
-                        {showGauge && (
-                          <Text style={[
-                            styles.percentageText,
-                            isSelected && styles.selectedPercentageText
-                          ]}>
-                            {percentage}%
-                          </Text>
-                        )}
+                          { color: isSelected ? '#2C5282' : '#4A5568' }
+                        ]}>{opt.content}</Text>
+                        <Text style={[
+                          styles.percentageText,
+                          isSelected && styles.selectedPercentageText
+                        ]}>{percentage}%</Text>
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -638,7 +632,6 @@ const MyPageScreen: React.FC = () => {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     setPostsLoading(true);
-    setShowSkeleton(true);
     try {
       await Promise.all([
         fetchProfile(),
@@ -1729,7 +1722,7 @@ const styles = StyleSheet.create({
     height: 24,
     backgroundColor: '#CBD5E0',
     borderRadius: 12,
-    marginBottom: 6,
+    marginBottom: 2,
     width: '90%',
     marginHorizontal: 12,
   },
@@ -1743,25 +1736,25 @@ const styles = StyleSheet.create({
   },
   skeletonOptions: {
     paddingHorizontal: 12,
-    gap: 8,
+    gap: 3,
   },
   skeletonOption: {
     height: 44,
     backgroundColor: '#CBD5E0',
     borderRadius: 8,
     width: '100%',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   skeletonReactions: {
     height: 28,
     backgroundColor: '#CBD5E0',
     borderRadius: 8,
-    marginTop: 6,
+    marginTop: 4,
     marginHorizontal: 12,
     width: '90%',
   },
   skeletonIntroduction: {
-    marginTop: 8,
+    marginTop: 4,
     paddingHorizontal: 16,
   },
   loadingProfileContainer: {
@@ -1850,7 +1843,7 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: 0,
     backgroundColor: '#111',
-    marginRight: 6,
+    marginRight: 0,
   },
   rightContent: {
     flex: 1,
@@ -1906,6 +1899,40 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 0,
     gap: 8,
+  },
+  imageOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    minHeight: 100,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#F7F7F7',
+    marginBottom: 6,
+  },
+  imageOptionGaugeArea: {
+    flex: 1,
+    height: 100,
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  imageOptionGaugeBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 0,
+    zIndex: 1,
+    opacity: 0.3,
+  },
+  imageOptionContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    width: '100%',
+    height: '100%',
+    zIndex: 2,
   },
 });
 
