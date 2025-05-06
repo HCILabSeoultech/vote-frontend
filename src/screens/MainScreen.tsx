@@ -40,13 +40,13 @@ interface JwtPayload {
 }
 
 const SkeletonLoader = React.memo(() => {
-  const opacity = useSharedValue(0.5);
+  const opacity = useSharedValue(0.3);
   
   useEffect(() => {
     opacity.value = withRepeat(
       withSequence(
-        withTiming(0.8, { duration: 800 }),
-        withTiming(0.5, { duration: 800 })
+        withTiming(0.7, { duration: 1000 }),
+        withTiming(0.3, { duration: 1000 })
       ),
       -1,
       true
@@ -67,13 +67,8 @@ const SkeletonLoader = React.memo(() => {
             <View style={[styles.skeletonText, { width: '60%' }]} />
           </View>
         </View>
-        <View style={styles.skeletonMetaRow}>
-          <View style={styles.skeletonCategory} />
-          <View style={styles.skeletonDate} />
-        </View>
         <View style={styles.skeletonTitle} />
         <View style={styles.skeletonContent} />
-        <View style={styles.skeletonImage} />
         <View style={styles.skeletonOptions}>
           <View style={styles.skeletonOption} />
           <View style={styles.skeletonOption} />
@@ -660,11 +655,8 @@ const MainScreen: React.FC = () => {
   }, [])
 
   useEffect(() => {
-    if (isFirstLoad.current) {
-      fetchInitialVotes();
-      isFirstLoad.current = false;
-    }
-  }, []);
+    fetchInitialVotes();
+  }, [fetchInitialVotes]);
 
   const updateSelectedOptions = useCallback((voteId: number, optionId: number) => {
     setSelectedOptions(prev => {
@@ -853,7 +845,7 @@ const MainScreen: React.FC = () => {
           flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
         }, 100);
       }
-    }, [route.params])
+    }, [route.params, handleRefresh])
   );
 
   const renderHeader = useCallback(() => (
@@ -867,9 +859,10 @@ const MainScreen: React.FC = () => {
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: any[] }) => {
     const imageUrls = viewableItems
+      .filter(item => item.item !== null)
       .flatMap(item => [
-        ...item.item.images.map((img: any) => img.imageUrl),
-        ...item.item.voteOptions
+        ...(item.item.images || []).map((img: any) => img.imageUrl),
+        ...(item.item.voteOptions || [])
           .filter((opt: any) => opt.optionImage)
           .map((opt: any) => opt.optionImage)
       ])
@@ -896,9 +889,14 @@ const MainScreen: React.FC = () => {
       )}
       <FlatList
         ref={flatListRef}
-        data={isLoading ? [] : votes}
-        keyExtractor={(item, index) => item.voteId?.toString() || `skeleton-${index}`}
-        renderItem={renderItem}
+        data={isLoading ? Array(3).fill(null) : votes}
+        keyExtractor={(item, index) => item?.voteId?.toString() || `skeleton-${index}`}
+        renderItem={({ item, index }) => {
+          if (isLoading || !item) {
+            return <SkeletonLoader key={index} />;
+          }
+          return renderItem({ item });
+        }}
         contentContainerStyle={styles.container}
         ListHeaderComponent={renderHeader}
         onEndReached={handleLoadMore}
@@ -923,13 +921,7 @@ const MainScreen: React.FC = () => {
           />
         }
         ListEmptyComponent={
-          isLoading ? (
-            <View style={styles.loadingContainer}>
-              {[1, 2, 3].map((_, index) => (
-                <SkeletonLoader key={index} />
-              ))}
-            </View>
-          ) : votes.length === 0 ? (
+          !isLoading && votes.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>아직 투표가 없습니다.</Text>
             </View>
@@ -1308,40 +1300,21 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#CBD5E0',
   },
   skeletonUserInfo: {
     flex: 1,
   },
   skeletonText: {
     height: 14,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#CBD5E0',
     borderRadius: 7,
     marginBottom: 4,
     width: '80%',
   },
-  skeletonMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    marginBottom: 2,
-  },
-  skeletonCategory: {
-    width: 80,
-    height: 14,
-    backgroundColor: '#E2E8F0',
-    borderRadius: 7,
-  },
-  skeletonDate: {
-    width: 80,
-    height: 14,
-    backgroundColor: '#E2E8F0',
-    borderRadius: 7,
-  },
   skeletonTitle: {
     height: 24,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#CBD5E0',
     borderRadius: 12,
     marginBottom: 8,
     width: '90%',
@@ -1349,17 +1322,11 @@ const styles = StyleSheet.create({
   },
   skeletonContent: {
     height: 20,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#CBD5E0',
     borderRadius: 8,
     marginBottom: 8,
     width: '90%',
     marginHorizontal: 12,
-  },
-  skeletonImage: {
-    width: '100%',
-    aspectRatio: 1,
-    backgroundColor: '#E2E8F0',
-    marginBottom: 8,
   },
   skeletonOptions: {
     paddingHorizontal: 12,
@@ -1367,13 +1334,13 @@ const styles = StyleSheet.create({
   },
   skeletonOption: {
     height: 44,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#CBD5E0',
     borderRadius: 8,
     width: '100%',
   },
   skeletonReactions: {
     height: 28,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#CBD5E0',
     borderRadius: 8,
     marginTop: 8,
     marginHorizontal: 12,

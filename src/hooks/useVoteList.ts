@@ -13,7 +13,11 @@ export const useVoteList = () => {
   const fetchInitialVotes = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await getMainPageVotes(0);
+      // 최소 1초의 로딩 시간 보장
+      const [response] = await Promise.all([
+        getMainPageVotes(0),
+        new Promise(resolve => setTimeout(resolve, 1000))
+      ]);
       setVotes(response.content);
       setHasMore(response.content.length === 10);
       setPage(0);
