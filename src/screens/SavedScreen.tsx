@@ -91,7 +91,7 @@ const SkeletonLoader = React.memo(() => {
   useEffect(() => {
     opacity.value = withRepeat(
       withSequence(
-        withTiming(0.7, { duration: 600 }),
+        withTiming(0.6, { duration: 600 }),
         withTiming(0.4, { duration: 600 })
       ),
       -1,
@@ -1078,7 +1078,7 @@ const StorageScreen: React.FC = () => {
     const hasImageOptions = item.voteOptions.some(opt => opt.optionImage);
 
     return (
-      <Animated.View entering={FadeIn.duration(400)}>
+      <Animated.View entering={FadeIn.duration(500)}>
         <View style={styles.voteItem}>
           <View style={styles.userInfoRow}>
             <View style={styles.userInfoLeft}>

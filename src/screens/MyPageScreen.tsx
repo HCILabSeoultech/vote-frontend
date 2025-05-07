@@ -684,11 +684,10 @@ const MyPageScreen: React.FC = () => {
   // 뷰어블 아이템 변경 감지
   const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: any[] }) => {
     const imageUrls = viewableItems
+      .filter(item => item.item)
       .flatMap(item => [
-        ...item.item.images.map((img: any) => img.imageUrl),
-        ...item.item.voteOptions
-          .filter((opt: any) => opt.optionImage)
-          .map((opt: any) => opt.optionImage)
+        ...(item.item.images ? item.item.images.map((img: any) => img.imageUrl) : []),
+        ...(item.item.voteOptions ? item.item.voteOptions.filter((opt: any) => opt.optionImage).map((opt: any) => opt.optionImage) : [])
       ])
       .filter(Boolean);
     
@@ -1001,39 +1000,67 @@ const MyPageScreen: React.FC = () => {
 
     return (
       <FlatList
-        data={data}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
+        key={showSkeleton ? 'skeleton' : 'data'}
+        ref={flatListRef}
+        contentInsetAdjustmentBehavior="never"
+        data={showSkeleton ? Array(3).fill(null) : posts}
+        keyExtractor={(item, index) => item?.voteId?.toString() || `skeleton-${index}`}
+        renderItem={({ item, index }) => {
+          if (!item) {
+            return <SkeletonLoader key={index} />;
+          }
+          return (
+            <PostItem
+              item={item}
+              onVote={handleVote}
+              onToggleLike={handleToggleLike}
+              onToggleBookmark={handleToggleBookmark}
+              onCommentPress={handleCommentPress}
+              onStatisticsPress={handleStatisticsPress}
+              onDeleteVote={handleDeleteVote}
+              navigation={navigation}
+              formatCreatedAt={formatCreatedAt}
+              isVoteClosed={isVoteClosed}
+              selectedOptions={selectedOptions}
+            />
+          );
+        }}
+        ListHeaderComponent={showSkeleton ? (
+          <Animated.View style={[styles.loadingProfileContainer, skeletonAnimatedStyle]}>
+            <View style={styles.profileHeader}>
+              <View style={styles.profileMainInfo}>
+                <View style={styles.skeletonProfileImage} />
+                <View style={styles.profileInfo}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View style={[styles.skeletonText, { width: '30%', height: 24 }]} />
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <View style={[styles.skeletonText, { width: 80, height: 32, borderRadius: 8 }]} />
+                      <View style={[styles.skeletonText, { width: 80, height: 32, borderRadius: 8 }]} />
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </Animated.View>
+        ) : renderHeader()}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
-        ListEmptyComponent={null}
-        contentContainerStyle={styles.container}
-        style={{ flex: 1 }}
-        showsVerticalScrollIndicator={false}
-        removeClippedSubviews={true}
-        maxToRenderPerBatch={5}
-        windowSize={10}
-        initialNumToRender={5}
-        updateCellsBatchingPeriod={50}
-        maintainVisibleContentPosition={{
-          minIndexForVisible: 0,
-          autoscrollToTopThreshold: 10,
-        }}
-        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
             colors={["#1499D9"]}
             tintColor="#1499D9"
-            progressViewOffset={10}
           />
         }
-        ListHeaderComponent={() => (
-          <>
-            {renderHeader()}
-          </>
-        )}
+        ListEmptyComponent={renderEmptyComponent}
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+        removeClippedSubviews={false}
+        maxToRenderPerBatch={5}
+        windowSize={5}
+        updateCellsBatchingPeriod={50}
+        initialNumToRender={10}
         {...flatListProps}
       />
     );
@@ -1137,7 +1164,16 @@ const MyPageScreen: React.FC = () => {
 
   useEffect(() => {
     if (!showSkeleton) {
-      fadeAnim.value = withTiming(1, { duration: 400 });
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+      setTimeout(() => {
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+      }, 100);
+    }
+  }, [showSkeleton]);
+
+  useEffect(() => {
+    if (!showSkeleton) {
+      fadeAnim.value = withTiming(1, { duration: 500 });
     } else {
       fadeAnim.value = 0;
     }
@@ -1164,211 +1200,168 @@ const MyPageScreen: React.FC = () => {
   return (
     <SafeAreaView style={[styles.safeArea, { flex: 1, paddingTop: insets.top }]}> 
       {showSkeleton ? (
-        <View style={{ flex: 1 }}>
-          <Animated.View style={[styles.loadingProfileContainer, skeletonAnimatedStyle]}>
-            <View style={styles.profileHeader}>
-              <View style={styles.profileMainInfo}>
-                <View style={styles.skeletonProfileImage} />
-                <View style={styles.profileInfo}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <View style={[styles.skeletonText, { width: '30%', height: 24 }]} />
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      <View style={[styles.skeletonText, { width: 80, height: 32, borderRadius: 8 }]} />
-                      <View style={[styles.skeletonText, { width: 80, height: 32, borderRadius: 8 }]} />
+        <FlatList
+          key="skeleton"
+          ref={flatListRef}
+          contentInsetAdjustmentBehavior="never"
+          data={Array(3).fill(null)}
+          keyExtractor={(_, index) => `skeleton-${index}`}
+          renderItem={({ item, index }) => <SkeletonLoader key={index} />}
+          ListHeaderComponent={
+            <Animated.View style={[styles.loadingProfileContainer, skeletonAnimatedStyle]}>
+              <View style={styles.profileHeader}>
+                <View style={styles.profileMainInfo}>
+                  <View style={styles.skeletonProfileImage} />
+                  <View style={styles.profileInfo}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <View style={[styles.skeletonText, { width: '30%', height: 24 }]} />
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <View style={[styles.skeletonText, { width: 80, height: 32, borderRadius: 8 }]} />
+                        <View style={[styles.skeletonText, { width: 80, height: 32, borderRadius: 8 }]} />
+                      </View>
                     </View>
                   </View>
                 </View>
               </View>
-            </View>
-          </Animated.View>
-          {/* 탭 위에 텍스트 스켈레톤 바 추가 */}
-          <Animated.View style={[
-            {
-              width: '92%',
-              height: 20,
-              alignSelf: 'center',
-              marginBottom: 6,
-              marginTop: -5,
-              backgroundColor: '#CBD5E0',
-              borderRadius: 7,
-            },
-            skeletonAnimatedStyle
-          ]} />
-          <Animated.View style={[styles.tabContainer, skeletonAnimatedStyle]}>
-            <View style={styles.tabRow}>
-              <View style={[styles.skeletonText, { width: '30%', height: 35 }]} />
-              <View style={[styles.skeletonText, { width: '30%', height: 35 }]} />
-              <View style={[styles.skeletonText, { width: '30%', height: 35 }]} />
-            </View>
-          </Animated.View>
-          <FlatList
-            data={Array(3).fill(null)}
-            keyExtractor={(_, index) => `skeleton-${index}`}
-            renderItem={() => <SkeletonLoader />}
-            contentContainerStyle={styles.container}
-            showsVerticalScrollIndicator={false}
-            removeClippedSubviews={true}
-            maxToRenderPerBatch={5}
-            windowSize={10}
-            initialNumToRender={5}
-            updateCellsBatchingPeriod={50}
-          />
-        </View>
+            </Animated.View>
+          }
+          contentContainerStyle={styles.container}
+          showsVerticalScrollIndicator={false}
+          removeClippedSubviews={false}
+          maxToRenderPerBatch={5}
+          windowSize={5}
+          updateCellsBatchingPeriod={50}
+          initialNumToRender={10}
+        />
       ) : (
         <Animated.View style={[{ flex: 1 }, fadeStyle]}>
-          {renderHeader()}
-          <View style={{ flex: 1 }}>
-            <View style={{ display: activeTab === 'posts' ? 'flex' : 'none', flex: 1 }}>
-              <FlatList
-                ref={flatListRef}
-                data={posts}
-                renderItem={renderPost}
-                keyExtractor={(item) => item.voteId.toString()}
-                onEndReached={handleLoadMore}
-                onEndReachedThreshold={0.5}
-                refreshControl={
-                  <RefreshControl
-                    refreshing={refreshing}
-                    onRefresh={onRefresh}
-                    colors={["#1499D9"]}
-                    tintColor="#1499D9"
-                  />
-                }
-                ListEmptyComponent={renderEmptyComponent}
-                contentContainerStyle={styles.container}
-                showsVerticalScrollIndicator={false}
-                removeClippedSubviews={false}
-                maxToRenderPerBatch={5}
-                windowSize={5}
-                updateCellsBatchingPeriod={50}
-                initialNumToRender={10}
-                maintainVisibleContentPosition={{
-                  minIndexForVisible: 0,
-                  autoscrollToTopThreshold: null,
-                }}
-                {...flatListProps}
+          <FlatList
+            key="data"
+            ref={flatListRef}
+            contentInsetAdjustmentBehavior="never"
+            data={posts}
+            keyExtractor={(item, index) => item?.voteId?.toString() || `post-${index}`}
+            renderItem={renderPost}
+            ListHeaderComponent={renderHeader()}
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.5}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={["#1499D9"]}
+                tintColor="#1499D9"
               />
-            </View>
-            <View style={{ display: activeTab === 'followers' ? 'flex' : 'none', flex: 1 }}>
-              <FlatList
-                data={followers}
-                renderItem={renderUser}
-                keyExtractor={(item) => `follower-${item.id}`}
-                contentContainerStyle={styles.container}
-                showsVerticalScrollIndicator={false}
-                removeClippedSubviews={false}
-              />
-            </View>
-            <View style={{ display: activeTab === 'following' ? 'flex' : 'none', flex: 1 }}>
-              <FlatList
-                data={following}
-                renderItem={renderUser}
-                keyExtractor={(item) => `following-${item.id}`}
-                contentContainerStyle={styles.container}
-                showsVerticalScrollIndicator={false}
-                removeClippedSubviews={false}
-              />
-            </View>
-          </View>
-          {commentModalVoteId !== null && (
-            <Modal
-              visible={true}
-              transparent
-              statusBarTranslucent
-              animationType="slide"
-              onRequestClose={() => {
+            }
+            ListEmptyComponent={renderEmptyComponent}
+            contentContainerStyle={styles.container}
+            showsVerticalScrollIndicator={false}
+            removeClippedSubviews={false}
+            maxToRenderPerBatch={5}
+            windowSize={5}
+            updateCellsBatchingPeriod={50}
+            initialNumToRender={10}
+            {...flatListProps}
+          />
+        </Animated.View>
+      )}
+      {commentModalVoteId !== null && (
+        <Modal
+          visible={true}
+          transparent
+          statusBarTranslucent
+          animationType="slide"
+          onRequestClose={() => {
+            setCommentModalVoteId(null);
+          }}
+        >
+          <View style={styles.modalOverlay}>
+            <Pressable 
+              style={styles.modalBackground}
+              onPress={() => {
                 setCommentModalVoteId(null);
               }}
             >
-              <View style={styles.modalOverlay}>
-                <Pressable 
-                  style={styles.modalBackground}
-                  onPress={() => {
-                    setCommentModalVoteId(null);
-                  }}
-                >
-                  <View style={styles.modalBackdrop} />
-                </Pressable>
-                <View style={styles.modalContainer}>
-                  <CommentScreen
-                    route={{
-                      key: 'comment-modal',
-                      name: 'CommentScreen',
-                      params: {
-                        voteId: commentModalVoteId
-                      }
-                    }}
-                  />
-                </View>
-              </View>
-            </Modal>
-          )}
+              <View style={styles.modalBackdrop} />
+            </Pressable>
+            <View style={styles.modalContainer}>
+              <CommentScreen
+                route={{
+                  key: 'comment-modal',
+                  name: 'CommentScreen',
+                  params: {
+                    voteId: commentModalVoteId
+                  }
+                }}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
 
-          {statisticsModalVoteId !== null && (
-            <Modal
-              visible={true}
-              transparent
-              statusBarTranslucent
-              animationType="slide"
-              onRequestClose={() => {
+      {statisticsModalVoteId !== null && (
+        <Modal
+          visible={true}
+          transparent
+          statusBarTranslucent
+          animationType="slide"
+          onRequestClose={() => {
+            setStatisticsModalVoteId(null);
+          }}
+        >
+          <View style={styles.modalOverlay}>
+            <Pressable 
+              style={styles.modalBackground}
+              onPress={() => {
                 setStatisticsModalVoteId(null);
               }}
             >
-              <View style={styles.modalOverlay}>
-                <Pressable 
-                  style={styles.modalBackground}
+              <View style={styles.modalBackdrop} />
+            </Pressable>
+            <View style={[styles.modalContainer, styles.statisticsModalContainer]}>
+              <View style={styles.statisticsHeader}>
+                <Text style={styles.statisticsTitle}>투표 통계</Text>
+                <TouchableOpacity 
                   onPress={() => {
                     setStatisticsModalVoteId(null);
                   }}
+                  style={styles.closeButton}
                 >
-                  <View style={styles.modalBackdrop} />
-                </Pressable>
-                <View style={[styles.modalContainer, styles.statisticsModalContainer]}>
-                  <View style={styles.statisticsHeader}>
-                    <Text style={styles.statisticsTitle}>투표 통계</Text>
-                    <TouchableOpacity 
-                      onPress={() => {
-                        setStatisticsModalVoteId(null);
-                      }}
-                      style={styles.closeButton}
-                    >
-                      <Feather name="x" size={24} color="#4A5568" />
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.statisticsTabContainer}>
-                    <TouchableOpacity
-                      style={[styles.statisticsTabButton, activeStatTab === 'region' && styles.activeStatisticsTab]}
-                      onPress={() => setActiveStatTab('region')}
-                    >
-                      <Text style={[styles.statisticsTabText, activeStatTab === 'region' && styles.activeStatisticsTabText]}>지역별</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.statisticsTabButton, activeStatTab === 'age' && styles.activeStatisticsTab]}
-                      onPress={() => setActiveStatTab('age')}
-                    >
-                      <Text style={[styles.statisticsTabText, activeStatTab === 'age' && styles.activeStatisticsTabText]}>연령별</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.statisticsTabButton, activeStatTab === 'gender' && styles.activeStatisticsTab]}
-                      onPress={() => setActiveStatTab('gender')}
-                    >
-                      <Text style={[styles.statisticsTabText, activeStatTab === 'gender' && styles.activeStatisticsTabText]}>성별</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.statisticsContent}>
-                    {statisticsModalVoteId && (
-                      <>
-                        {activeStatTab === 'region' && <RegionStatistics voteId={statisticsModalVoteId} />}
-                        {activeStatTab === 'age' && <AgeStatistics voteId={statisticsModalVoteId} />}
-                        {activeStatTab === 'gender' && <GenderStatistics voteId={statisticsModalVoteId} />}
-                      </>
-                    )}
-                  </View>
-                </View>
+                  <Feather name="x" size={24} color="#4A5568" />
+                </TouchableOpacity>
               </View>
-            </Modal>
-          )}
-        </Animated.View>
+              <View style={styles.statisticsTabContainer}>
+                <TouchableOpacity
+                  style={[styles.statisticsTabButton, activeStatTab === 'region' && styles.activeStatisticsTab]}
+                  onPress={() => setActiveStatTab('region')}
+                >
+                  <Text style={[styles.statisticsTabText, activeStatTab === 'region' && styles.activeStatisticsTabText]}>지역별</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.statisticsTabButton, activeStatTab === 'age' && styles.activeStatisticsTab]}
+                  onPress={() => setActiveStatTab('age')}
+                >
+                  <Text style={[styles.statisticsTabText, activeStatTab === 'age' && styles.activeStatisticsTabText]}>연령별</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.statisticsTabButton, activeStatTab === 'gender' && styles.activeStatisticsTab]}
+                  onPress={() => setActiveStatTab('gender')}
+                >
+                  <Text style={[styles.statisticsTabText, activeStatTab === 'gender' && styles.activeStatisticsTabText]}>성별</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.statisticsContent}>
+                {statisticsModalVoteId && (
+                  <>
+                    {activeStatTab === 'region' && <RegionStatistics voteId={statisticsModalVoteId} />}
+                    {activeStatTab === 'age' && <AgeStatistics voteId={statisticsModalVoteId} />}
+                    {activeStatTab === 'gender' && <GenderStatistics voteId={statisticsModalVoteId} />}
+                  </>
+                )}
+              </View>
+            </View>
+          </View>
+        </Modal>
       )}
     </SafeAreaView>
   );

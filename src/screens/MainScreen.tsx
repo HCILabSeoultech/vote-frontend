@@ -58,7 +58,7 @@ const SkeletonLoader = React.memo(() => {
   }));
 
   return (
-    <Animated.View entering={FadeIn.duration(400)}>
+    <Animated.View entering={FadeIn.duration(100)}>
       <Animated.View style={[styles.skeletonItem, animatedStyle]}>
         <View style={styles.skeletonHeader}>
           <View style={styles.skeletonAvatar} />
@@ -274,7 +274,7 @@ const VoteItem = React.memo(({
 
   return (
     <Animated.View
-      entering={FadeIn.duration(400).delay((item.voteId % 10) * 50)}
+      entering={FadeIn.duration(500).delay((item.voteId % 10) * 50)}
       style={styles.voteItem}
     >
       <View style={styles.userInfoRow}>
@@ -823,7 +823,7 @@ const MainScreen: React.FC = () => {
           progressiveRenderingEnabled={true}
           fadeDuration={0}
         />
-        {isLoading && !isPreloaded && (
+        {isLoading && !isPreloaded && !isCached && (
           <View style={styles.loadingOverlay}>
             <ActivityIndicator size="small" color="#1499D9" />
           </View>
