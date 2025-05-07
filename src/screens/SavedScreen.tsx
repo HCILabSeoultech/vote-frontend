@@ -91,8 +91,8 @@ const SkeletonLoader = React.memo(() => {
   useEffect(() => {
     opacity.value = withRepeat(
       withSequence(
-        withTiming(0.9, { duration: 600 }),
-        withTiming(0.7, { duration: 600 })
+        withTiming(0.7, { duration: 600 }),
+        withTiming(0.4, { duration: 600 })
       ),
       -1,
       true
@@ -168,6 +168,16 @@ const EmptyState = React.memo(({
   storageType: StorageType;
   loading: boolean;
 }) => {
+  const [showSkeleton, setShowSkeleton] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowSkeleton(false);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -178,12 +188,33 @@ const EmptyState = React.memo(({
     );
   }
 
+  if (showSkeleton) {
+    return (
+      <View style={styles.container}>
+        {Array(3).fill(0).map((_, index) => (
+          <SkeletonLoader key={`skeleton-${index}`} />
+        ))}
+      </View>
+    );
+  }
+
+  const getEmptyMessage = () => {
+    switch (storageType) {
+      case 'voted':
+        return '참여한 투표가 없습니다.';
+      case 'liked':
+        return '좋아요한 투표가 없습니다.';
+      case 'bookmarked':
+        return '북마크한 투표가 없습니다.';
+      default:
+        return '데이터가 없습니다.';
+    }
+  };
+
   return (
     <View style={styles.emptyContainer}>
       <Text style={styles.emptyText}>
-        {storageType === 'voted' ? '아직 참여한 투표가 없습니다.' :
-         storageType === 'liked' ? '아직 좋아요한 투표가 없습니다.' :
-         '아직 북마크한 투표가 없습니다.'}
+        {getEmptyMessage()}
       </Text>
     </View>
   );
@@ -561,9 +592,9 @@ const StorageScreen: React.FC = () => {
           setIsInitialLoad(true);
         } catch (err) {
           console.error('[초기 데이터 로드 에러]', err);
-          setIsSkeletonLoading(false);
         } finally {
           setLoading(false);
+          setIsSkeletonLoading(false);
         }
       };
       
@@ -1240,13 +1271,21 @@ const StorageScreen: React.FC = () => {
       </View>
     ) : null,
     ListEmptyComponent: () => (
-      isSkeletonLoading || !imagesLoaded ? (
+      isSkeletonLoading ? (
         <View style={styles.skeletonContainer}>
           {Array(3).fill(0).map((_, index) => (
             <SkeletonLoader key={`skeleton-${index}`} />
           ))}
         </View>
-      ) : <EmptyState storageType={storageType} loading={loading} />
+      ) : (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>
+            {storageType === 'voted' ? '참여한 투표가 없습니다.' :
+             storageType === 'liked' ? '좋아요한 투표가 없습니다.' :
+             '북마크한 투표가 없습니다.'}
+          </Text>
+        </View>
+      )
     ),
     contentContainerStyle: [
       styles.container,
@@ -1269,7 +1308,7 @@ const StorageScreen: React.FC = () => {
       itemVisiblePercentThreshold: 50,
       minimumViewTime: 100,
     },
-  }), [loading, votes, refreshing, page, isLast, storageType, scrollPositions, renderItem, isSkeletonLoading, imagesLoaded]);
+  }), [loading, votes, refreshing, page, isLast, storageType, scrollPositions, renderItem, isSkeletonLoading]);
 
   return (
     <View style={[styles.safeArea, { paddingTop: insets.top }]}>
@@ -1770,7 +1809,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#CBD5E0',
+    backgroundColor: '#D1D5DB',
     marginRight: 12,
   },
   skeletonUserInfo: {
@@ -1778,7 +1817,7 @@ const styles = StyleSheet.create({
   },
   skeletonText: {
     height: 14,
-    backgroundColor: '#CBD5E0',
+    backgroundColor: '#D1D5DB',
     borderRadius: 7,
     marginBottom: 4,
     width: '80%',
@@ -1791,26 +1830,26 @@ const styles = StyleSheet.create({
   skeletonCategory: {
     width: 80,
     height: 20,
-    backgroundColor: '#CBD5E0',
+    backgroundColor: '#D1D5DB',
     borderRadius: 10,
     marginRight: 8,
   },
   skeletonDate: {
     width: 100,
     height: 20,
-    backgroundColor: '#CBD5E0',
+    backgroundColor: '#D1D5DB',
     borderRadius: 10,
   },
   skeletonTitle: {
     height: 24,
-    backgroundColor: '#CBD5E0',
+    backgroundColor: '#D1D5DB',
     borderRadius: 12,
     marginBottom: 8,
     width: '90%',
   },
   skeletonContent: {
     height: 20,
-    backgroundColor: '#CBD5E0',
+    backgroundColor: '#D1D5DB',
     borderRadius: 10,
     marginBottom: 12,
     width: '90%',
@@ -1818,7 +1857,7 @@ const styles = StyleSheet.create({
   skeletonImage: {
     width: '100%',
     aspectRatio: 1,
-    backgroundColor: '#CBD5E0',
+    backgroundColor: '#D1D5DB',
     borderRadius: 12,
     marginBottom: 12,
   },
@@ -1827,13 +1866,13 @@ const styles = StyleSheet.create({
   },
   skeletonOption: {
     height: 44,
-    backgroundColor: '#CBD5E0',
+    backgroundColor: '#D1D5DB',
     borderRadius: 8,
     marginBottom: 8,
   },
   skeletonReactions: {
     height: 28,
-    backgroundColor: '#CBD5E0',
+    backgroundColor: '#D1D5DB',
     borderRadius: 8,
   },
   optionTextContainer: {
