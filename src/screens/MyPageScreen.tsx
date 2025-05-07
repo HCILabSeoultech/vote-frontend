@@ -595,7 +595,7 @@ const MyPageScreen: React.FC = () => {
       setTimeout(() => {
         setRefreshing(false);
         setShowSkeleton(false);
-      }, 1000);
+      }, 500);
       isFirstLoad.current = false;
     }
   }, [fetchProfile, fetchPosts]);

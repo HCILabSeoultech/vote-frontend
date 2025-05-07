@@ -850,7 +850,6 @@ const MainScreen: React.FC = () => {
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    
     try {
       await refreshVotes();
     } finally {
@@ -910,7 +909,7 @@ const MainScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {refreshing && (
+      {isRefreshing && (
         <View style={styles.refreshIndicator}>
           <ActivityIndicator size="small" color="#1499D9" />
           <Text style={styles.refreshText}>새로고침 중...</Text>
@@ -942,7 +941,7 @@ const MainScreen: React.FC = () => {
         scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
+            refreshing={isRefreshing}
             onRefresh={handleRefresh}
             colors={["#1499D9"]}
             tintColor="#1499D9"
@@ -1464,8 +1463,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1000,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
   },
   refreshText: {
     marginLeft: 8,
