@@ -92,6 +92,23 @@ export const selectVoteOption = async (voteId: number, optionId: number) => {
   );
 };
 
+//투표 취소
+export const cancelVote = async (voteId: number) => {
+  const token = await AsyncStorage.getItem('token');
+  if (!token) throw new Error('JWT 토큰이 없습니다.');
+
+  const response = await axios.post(`${API_URL}/cancel`, {
+    voteId
+  }, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  return response.data;
+}; 
+ 
+
 // 단일 투표 조회
 export const getVoteById = async (voteId: number): Promise<VoteResponse> => {
   const token = await AsyncStorage.getItem('token');

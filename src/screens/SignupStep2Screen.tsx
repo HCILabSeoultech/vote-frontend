@@ -66,7 +66,7 @@ const SignupStep2Screen: React.FC<Props> = ({ navigation, route }) => {
     (async () => {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        alert('갤러리 접근 권한이 필요합니다!');
+        Alert.alert('갤러리 접근 권한이 필요합니다!');
       }
     })();
   }, []);

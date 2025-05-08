@@ -19,7 +19,7 @@ import {
 import { Feather } from '@expo/vector-icons'
 import Animated, { FadeInLeft, FadeIn, useAnimatedStyle, withRepeat, withSequence, withTiming, useSharedValue } from "react-native-reanimated"
 import AsyncStorage from "@react-native-async-storage/async-storage"
-import { selectVoteOption, getVoteById } from "../api/post"
+import { selectVoteOption, getVoteById, cancelVote } from "../api/post"
 import { toggleLike, toggleBookmark } from "../api/reaction"
 import type { VoteResponse } from "../types/Vote"
 import { useIsFocused, useNavigation, useFocusEffect, useRoute, RouteProp } from "@react-navigation/native"
@@ -34,6 +34,7 @@ import GenderStatistics from "../components/GenderStatistics"
 import { BlurView } from 'expo-blur'
 import { searchVotes } from '../api/search'
 import type { SearchVoteResponse } from '../types/Vote'
+import axios from "axios"
 
 import { SERVER_URL, IMAGE_BASE_URL } from "../constant/config"
 
@@ -179,6 +180,7 @@ const VoteItem = React.memo(({
   animatedWidths,
   renderImage,
   disableAnimation = false,
+  onCancelVote,
 }: {
   item: VoteResponse;
   currentUsername: string | null;
@@ -190,6 +192,7 @@ const VoteItem = React.memo(({
   animatedWidths: Record<string, number>;
   renderImage: (imageUrl: string, style: any) => React.ReactNode;
   disableAnimation?: boolean;
+  onCancelVote: (voteId: number) => void;
 }) => {
   const closed = isVoteClosed(item.finishTime)
   const selectedOptionId = item.selectedOptionId
@@ -441,7 +444,20 @@ const VoteItem = React.memo(({
               </View>
             )
           })}
-          {showGauge && totalCount > 0 && <Text style={styles.responseCountText}>{totalCount}명 참여</Text>}
+          {showGauge && totalCount > 0 && (
+            <View style={styles.responseCountContainer}>
+              <Text style={styles.responseCountText}>{totalCount}명 참여</Text>
+              {hasVoted && !closed && (
+                <TouchableOpacity
+                  style={styles.cancelVoteButton}
+                  onPress={() => onCancelVote(item.voteId)}
+                >
+                  <Feather name="x-circle" size={14} color="#666" />
+                  <Text style={styles.cancelVoteText}>취소</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
         </View>
       )}
 
@@ -642,7 +658,7 @@ const StatisticsModal = React.memo(({
 });
 
 // 검색 결과용 카드 컴포넌트
-const SearchResultItem = React.memo(({ item }: { item: SearchVoteResponse }) => {
+const SearchResultItem = React.memo(({ item, onCancelVote }: { item: SearchVoteResponse; onCancelVote: (voteId: number) => void }) => {
   const [voteDetail, setVoteDetail] = useState<VoteResponse | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -689,6 +705,22 @@ const SearchResultItem = React.memo(({ item }: { item: SearchVoteResponse }) => 
             <Feather name="users" size={11} color="#666" />
             <Text style={{ fontSize: 11, color: '#666', marginLeft: 2 }}>{voteDetail.totalVotes}</Text>
           </View>
+          {voteDetail.selectedOptionId && !isVoteClosed(voteDetail.finishTime) && (
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#F3F4F6',
+                paddingVertical: 4,
+                paddingHorizontal: 8,
+                borderRadius: 6,
+              }}
+              onPress={() => onCancelVote(item.id)}
+            >
+              <Feather name="x-circle" size={14} color="#666" />
+              <Text style={{ color: '#666', fontSize: 12, fontWeight: '500', marginLeft: 2 }}>취소</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </View>
@@ -777,8 +809,8 @@ const MainScreen: React.FC = () => {
         return
       }
 
-      updateSelectedOptions(voteId, optionId)
-      await selectVoteOption(voteId, optionId)
+      updateSelectedOptions(voteId, optionId);
+      await selectVoteOption(voteId, optionId);
       
       // 검색 모드일 때는 searchResults를 직접 업데이트
       if (searchMode && searchResults) {
@@ -806,6 +838,21 @@ const MainScreen: React.FC = () => {
       })
     }
   }, [updateVoteById, updateSelectedOptions, searchMode, searchResults])
+
+  const handleCancelVote = useCallback(async (voteId: number) => {
+    try {
+      await cancelVote(voteId);
+      setSelectedOptions(prev => {
+        const newState = { ...prev };
+        delete newState[voteId];
+        return newState;
+      });
+      await updateVoteById(voteId);
+    } catch (error) {
+      console.error("투표 취소 실패:", error);
+      Alert.alert("에러", "투표 취소 중 오류가 발생했습니다.");
+    }
+  }, [updateVoteById]);
 
   const handleToggleLike = useCallback(async (voteId: number) => {
     try {
@@ -958,9 +1005,10 @@ const MainScreen: React.FC = () => {
         animatedWidths={animatedWidths}
         renderImage={renderImage}
         disableAnimation={!searchMode}
+        onCancelVote={handleCancelVote}
       />
     );
-  }, [currentUsername, handleVote, handleToggleLike, handleToggleBookmark, handleCommentPress, handleStatisticsPress, animatedWidths, renderImage, searchMode]);
+  }, [currentUsername, handleVote, handleToggleLike, handleToggleBookmark, handleCommentPress, handleStatisticsPress, animatedWidths, renderImage, searchMode, handleCancelVote]);
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -1118,7 +1166,7 @@ const MainScreen: React.FC = () => {
             <FlatList
               data={searchSummaryResults ?? []}
               keyExtractor={(item, index) => item?.id?.toString() || `search-${index}`}
-              renderItem={({ item }) => <SearchResultItem item={item} />}
+              renderItem={({ item }) => <SearchResultItem item={item} onCancelVote={handleCancelVote} />}
               ListEmptyComponent={
                 <Text style={{ color: '#888', fontSize: 15, fontWeight: '400', textAlign: 'center', marginTop: 5 }}>
                   {searchText.trim().length > 0 ? '검색 결과가 없습니다.' : '검색어를 입력하세요.'}
@@ -1502,12 +1550,31 @@ const styles = StyleSheet.create({
   selectedPercentageText: {
     color: '#3182CE',
   },
-  responseCountText: {
+  responseCountContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
     marginTop: 8,
+    gap: 8,
+  },
+  responseCountText: {
     fontSize: 13,
     color: '#888',
-    textAlign: 'right',
     fontWeight: '500',
+  },
+  cancelVoteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+  },
+  cancelVoteText: {
+    color: '#666',
+    fontSize: 12,
+    fontWeight: '500',
+    marginLeft: 2,
   },
   divider: {
     height: 1,
