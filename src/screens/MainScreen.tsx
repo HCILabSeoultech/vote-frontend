@@ -19,7 +19,7 @@ import {
 import { Feather } from '@expo/vector-icons'
 import Animated, { FadeInLeft, FadeIn, useAnimatedStyle, withRepeat, withSequence, withTiming, useSharedValue } from "react-native-reanimated"
 import AsyncStorage from "@react-native-async-storage/async-storage"
-import { selectVoteOption } from "../api/post"
+import { selectVoteOption, getVoteById } from "../api/post"
 import { toggleLike, toggleBookmark } from "../api/reaction"
 import type { VoteResponse } from "../types/Vote"
 import { useIsFocused, useNavigation, useFocusEffect, useRoute, RouteProp } from "@react-navigation/native"
@@ -32,6 +32,8 @@ import RegionStatistics from "../components/RegionStatistics"
 import AgeStatistics from "../components/AgeStatistics"
 import GenderStatistics from "../components/GenderStatistics"
 import { BlurView } from 'expo-blur'
+import { searchVotes } from '../api/search'
+import type { SearchVoteResponse } from '../types/Vote'
 
 import { SERVER_URL, IMAGE_BASE_URL } from "../constant/config"
 
@@ -176,6 +178,7 @@ const VoteItem = React.memo(({
   onStatisticsPress,
   animatedWidths,
   renderImage,
+  disableAnimation = false,
 }: {
   item: VoteResponse;
   currentUsername: string | null;
@@ -186,6 +189,7 @@ const VoteItem = React.memo(({
   onStatisticsPress: (vote: VoteResponse) => void;
   animatedWidths: Record<string, number>;
   renderImage: (imageUrl: string, style: any) => React.ReactNode;
+  disableAnimation?: boolean;
 }) => {
   const closed = isVoteClosed(item.finishTime)
   const selectedOptionId = item.selectedOptionId
@@ -276,7 +280,7 @@ const VoteItem = React.memo(({
 
   return (
     <Animated.View
-      entering={FadeIn.duration(500).delay((item.voteId % 10) * 50)}
+      entering={disableAnimation ? undefined : FadeIn.duration(500).delay((item.voteId % 10) * 50)}
       style={styles.voteItem}
     >
       <View style={styles.userInfoRow}>
@@ -501,7 +505,8 @@ const VoteItem = React.memo(({
     prevProps.item.isBookmarked === nextProps.item.isBookmarked &&
     prevProps.item.likeCount === nextProps.item.likeCount &&
     prevProps.item.commentCount === nextProps.item.commentCount &&
-    prevProps.animatedWidths === nextProps.animatedWidths
+    prevProps.animatedWidths === nextProps.animatedWidths &&
+    prevProps.item.voteOptions === nextProps.item.voteOptions
   );
 });
 
@@ -636,6 +641,60 @@ const StatisticsModal = React.memo(({
   );
 });
 
+// 검색 결과용 카드 컴포넌트
+const SearchResultItem = React.memo(({ item }: { item: SearchVoteResponse }) => {
+  const [voteDetail, setVoteDetail] = useState<VoteResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchVoteDetail = async () => {
+      try {
+        setLoading(true);
+        const detail = await getVoteById(item.id);
+        setVoteDetail(detail);
+      } catch (error) {
+        console.error('투표 상세 정보 로딩 실패:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchVoteDetail();
+  }, [item.id]);
+
+  return (
+    <View style={{
+      backgroundColor: '#F3F4F6',
+      borderRadius: 14,
+      padding: 18,
+      marginVertical: 6,
+      marginHorizontal: 8,
+    }}>
+      <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#222' }}>{item.title}</Text>
+      {loading ? (
+        <View style={{ marginTop: 8, alignItems: 'center' }}>
+          <ActivityIndicator size="small" color="#1499D9" />
+        </View>
+      ) : voteDetail && (
+        <View style={{ flexDirection: 'row', marginTop: 8, gap: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Feather name="heart" size={11} color="#666" />
+            <Text style={{ fontSize: 11, color: '#666', marginLeft: 2 }}>{voteDetail.likeCount}</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Feather name="message-circle" size={11} color="#666" />
+            <Text style={{ fontSize: 11, color: '#666', marginLeft: 2 }}>{voteDetail.commentCount}</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Feather name="users" size={11} color="#666" />
+            <Text style={{ fontSize: 11, color: '#666', marginLeft: 2 }}>{voteDetail.totalVotes}</Text>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+});
+
 const MainScreen: React.FC = () => {
   const {
     votes,
@@ -662,8 +721,13 @@ const MainScreen: React.FC = () => {
   const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set())
   const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set())
   const [imageCache, setImageCache] = useState<Record<string, boolean>>({})
-  const [showSearch, setShowSearch] = useState(false)
+  const [showSearchModal, setShowSearchModal] = useState(false)
   const [searchText, setSearchText] = useState('')
+  const [searchSummaryResults, setSearchSummaryResults] = useState<SearchVoteResponse[] | null>(null)
+  const [searchResults, setSearchResults] = useState<VoteResponse[] | null>(null)
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const [searchMode, setSearchMode] = useState(false)
 
   const isFocused = useIsFocused()
   const isFirstLoad = useRef(true);
@@ -715,7 +779,22 @@ const MainScreen: React.FC = () => {
 
       updateSelectedOptions(voteId, optionId)
       await selectVoteOption(voteId, optionId)
-      await updateVoteById(voteId)
+      
+      // 검색 모드일 때는 searchResults를 직접 업데이트
+      if (searchMode && searchResults) {
+        const updatedResults = await Promise.all(
+          searchResults.map(async (vote) => {
+            if (vote.voteId === voteId) {
+              return await getVoteById(voteId);
+            }
+            return vote;
+          })
+        );
+        setSearchResults(updatedResults);
+      } else {
+        // 일반 모드일 때는 기존 방식대로 업데이트
+        await updateVoteById(voteId);
+      }
       
     } catch (error) {
       console.error("투표 실패:", error)
@@ -726,7 +805,7 @@ const MainScreen: React.FC = () => {
         return newState
       })
     }
-  }, [updateVoteById, updateSelectedOptions])
+  }, [updateVoteById, updateSelectedOptions, searchMode, searchResults])
 
   const handleToggleLike = useCallback(async (voteId: number) => {
     try {
@@ -737,12 +816,27 @@ const MainScreen: React.FC = () => {
       }
 
       await toggleLike(voteId)
-      await updateVoteById(voteId)
+      
+      // 검색 모드일 때는 searchResults를 직접 업데이트
+      if (searchMode && searchResults) {
+        const updatedResults = await Promise.all(
+          searchResults.map(async (vote) => {
+            if (vote.voteId === voteId) {
+              return await getVoteById(voteId);
+            }
+            return vote;
+          })
+        );
+        setSearchResults(updatedResults);
+      } else {
+        // 일반 모드일 때는 기존 방식대로 업데이트
+        await updateVoteById(voteId);
+      }
     } catch (err) {
       console.error("좋아요 실패:", err)
       Alert.alert("에러", "좋아요 처리 중 오류가 발생했습니다.")
     }
-  }, [updateVoteById])
+  }, [updateVoteById, searchMode, searchResults])
 
   const handleToggleBookmark = useCallback(async (voteId: number) => {
     try {
@@ -753,12 +847,27 @@ const MainScreen: React.FC = () => {
       }
 
       await toggleBookmark(voteId)
-      await updateVoteById(voteId)
+      
+      // 검색 모드일 때는 searchResults를 직접 업데이트
+      if (searchMode && searchResults) {
+        const updatedResults = await Promise.all(
+          searchResults.map(async (vote) => {
+            if (vote.voteId === voteId) {
+              return await getVoteById(voteId);
+            }
+            return vote;
+          })
+        );
+        setSearchResults(updatedResults);
+      } else {
+        // 일반 모드일 때는 기존 방식대로 업데이트
+        await updateVoteById(voteId);
+      }
     } catch (err) {
       console.error("북마크 실패:", err)
       Alert.alert("에러", "북마크 처리 중 오류가 발생했습니다.")
     }
-  }, [updateVoteById])
+  }, [updateVoteById, searchMode, searchResults])
 
   const handleCommentPress = useCallback((voteId: number) => {
     setSelectedVoteId(voteId)
@@ -848,9 +957,10 @@ const MainScreen: React.FC = () => {
         onStatisticsPress={handleStatisticsPress}
         animatedWidths={animatedWidths}
         renderImage={renderImage}
+        disableAnimation={!searchMode}
       />
     );
-  }, [currentUsername, handleVote, handleToggleLike, handleToggleBookmark, handleCommentPress, handleStatisticsPress, animatedWidths, renderImage]);
+  }, [currentUsername, handleVote, handleToggleLike, handleToggleBookmark, handleCommentPress, handleStatisticsPress, animatedWidths, renderImage, searchMode]);
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -880,11 +990,163 @@ const MainScreen: React.FC = () => {
     }, [route.params, handleRefresh])
   );
 
+  // 검색 요약(모달 내) 실시간
+  const handleSummarySearch = useCallback(async (text: string) => {
+    if (!text.trim()) {
+      setSearchSummaryResults(null);
+      setSearchLoading(false);
+      setSearchError(null);
+      return;
+    }
+    setSearchLoading(true);
+    setSearchError(null);
+    try {
+      const results = await searchVotes(text.trim());
+      setSearchSummaryResults(results);
+    } catch (e) {
+      setSearchError('검색 중 오류가 발생했습니다.');
+      setSearchSummaryResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, []);
+
+  // 메인에 상세 검색 결과 표시
+  const handleMainSearch = useCallback(async () => {
+    if (!searchText.trim()) {
+      setSearchResults(null);
+      setSearchMode(false);
+      setShowSearchModal(false);
+      return;
+    }
+    setSearchLoading(true);
+    setSearchError(null);
+    try {
+      const results = await searchVotes(searchText.trim());
+      const detailedResults = await Promise.all(
+        results.map(result => getVoteById(result.id))
+      );
+      setSearchResults(detailedResults);
+      setSearchMode(true);
+    } catch (e) {
+      setSearchError('검색 중 오류가 발생했습니다.');
+      setSearchResults([]);
+      setSearchMode(true);
+    } finally {
+      setSearchLoading(false);
+      setShowSearchModal(false);
+    }
+  }, [searchText]);
+
+  // 검색모드 해제
+  const handleCloseSearch = useCallback(() => {
+    setSearchMode(false);
+    setSearchResults(null);
+    setSearchText('');
+    setSearchSummaryResults(null);
+    setSearchError(null);
+    requestAnimationFrame(() => {
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+    });
+  }, []);
+
+  // 검색 모달 렌더링
+  const renderSearchModal = () => (
+    showSearchModal && (
+      <Modal
+        visible={showSearchModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowSearchModal(false)}
+      >
+        <BlurView
+          intensity={30}
+          style={{ ...StyleSheet.absoluteFillObject, zIndex: 0 }}
+          tint="light"
+        />
+        <View
+          style={{
+            width: width - 32,
+            backgroundColor: '#fff',
+            borderRadius: 18,
+            alignSelf: 'center',
+            marginTop: 110,
+            overflow: 'hidden',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.06,
+            shadowRadius: 8,
+            elevation: 2,
+            zIndex: 1,
+          }}
+        >
+          {/* 검색 입력창 */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', padding: 6, backgroundColor: '#fff' }}>
+            <TextInput
+              style={{
+                flex: 1,
+                color: '#222',
+                fontSize: 15,
+                backgroundColor: '#F3F4F6',
+                borderRadius: 10,
+                paddingHorizontal: 12,
+                height: 36,
+                borderWidth: 0,
+              }}
+              placeholder="투표 제목 검색..."
+              placeholderTextColor="#888"
+              value={searchText}
+              onChangeText={t => {
+                setSearchText(t);
+                handleSummarySearch(t);
+              }}
+              autoFocus
+              onSubmitEditing={handleMainSearch}
+            />
+            <TouchableOpacity style={{ backgroundColor: '#3182CE', borderRadius: 7, marginLeft: 6, paddingHorizontal: 10, paddingVertical: 5 }} onPress={handleMainSearch}>
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>검색</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ marginLeft: 6, padding: 3 }} onPress={() => setShowSearchModal(false)}>
+              <Feather name="x" size={17} color="#888" />
+            </TouchableOpacity>
+          </View>
+          {/* 구분선 */}
+          <View style={{ height: 1, backgroundColor: '#E5E7EB', width: '100%', marginTop: 2, marginBottom: 6 }} />
+          {/* 결과/안내문구 */}
+          <View style={{ minHeight: 120, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff', borderBottomLeftRadius: 18, borderBottomRightRadius: 18 }}>
+            <FlatList
+              data={searchSummaryResults ?? []}
+              keyExtractor={(item, index) => item?.id?.toString() || `search-${index}`}
+              renderItem={({ item }) => <SearchResultItem item={item} />}
+              ListEmptyComponent={
+                <Text style={{ color: '#888', fontSize: 15, fontWeight: '400', textAlign: 'center', marginTop: 5 }}>
+                  {searchText.trim().length > 0 ? '검색 결과가 없습니다.' : '검색어를 입력하세요.'}
+                </Text>
+              }
+              contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+              showsVerticalScrollIndicator={false}
+              style={{ width: '100%', backgroundColor: 'transparent' }}
+            />
+          </View>
+        </View>
+      </Modal>
+    )
+  );
+
+  // 헤더 렌더링
   const renderHeader = useCallback(() => (
     <View style={styles.header}>
       <Text style={styles.headerTitle}>VoteY</Text>
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <TouchableOpacity onPress={() => setShowSearch(true)} style={{ marginRight: 16 }}>
+        <TouchableOpacity 
+          onPress={() => {
+            setSearchText('');
+            setSearchSummaryResults(null);
+            setShowSearchModal(true);
+          }} 
+          style={{ marginRight: 16 }}
+        >
           <Feather name="search" size={24} color="#2D3748" />
         </TouchableOpacity>
         <TouchableOpacity onPress={() => Alert.alert("알림", "알림 기능 준비 중입니다.")}> 
@@ -916,55 +1178,52 @@ const MainScreen: React.FC = () => {
     },
   }), [onViewableItemsChanged]);
 
-  // 검색창 렌더링
-  const renderSearchModal = () => (
-    showSearch && (
-      <Modal
-        visible={showSearch}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={() => setShowSearch(false)}
-      >
-        <View style={styles.searchOverlay}>
-          {/* 블러 처리: 웹에서는 fallback으로 반투명 배경 */}
-          <BlurView intensity={40} style={StyleSheet.absoluteFill} tint="dark" />
-          <View style={styles.searchBoxWrapper}>
-            <View style={styles.searchBox}>
-              <TextInput
-                style={styles.searchInput}
-                placeholder="투표 제목 검색..."
-                placeholderTextColor="#aaa"
-                value={searchText}
-                onChangeText={setSearchText}
-                autoFocus
-              />
-              <TouchableOpacity style={styles.searchButton} onPress={() => {/* 검색 로직 */}}>
-                <Text style={styles.searchButtonText}>검색</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.closeButton} onPress={() => setShowSearch(false)}>
-                <Feather name="x" size={22} color="#888" />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.searchGuideText}>검색어를 입력하세요.</Text>
-          </View>
-        </View>
-      </Modal>
-    )
-  )
-
   return (
     <SafeAreaView style={styles.safeArea}>
       {renderSearchModal()}
-      {isRefreshing && (
-        <View style={styles.refreshIndicator}>
-          <ActivityIndicator size="small" color="#1499D9" />
-          <Text style={styles.refreshText}>새로고침 중...</Text>
+      {renderHeader()}
+      {searchMode && (
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: '#F3F4F6',
+          borderRadius: 10,
+          margin: 12,
+          marginBottom: 0,
+          overflow: 'hidden',
+          minHeight: 44,
+          padding: 12,
+        }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: '#666', fontSize: 14, marginBottom: 1 }}>
+              검색어: <Text style={{ color: '#2563EB', fontWeight: 'bold' }}>{searchText}</Text>
+            </Text>
+            <Text style={{ color: '#888', fontSize: 13 }}>검색 결과: {searchResults ? searchResults.length : 0}개</Text>
+          </View>
+          <TouchableOpacity
+            style={{ borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, marginRight: 6, flexDirection: 'row', alignItems: 'center' }}
+            onPress={() => {
+              setSearchText('');
+              setSearchSummaryResults(null);
+              setShowSearchModal(true);
+            }}
+          >
+            <Feather name="search" size={14} color="#444" style={{ marginRight: 2 }} />
+            <Text style={{ color: '#444', fontSize: 13 }}>새 검색</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{ borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, flexDirection: 'row', alignItems: 'center' }}
+            onPress={handleCloseSearch}
+          >
+            <Feather name="x" size={14} color="#444" style={{ marginRight: 2 }} />
+            <Text style={{ color: '#444', fontSize: 13 }}>닫기</Text>
+          </TouchableOpacity>
         </View>
       )}
       <FlatList
         ref={flatListRef}
-        data={isLoading ? Array(3).fill(null) : votes}
+        key={searchMode ? 'search' : 'main'}
+        data={searchMode ? (searchResults ?? []) : (isLoading ? Array(3).fill(null) : votes)}
         keyExtractor={(item, index) => item?.voteId?.toString() || `skeleton-${index}`}
         renderItem={({ item, index }) => {
           if (isLoading || !item) {
@@ -973,7 +1232,6 @@ const MainScreen: React.FC = () => {
           return renderItem({ item });
         }}
         contentContainerStyle={styles.container}
-        ListHeaderComponent={renderHeader}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.2}
         windowSize={3}
@@ -996,9 +1254,11 @@ const MainScreen: React.FC = () => {
           />
         }
         ListEmptyComponent={
-          !isLoading && votes.length === 0 ? (
+          !isLoading && (searchMode ? (searchResults?.length === 0) : (votes.length === 0)) ? (
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>아직 투표가 없습니다.</Text>
+              <Text style={styles.emptyText}>
+                {searchMode ? '검색 결과가 없습니다.' : '아직 투표가 없습니다.'}
+              </Text>
             </View>
           ) : null
         }
