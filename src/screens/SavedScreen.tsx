@@ -309,7 +309,7 @@ const StorageScreen: React.FC = () => {
   const [showCommentModal, setShowCommentModal] = useState(false);
   const [showStatisticsModal, setShowStatisticsModal] = useState(false);
   const [selectedVoteForStats, setSelectedVoteForStats] = useState<number | null>(null);
-  const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('region');
+  const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('gender');
   
   // 각 탭의 스크롤 위치를 저장하는 상태 추가
   const [scrollPositions, setScrollPositions] = useState<{ [key in StorageType]: number }>({
@@ -1213,9 +1213,9 @@ const StorageScreen: React.FC = () => {
   const renderStatisticsTabs = useCallback(() => (
     <View style={styles.statisticsTabContainer}>
       <StatisticsTab
-        label="지역별"
-        isActive={activeStatTab === 'region'}
-        onPress={() => setActiveStatTab('region')}
+        label="성별"
+        isActive={activeStatTab === 'gender'}
+        onPress={() => setActiveStatTab('gender')}
       />
       <StatisticsTab
         label="연령별"
@@ -1223,9 +1223,9 @@ const StorageScreen: React.FC = () => {
         onPress={() => setActiveStatTab('age')}
       />
       <StatisticsTab
-        label="성별"
-        isActive={activeStatTab === 'gender'}
-        onPress={() => setActiveStatTab('gender')}
+        label="지역별"
+        isActive={activeStatTab === 'region'}
+        onPress={() => setActiveStatTab('region')}
       />
     </View>
   ), [activeStatTab]);
@@ -1383,9 +1383,9 @@ const StorageScreen: React.FC = () => {
             <View style={styles.statisticsContent}>
               {selectedVoteForStats && (
                 <>
-                  {activeStatTab === 'region' && <RegionStatistics voteId={selectedVoteForStats} />}
-                  {activeStatTab === 'age' && <AgeStatistics voteId={selectedVoteForStats} />}
                   {activeStatTab === 'gender' && <GenderStatistics voteId={selectedVoteForStats} />}
+                  {activeStatTab === 'age' && <AgeStatistics voteId={selectedVoteForStats} />}
+                  {activeStatTab === 'region' && <RegionStatistics voteId={selectedVoteForStats} />}
                 </>
               )}
             </View>

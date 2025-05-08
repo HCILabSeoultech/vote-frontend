@@ -484,7 +484,7 @@ const MyPageScreen: React.FC = () => {
   const [commentModalVoteId, setCommentModalVoteId] = useState<number | null>(null);
   const [statisticsModalVoteId, setStatisticsModalVoteId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('posts');
-  const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('region');
+  const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('gender');
   const [refreshing, setRefreshing] = useState(false);
   const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
   const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
@@ -1332,10 +1332,10 @@ const MyPageScreen: React.FC = () => {
               </View>
               <View style={styles.statisticsTabContainer}>
                 <TouchableOpacity
-                  style={[styles.statisticsTabButton, activeStatTab === 'region' && styles.activeStatisticsTab]}
-                  onPress={() => setActiveStatTab('region')}
+                  style={[styles.statisticsTabButton, activeStatTab === 'gender' && styles.activeStatisticsTab]}
+                  onPress={() => setActiveStatTab('gender')}
                 >
-                  <Text style={[styles.statisticsTabText, activeStatTab === 'region' && styles.activeStatisticsTabText]}>지역별</Text>
+                  <Text style={[styles.statisticsTabText, activeStatTab === 'gender' && styles.activeStatisticsTabText]}>성별</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.statisticsTabButton, activeStatTab === 'age' && styles.activeStatisticsTab]}
@@ -1344,18 +1344,18 @@ const MyPageScreen: React.FC = () => {
                   <Text style={[styles.statisticsTabText, activeStatTab === 'age' && styles.activeStatisticsTabText]}>연령별</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.statisticsTabButton, activeStatTab === 'gender' && styles.activeStatisticsTab]}
-                  onPress={() => setActiveStatTab('gender')}
+                  style={[styles.statisticsTabButton, activeStatTab === 'region' && styles.activeStatisticsTab]}
+                  onPress={() => setActiveStatTab('region')}
                 >
-                  <Text style={[styles.statisticsTabText, activeStatTab === 'gender' && styles.activeStatisticsTabText]}>성별</Text>
+                  <Text style={[styles.statisticsTabText, activeStatTab === 'region' && styles.activeStatisticsTabText]}>지역별</Text>
                 </TouchableOpacity>
               </View>
               <View style={styles.statisticsContent}>
                 {statisticsModalVoteId && (
                   <>
-                    {activeStatTab === 'region' && <RegionStatistics voteId={statisticsModalVoteId} />}
-                    {activeStatTab === 'age' && <AgeStatistics voteId={statisticsModalVoteId} />}
                     {activeStatTab === 'gender' && <GenderStatistics voteId={statisticsModalVoteId} />}
+                    {activeStatTab === 'age' && <AgeStatistics voteId={statisticsModalVoteId} />}
+                    {activeStatTab === 'region' && <RegionStatistics voteId={statisticsModalVoteId} />}
                   </>
                 )}
               </View>

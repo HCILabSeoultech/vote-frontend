@@ -72,17 +72,21 @@ const SkeletonLoader = React.memo(() => {
 
 const imageWidth = 100;
 const gaugeWidthAnims = {};
-const VoteOptionGauge = ({ percentage, isSelected, width, imageWidth = 0 }: { percentage: number; isSelected: boolean; width: number; imageWidth?: number }) => {
+const VoteOptionGauge = ({ percentage, isSelected, width, imageWidth = 0, animate = true }: { percentage: number; isSelected: boolean; width: number; imageWidth?: number; animate?: boolean }) => {
   const widthAnim = React.useRef(new RNAnimated.Value(0)).current;
   useEffect(() => {
     const targetWidth = width > 0 ? (width - imageWidth) * (percentage / 100) : 0;
-    RNAnimated.timing(widthAnim, {
-      toValue: targetWidth,
-      duration: 300,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
-  }, [percentage, width, imageWidth]);
+    if (animate) {
+      RNAnimated.timing(widthAnim, {
+        toValue: targetWidth,
+        duration: 300,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start();
+    } else {
+      widthAnim.setValue(targetWidth);
+    }
+  }, [percentage, width, imageWidth, animate]);
   return (
     <RNAnimated.View
       style={[
@@ -124,7 +128,8 @@ const UserPageScreen: React.FC = () => {
   const [showSkeleton, setShowSkeleton] = useState(true);
   const fadeAnim = useSharedValue(0);
   const skeletonOpacity = useSharedValue(0.3);
-  const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('region');
+  const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('gender');
+  const [shouldAnimateGauge, setShouldAnimateGauge] = useState(false);
 
   const isFocused = useIsFocused();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'CommentScreen'>>();
@@ -182,6 +187,12 @@ const UserPageScreen: React.FC = () => {
       true
     );
   }, []);
+
+  useEffect(() => {
+    if (!showSkeleton) {
+      setShouldAnimateGauge(false);
+    }
+  }, [showSkeleton]);
 
   const skeletonAnimatedStyle = useAnimatedStyle(() => ({
     opacity: skeletonOpacity.value,
@@ -486,6 +497,7 @@ const UserPageScreen: React.FC = () => {
                           isSelected={isSelected}
                           width={optionWidths[opt.id]}
                           imageWidth={imageWidth}
+                          animate={shouldAnimateGauge}
                         />
                       )}
                       <View style={styles.rightContent}>
@@ -537,6 +549,7 @@ const UserPageScreen: React.FC = () => {
                         isSelected={isSelected}
                         width={optionWidths[opt.id]}
                         imageWidth={0}
+                        animate={shouldAnimateGauge}
                       />
                     )}
                     <View style={styles.textAndPercentRow}>
@@ -616,7 +629,7 @@ const UserPageScreen: React.FC = () => {
         </View>
       </Animated.View>
     );
-  }, [getCloudfrontUrl, formatCreatedAt, isVoteClosed, selectedOptions, handleVote, handleToggleLike, handleCommentPress, handleToggleBookmark, handleStatisticsPress, optionWidths]);
+  }, [getCloudfrontUrl, formatCreatedAt, isVoteClosed, selectedOptions, handleVote, handleToggleLike, handleCommentPress, handleToggleBookmark, handleStatisticsPress, optionWidths, shouldAnimateGauge]);
 
   const renderHeader = useCallback(() => {
     if (!profile) return (
@@ -846,10 +859,10 @@ const UserPageScreen: React.FC = () => {
               </View>
               <View style={styles.statisticsTabContainer}>
                 <TouchableOpacity
-                  style={[styles.statisticsTabButton, activeStatTab === 'region' && styles.activeStatisticsTab]}
-                  onPress={() => setActiveStatTab('region')}
+                  style={[styles.statisticsTabButton, activeStatTab === 'gender' && styles.activeStatisticsTab]}
+                  onPress={() => setActiveStatTab('gender')}
                 >
-                  <Text style={[styles.statisticsTabText, activeStatTab === 'region' && styles.activeStatisticsTabText]}>지역별</Text>
+                  <Text style={[styles.statisticsTabText, activeStatTab === 'gender' && styles.activeStatisticsTabText]}>성별</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.statisticsTabButton, activeStatTab === 'age' && styles.activeStatisticsTab]}
@@ -858,10 +871,10 @@ const UserPageScreen: React.FC = () => {
                   <Text style={[styles.statisticsTabText, activeStatTab === 'age' && styles.activeStatisticsTabText]}>연령별</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.statisticsTabButton, activeStatTab === 'gender' && styles.activeStatisticsTab]}
-                  onPress={() => setActiveStatTab('gender')}
+                  style={[styles.statisticsTabButton, activeStatTab === 'region' && styles.activeStatisticsTab]}
+                  onPress={() => setActiveStatTab('region')}
                 >
-                  <Text style={[styles.statisticsTabText, activeStatTab === 'gender' && styles.activeStatisticsTabText]}>성별</Text>
+                  <Text style={[styles.statisticsTabText, activeStatTab === 'region' && styles.activeStatisticsTabText]}>지역별</Text>
                 </TouchableOpacity>
               </View>
               <View style={styles.statisticsContent}>

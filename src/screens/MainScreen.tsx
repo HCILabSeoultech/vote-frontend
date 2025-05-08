@@ -591,14 +591,14 @@ const StatisticsModal = React.memo(({
             <TouchableOpacity
               style={[
                 styles.statisticsTabButton,
-                activeTab === 'region' && styles.activeStatisticsTab
+                activeTab === 'gender' && styles.activeStatisticsTab
               ]}
-              onPress={() => onTabChange('region')}
+              onPress={() => onTabChange('gender')}
             >
               <Text style={[
                 styles.statisticsTabText,
-                activeTab === 'region' && styles.activeStatisticsTabText
-              ]}>지역별</Text>
+                activeTab === 'gender' && styles.activeStatisticsTabText
+              ]}>성별</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
@@ -615,20 +615,20 @@ const StatisticsModal = React.memo(({
             <TouchableOpacity
               style={[
                 styles.statisticsTabButton,
-                activeTab === 'gender' && styles.activeStatisticsTab
+                activeTab === 'region' && styles.activeStatisticsTab
               ]}
-              onPress={() => onTabChange('gender')}
+              onPress={() => onTabChange('region')}
             >
               <Text style={[
                 styles.statisticsTabText,
-                activeTab === 'gender' && styles.activeStatisticsTabText
-              ]}>성별</Text>
+                activeTab === 'region' && styles.activeStatisticsTabText
+              ]}>지역별</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.statisticsContent}>
-            {activeTab === 'region' && <RegionStatistics voteId={voteId} />}
-            {activeTab === 'age' && <AgeStatistics voteId={voteId} />}
             {activeTab === 'gender' && <GenderStatistics voteId={voteId} />}
+            {activeTab === 'age' && <AgeStatistics voteId={voteId} />}
+            {activeTab === 'region' && <RegionStatistics voteId={voteId} />}
           </View>
         </View>
       </View>
@@ -655,7 +655,7 @@ const MainScreen: React.FC = () => {
   const [showCommentModal, setShowCommentModal] = useState(false)
   const [showStatisticsModal, setShowStatisticsModal] = useState(false)
   const [selectedVoteForStats, setSelectedVoteForStats] = useState<number | null>(null)
-  const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('region')
+  const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('gender')
   const [animatedWidths, setAnimatedWidths] = useState<Record<string, number>>({})
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set())
