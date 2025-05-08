@@ -786,6 +786,22 @@ const UserPageScreen: React.FC = () => {
                   </View>
                 </View>
               </View>
+              <View style={{
+                width: '90%',
+                height: 16,
+                marginTop: 20,
+                marginLeft: 0,
+                backgroundColor: '#CBD5E0',
+                borderRadius: 7,
+              }} />
+              <View style={[styles.tabContainer, { marginTop: 14 }]}>
+                <View style={styles.tabRow}>
+                  <View style={[styles.skeletonText, { width: '30%', height: 35, borderRadius: 8 }]} />
+                  <View style={[styles.skeletonText, { width: '30%', height: 35, borderRadius: 8 }]} />
+                  <View style={[styles.skeletonText, { width: '30%', height: 35, borderRadius: 8 }]} />
+                </View>
+                <View style={[styles.skeletonText, { width: '100%', height: 2, marginTop: 8, backgroundColor: '#E2E8F0' }]} />
+              </View>
             </Animated.View>
           }
           contentContainerStyle={styles.container}

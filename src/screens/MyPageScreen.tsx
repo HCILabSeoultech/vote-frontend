@@ -1082,34 +1082,39 @@ const MyPageScreen: React.FC = () => {
     }));
 
     return (
-      <Animated.View>
-        <Animated.View 
-          style={[styles.profileContainer, animatedStyle]}
-        >
-          <View style={styles.profileHeader}>
-            <View style={styles.profileMainInfo}>
-              <View style={styles.skeletonProfileImage} />
-              <View style={styles.profileInfo}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <View style={[styles.skeletonText, { width: '30%', height: 24 }]} />
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <View style={[styles.skeletonText, { width: 80, height: 32, borderRadius: 8 }]} />
-                    <View style={[styles.skeletonText, { width: 80, height: 32, borderRadius: 8 }]} />
-                  </View>
+      <Animated.View style={[styles.profileContainer, animatedStyle]}>
+        <View style={styles.profileHeader}>
+          <View style={styles.profileMainInfo}>
+            <View style={styles.skeletonProfileImage} />
+            <View style={styles.profileInfo}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={[styles.skeletonText, { width: '30%', height: 24 }]} />
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <View style={[styles.skeletonText, { width: 80, height: 32, borderRadius: 8 }]} />
+                  <View style={[styles.skeletonText, { width: 80, height: 32, borderRadius: 8 }]} />
                 </View>
               </View>
             </View>
           </View>
-          {/* 프로필 자기소개 스켈레톤 바 */}
-          <View style={{
-            width: '70%',
-            height: 16,
-            marginTop: 8,
-            marginLeft: 4,
-            backgroundColor: '#CBD5E0',
-            borderRadius: 7,
-          }} />
-        </Animated.View>
+        </View>
+        {/* 프로필 자기소개 스켈레톤 바 */}
+        <View style={{
+          width: '70%',
+          height: 16,
+          marginTop: 12,
+          marginLeft: 16,
+          backgroundColor: '#CBD5E0',
+          borderRadius: 7,
+        }} />
+        {/* 탭 스켈레톤 */}
+        <View style={[styles.tabContainer, { marginTop: 10 }]}>
+          <View style={styles.tabRow}>
+            <View style={[styles.skeletonText, { width: '30%', height: 35, borderRadius: 8 }]} />
+            <View style={[styles.skeletonText, { width: '30%', height: 35, borderRadius: 8 }]} />
+            <View style={[styles.skeletonText, { width: '30%', height: 35, borderRadius: 8 }]} />
+          </View>
+          <View style={[styles.skeletonText, { width: '100%', height: 2, marginTop: 8, backgroundColor: '#E2E8F0' }]} />
+        </View>
       </Animated.View>
     );
   };
@@ -1207,24 +1212,7 @@ const MyPageScreen: React.FC = () => {
           data={Array(3).fill(null)}
           keyExtractor={(_, index) => `skeleton-${index}`}
           renderItem={({ item, index }) => <SkeletonLoader key={index} />}
-          ListHeaderComponent={
-            <Animated.View style={[styles.loadingProfileContainer, skeletonAnimatedStyle]}>
-              <View style={styles.profileHeader}>
-                <View style={styles.profileMainInfo}>
-                  <View style={styles.skeletonProfileImage} />
-                  <View style={styles.profileInfo}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <View style={[styles.skeletonText, { width: '30%', height: 24 }]} />
-                      <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <View style={[styles.skeletonText, { width: 80, height: 32, borderRadius: 8 }]} />
-                        <View style={[styles.skeletonText, { width: 80, height: 32, borderRadius: 8 }]} />
-                      </View>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            </Animated.View>
-          }
+          ListHeaderComponent={<ProfileSkeleton />}
           contentContainerStyle={styles.container}
           showsVerticalScrollIndicator={false}
           removeClippedSubviews={false}
