@@ -117,7 +117,7 @@ const RegionStatistics = ({ voteId }: Props) => {
       console.error('Region Stats Error:', err);
       setError('통계 데이터를 불러오는데 실패했습니다.');
     } finally {
-      setLoading(false);
+      setTimeout(() => setLoading(false), 500);
     }
   }, [voteId]);
 

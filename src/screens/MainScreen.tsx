@@ -14,6 +14,7 @@ import {
   Pressable,
   RefreshControl,
   Animated as RNAnimated,
+  TextInput,
 } from "react-native"
 import { Feather } from '@expo/vector-icons'
 import Animated, { FadeInLeft, FadeIn, useAnimatedStyle, withRepeat, withSequence, withTiming, useSharedValue } from "react-native-reanimated"
@@ -30,6 +31,7 @@ import CommentScreen from "../screens/CommentScreen"
 import RegionStatistics from "../components/RegionStatistics"
 import AgeStatistics from "../components/AgeStatistics"
 import GenderStatistics from "../components/GenderStatistics"
+import { BlurView } from 'expo-blur'
 
 import { SERVER_URL, IMAGE_BASE_URL } from "../constant/config"
 
@@ -660,6 +662,8 @@ const MainScreen: React.FC = () => {
   const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set())
   const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set())
   const [imageCache, setImageCache] = useState<Record<string, boolean>>({})
+  const [showSearch, setShowSearch] = useState(false)
+  const [searchText, setSearchText] = useState('')
 
   const isFocused = useIsFocused()
   const isFirstLoad = useRef(true);
@@ -879,11 +883,16 @@ const MainScreen: React.FC = () => {
   const renderHeader = useCallback(() => (
     <View style={styles.header}>
       <Text style={styles.headerTitle}>VoteY</Text>
-      <TouchableOpacity onPress={() => Alert.alert("알림", "알림 기능 준비 중입니다.")}>
-        <Feather name="bell" size={24} color="#2D3748" />
-      </TouchableOpacity>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <TouchableOpacity onPress={() => setShowSearch(true)} style={{ marginRight: 16 }}>
+          <Feather name="search" size={24} color="#2D3748" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => Alert.alert("알림", "알림 기능 준비 중입니다.")}> 
+          <Feather name="bell" size={24} color="#2D3748" />
+        </TouchableOpacity>
+      </View>
     </View>
-  ), []);
+  ), [])
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: any[] }) => {
     const imageUrls = viewableItems
@@ -907,8 +916,46 @@ const MainScreen: React.FC = () => {
     },
   }), [onViewableItemsChanged]);
 
+  // 검색창 렌더링
+  const renderSearchModal = () => (
+    showSearch && (
+      <Modal
+        visible={showSearch}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowSearch(false)}
+      >
+        <View style={styles.searchOverlay}>
+          {/* 블러 처리: 웹에서는 fallback으로 반투명 배경 */}
+          <BlurView intensity={40} style={StyleSheet.absoluteFill} tint="dark" />
+          <View style={styles.searchBoxWrapper}>
+            <View style={styles.searchBox}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="투표 제목 검색..."
+                placeholderTextColor="#aaa"
+                value={searchText}
+                onChangeText={setSearchText}
+                autoFocus
+              />
+              <TouchableOpacity style={styles.searchButton} onPress={() => {/* 검색 로직 */}}>
+                <Text style={styles.searchButtonText}>검색</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.closeButton} onPress={() => setShowSearch(false)}>
+                <Feather name="x" size={22} color="#888" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.searchGuideText}>검색어를 입력하세요.</Text>
+          </View>
+        </View>
+      </Modal>
+    )
+  )
+
   return (
     <SafeAreaView style={styles.safeArea}>
+      {renderSearchModal()}
       {isRefreshing && (
         <View style={styles.refreshIndicator}>
           <ActivityIndicator size="small" color="#1499D9" />
@@ -1486,6 +1533,43 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  searchOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  searchBoxWrapper: {
+    position: 'absolute',
+    top: 100,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 8,
+  },
+  searchInput: {
+    flex: 1,
+    padding: 8,
+  },
+  searchButton: {
+    padding: 8,
+  },
+  searchButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  searchGuideText: {
+    marginTop: 16,
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
   },
 })
 

@@ -1,5 +1,5 @@
-export const SERVER_URL = 'http://localhost:8080';
-// export const SERVER_URL = 'http://192.168.45.137:8080';
+// export const SERVER_URL = 'http://localhost:8080';
+export const SERVER_URL = 'http://192.168.0.59:8080';
 
 // export const SERVER_URL = 'http://192.168.0.32:8080';
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -37,24 +37,18 @@ import { SERVER_URL, IMAGE_BASE_URL } from '../constant/config';
 
 const { width } = Dimensions.get('window');
 
-const SkeletonLoader = () => {
+const SkeletonLoader = React.memo(() => {
   const opacity = useSharedValue(0.3);
-  
   useEffect(() => {
     opacity.value = withRepeat(
-      withSequence(
-        withTiming(0.7, { duration: 1000 }),
-        withTiming(0.3, { duration: 1000 })
-      ),
+      withTiming(0.7, { duration: 1000 }),
       -1,
       true
     );
   }, []);
-
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
   }));
-
   return (
     <Animated.View style={[styles.skeletonItem, animatedStyle]}>
       <View style={styles.skeletonHeader}>
@@ -64,14 +58,17 @@ const SkeletonLoader = () => {
           <View style={[styles.skeletonText, { width: '60%' }]} />
         </View>
       </View>
+      <View style={[styles.skeletonText, { width: '80%', height: 16, marginBottom: 12, marginLeft: 12 }]} />
       <View style={styles.skeletonTitle} />
+      <View style={styles.skeletonPostContent} />
       <View style={styles.skeletonOptions}>
         <View style={styles.skeletonOption} />
         <View style={styles.skeletonOption} />
       </View>
+      <View style={styles.skeletonReactions} />
     </Animated.View>
   );
-};
+});
 
 const imageWidth = 100;
 const gaugeWidthAnims = {};
@@ -121,9 +118,13 @@ const UserPageScreen: React.FC = () => {
   const [selectedVoteForStats, setSelectedVoteForStats] = useState<number | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [imageSizes, setImageSizes] = useState<Record<number, { width: number; height: number }>>({});
-  const optionWidthRef = React.useRef<Record<number, number>>({});
+  const [optionWidths, setOptionWidths] = useState<Record<number, number>>({});
   const gaugeAnimRef = React.useRef<Record<number, RNAnimated.Value>>({});
   const [loadedImages, setLoadedImages] = useState<Set<number>>(new Set());
+  const [showSkeleton, setShowSkeleton] = useState(true);
+  const fadeAnim = useSharedValue(0);
+  const skeletonOpacity = useSharedValue(0.3);
+  const [activeStatTab, setActiveStatTab] = useState<'region' | 'age' | 'gender'>('region');
 
   const isFocused = useIsFocused();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList, 'CommentScreen'>>();
@@ -135,6 +136,7 @@ const UserPageScreen: React.FC = () => {
       setVotes([]);
       setPage(0);
       setIsLast(false);
+      setShowSkeleton(true);
       fetchUserData(0);
     }
   }, [isFocused]);
@@ -173,12 +175,29 @@ const UserPageScreen: React.FC = () => {
     fetchFollowStatus();
   }, [currentUserId, userId]);
 
+  useEffect(() => {
+    skeletonOpacity.value = withRepeat(
+      withTiming(0.7, { duration: 1000 }),
+      -1,
+      true
+    );
+  }, []);
+
+  const skeletonAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: skeletonOpacity.value,
+  }));
+
   const fetchUserData = async (nextPage: number) => {
     if (loading || isLast) return;
     setLoading(true);
     try {
       const res = await getUserPage(userId, nextPage);
-      if (nextPage === 0) setProfile(res);
+      if (nextPage === 0) {
+        setProfile(res);
+        setTimeout(() => {
+          setShowSkeleton(false);
+        }, 1000);
+      }
       setVotes((prev) => [...prev, ...res.posts.content]);
       setPage(res.posts.number + 1);
       setIsLast(res.posts.last);
@@ -198,13 +217,6 @@ const UserPageScreen: React.FC = () => {
       console.error('투표 새로고침 실패:', err);
     }
   };
-
-  const isVoteClosed = (finishTime: string) => {
-    const finish = new Date(finishTime)
-    const now = new Date() //KST시스템
-
-    return finish.getTime() < now.getTime()
-  }
 
   const handleVote = async (voteId: number, optionId: number) => {
     try {
@@ -254,25 +266,6 @@ const UserPageScreen: React.FC = () => {
 
     } catch (err) {
       Alert.alert('에러', '팔로우 처리 중 오류가 발생했습니다.');
-    }
-  };
-
-  const formatCreatedAt = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffMinutes = Math.floor(diffTime / (1000 * 60));
-    const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffMinutes < 60) {
-      return `${diffMinutes}분 전`;
-    } else if (diffHours < 24) {
-      return `${diffHours}시간 전`;
-    } else if (diffDays < 7) {
-      return `${diffDays}일 전`;
-    } else {
-      return date.toLocaleDateString();
     }
   };
 
@@ -331,11 +324,42 @@ const UserPageScreen: React.FC = () => {
     });
   }, []);
 
-  const renderItem = ({ item, index }: { item: VoteResponse, index: number }) => {
+  const getCloudfrontUrl = useCallback((url: string | undefined) => {
+    if (!url) return `${IMAGE_BASE_URL}/images/default.png`;
+    if (url.includes('votey-image.s3.ap-northeast-2.amazonaws.com')) {
+      return url.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL);
+    }
+    if (url.startsWith('http')) return url;
+    return `${IMAGE_BASE_URL}${url.startsWith('/') ? url : '/' + url}`;
+  }, []);
+
+  const formatCreatedAt = useCallback((dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffMinutes = Math.floor(diffTime / (1000 * 60));
+    const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    if (diffMinutes < 60) return `${diffMinutes}분 전`;
+    if (diffHours < 24) return `${diffHours}시간 전`;
+    if (diffDays < 7) return `${diffDays}일 전`;
+    return date.toLocaleDateString();
+  }, []);
+
+  const isVoteClosed = useCallback((finishTime: string) => {
+    const finish = new Date(finishTime);
+    const now = new Date();
+    return finish.getTime() < now.getTime();
+  }, []);
+
+  const handleTabChange = useCallback((tab: string) => {
+    setActiveTab(tab);
+  }, []);
+
+  const renderItem = useCallback(({ item, index }: { item: VoteResponse, index: number }) => {
     const closed = isVoteClosed(item.finishTime);
     const selectedOptionId = item.selectedOptionId ?? selectedOptions[item.voteId];
     const hasVoted = !!selectedOptionId;
-    const showGauge = closed || hasVoted;
     const totalCount = item.voteOptions.reduce((sum, opt) => sum + opt.voteCount, 0);
     const hasImageOptions = item.voteOptions.some(opt => opt.optionImage);
 
@@ -379,7 +403,7 @@ const UserPageScreen: React.FC = () => {
               source={{
                 uri: item.profileImage === 'default.jpg'
                   ? `${IMAGE_BASE_URL}/images/default.png`
-                  : item.profileImage,
+                  : getCloudfrontUrl(item.profileImage ?? ''),
               }}
               style={styles.profileImageSmall}
             />
@@ -413,13 +437,7 @@ const UserPageScreen: React.FC = () => {
             {item.images.map((img) => (
               <Image
                 key={img.id}
-                source={{ 
-                  uri: img.imageUrl.includes('votey-image.s3.ap-northeast-2.amazonaws.com')
-                    ? img.imageUrl.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
-                    : img.imageUrl.startsWith('http')
-                      ? img.imageUrl
-                      : `${IMAGE_BASE_URL}${img.imageUrl}`
-                }}
+                source={{ uri: getCloudfrontUrl(img.imageUrl ?? '') }}
                 style={styles.image}
                 resizeMode="cover"
               />
@@ -432,7 +450,6 @@ const UserPageScreen: React.FC = () => {
             {item.voteOptions.map((opt) => {
               const isSelected = selectedOptionId === opt.id;
               const percentage = totalCount > 0 ? Math.round((opt.voteCount / totalCount) * 100) : 0;
-              // 이미지 옵션
               if (opt.optionImage) {
                 return (
                   <View key={opt.id} style={styles.optionWrapper}>
@@ -450,26 +467,24 @@ const UserPageScreen: React.FC = () => {
                       disabled={closed || isSelected}
                       activeOpacity={0.7}
                       onLayout={e => {
-                        optionWidthRef.current[opt.id] = e.nativeEvent.layout.width;
+                        const width = e.nativeEvent.layout.width;
+                        setOptionWidths(prev => {
+                          if (prev[opt.id] === width) return prev;
+                          return { ...prev, [opt.id]: width };
+                        });
                       }}
                     >
                       <Image
-                        source={{ 
-                          uri: opt.optionImage.includes('votey-image.s3.ap-northeast-2.amazonaws.com') 
-                            ? opt.optionImage.replace('https://votey-image.s3.ap-northeast-2.amazonaws.com', IMAGE_BASE_URL)
-                            : opt.optionImage.startsWith('http') 
-                              ? opt.optionImage 
-                              : `${IMAGE_BASE_URL}${opt.optionImage}`
-                        }}
-                        style={[styles.leftOptionImage, { display: loadedImages.has(item.voteId) ? 'flex' : 'none' }]}
+                        source={{ uri: getCloudfrontUrl(opt.optionImage ?? '') }}
+                        style={styles.leftOptionImage}
                         resizeMode="cover"
-                        onLoad={() => handleImageLoad(item.voteId)}
+                        onError={(e) => { console.warn('옵션 이미지 로드 실패:', opt.optionImage, e.nativeEvent); }}
                       />
-                      {showGauge && (
+                      {optionWidths[opt.id] > 0 && (
                         <VoteOptionGauge
                           percentage={percentage}
                           isSelected={isSelected}
-                          width={optionWidthRef.current[opt.id] || 0}
+                          width={optionWidths[opt.id]}
                           imageWidth={imageWidth}
                         />
                       )}
@@ -478,25 +493,22 @@ const UserPageScreen: React.FC = () => {
                           <Text style={[
                             styles.optionButtonText,
                             isSelected && styles.selectedOptionText,
-                            showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
+                            { color: isSelected ? "#2C5282" : "#4A5568" }
                           ]}>
                             {opt.content}
                           </Text>
-                          {showGauge && (
-                            <Text style={[
-                              styles.percentageText,
-                              isSelected && styles.selectedPercentageText
-                            ]}>
-                              {percentage}%
-                            </Text>
-                          )}
+                          <Text style={[
+                            styles.percentageText,
+                            isSelected && styles.selectedPercentageText
+                          ]}>
+                            {percentage}%
+                          </Text>
                         </View>
                       </View>
                     </TouchableOpacity>
                   </View>
                 );
               }
-              // 일반 옵션
               return (
                 <View key={opt.id} style={styles.optionWrapper}>
                   <TouchableOpacity
@@ -512,14 +524,18 @@ const UserPageScreen: React.FC = () => {
                     disabled={closed || isSelected}
                     activeOpacity={0.7}
                     onLayout={e => {
-                      optionWidthRef.current[opt.id] = e.nativeEvent.layout.width;
+                      const width = e.nativeEvent.layout.width;
+                      setOptionWidths(prev => {
+                        if (prev[opt.id] === width) return prev;
+                        return { ...prev, [opt.id]: width };
+                      });
                     }}
                   >
-                    {showGauge && (
+                    {optionWidths[opt.id] > 0 && (
                       <VoteOptionGauge
                         percentage={percentage}
                         isSelected={isSelected}
-                        width={optionWidthRef.current[opt.id] || 0}
+                        width={optionWidths[opt.id]}
                         imageWidth={0}
                       />
                     )}
@@ -527,24 +543,22 @@ const UserPageScreen: React.FC = () => {
                       <Text style={[
                         styles.optionButtonText,
                         isSelected && styles.selectedOptionText,
-                        showGauge && { color: isSelected ? "#2C5282" : "#4A5568" }
+                        { color: isSelected ? "#2C5282" : "#4A5568" }
                       ]}>
                         {opt.content}
                       </Text>
-                      {showGauge && (
-                        <Text style={[
-                          styles.percentageText,
-                          isSelected && styles.selectedPercentageText
-                        ]}>
-                          {percentage}%
-                        </Text>
-                      )}
+                      <Text style={[
+                        styles.percentageText,
+                        isSelected && styles.selectedPercentageText
+                      ]}>
+                        {percentage}%
+                      </Text>
                     </View>
                   </TouchableOpacity>
                 </View>
               );
             })}
-            {showGauge && totalCount > 0 && (
+            {totalCount > 0 && (
               <Text style={styles.responseCountText}>{totalCount}명 참여</Text>
             )}
           </View>
@@ -602,15 +616,17 @@ const UserPageScreen: React.FC = () => {
         </View>
       </Animated.View>
     );
-  };
+  }, [getCloudfrontUrl, formatCreatedAt, isVoteClosed, selectedOptions, handleVote, handleToggleLike, handleCommentPress, handleToggleBookmark, handleStatisticsPress, optionWidths]);
 
-  const renderHeader = () => {
+  const renderHeader = useCallback(() => {
     if (!profile) return (
       <View style={styles.loadingProfileContainer}>
         <View style={styles.skeletonProfile}>
           <View style={styles.skeletonProfileImage} />
           <View style={styles.skeletonProfileInfo}>
-            <View style={styles.skeletonText} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={[styles.skeletonText, { width: '100%', height: 24 }]} />
+            </View>
           </View>
         </View>
       </View>
@@ -626,7 +642,7 @@ const UserPageScreen: React.FC = () => {
               source={{
                 uri: isDefault
                   ? `${IMAGE_BASE_URL}/images/default.png`
-                  : profile.profileImage,
+                  : getCloudfrontUrl(profile.profileImage ?? ''),
               }}
               style={styles.profileImage}
             />
@@ -702,11 +718,30 @@ const UserPageScreen: React.FC = () => {
         </View>
       </View>
     );
-  };
+  }, [profile, currentUserId, userId, isFollowing, getCloudfrontUrl, handleFollowToggle, handleTabChange]);
 
-  const handleTabChange = (tab: string) => {
-    setActiveTab(tab);
-  };
+  const keyExtractor = useCallback((item: VoteResponse) => item.voteId.toString(), []);
+
+  const flatListProps = useMemo(() => ({
+    data: activeTab === 'posts' ? votes : [],
+    keyExtractor,
+    renderItem: activeTab === 'posts' ? renderItem : undefined,
+    contentContainerStyle: styles.container,
+    onEndReached: () => activeTab === 'posts' && fetchUserData(page),
+    onEndReachedThreshold: 0.5,
+    ListHeaderComponent: renderHeader,
+    refreshControl: (
+      <RefreshControl
+        refreshing={isRefreshing}
+        onRefresh={handleRefresh}
+        colors={["#1499D9"]}
+        tintColor="#1499D9"
+        progressViewOffset={0}
+      />
+    ),
+    ListEmptyComponent: null,
+    showsVerticalScrollIndicator: false,
+  }), [activeTab, votes, renderItem, renderHeader, isRefreshing, handleRefresh, fetchUserData, page]);
 
   const renderEmptyPosts = () => {
     if (loading) return null;
@@ -720,32 +755,34 @@ const UserPageScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {isRefreshing && (
-        <View style={styles.refreshIndicator}>
-          <ActivityIndicator size="small" color="#1499D9" />
-        </View>
+      {showSkeleton ? (
+        <FlatList
+          key="skeleton"
+          data={Array(3).fill(null)}
+          keyExtractor={(_, index) => `skeleton-${index}`}
+          renderItem={({ item, index }) => <SkeletonLoader key={index} />}
+          ListHeaderComponent={
+            <Animated.View style={[styles.loadingProfileContainer, skeletonAnimatedStyle]}>
+              <View style={styles.profileHeader}>
+                <View style={styles.profileMainInfo}>
+                  <View style={styles.skeletonProfileImage} />
+                  <View style={styles.profileInfo}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <View style={[styles.skeletonText, { width: '100%', height: 24 }]} />
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </Animated.View>
+          }
+          contentContainerStyle={styles.container}
+          showsVerticalScrollIndicator={false}
+        />
+      ) : (
+        <FlatList
+          {...flatListProps}
+        />
       )}
-      <FlatList
-        style={styles.flatList}
-        data={activeTab === 'posts' ? votes : []}
-        keyExtractor={(item) => item.voteId.toString()}
-        renderItem={activeTab === 'posts' ? renderItem : null}
-        contentContainerStyle={styles.container}
-        onEndReached={() => activeTab === 'posts' && fetchUserData(page)}
-        onEndReachedThreshold={0.5}
-        ListHeaderComponent={renderHeader}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={handleRefresh}
-            colors={["#1499D9"]}
-            tintColor="#1499D9"
-            progressViewOffset={0}
-          />
-        }
-        ListEmptyComponent={null}
-        showsVerticalScrollIndicator={false}
-      />
 
       {showCommentModal && selectedVoteId && (
         <Modal
@@ -778,6 +815,60 @@ const UserPageScreen: React.FC = () => {
                   }
                 }}
               />
+            </View>
+          </View>
+        </Modal>
+      )}
+      {showStatisticsModal && selectedVoteForStats && (
+        <Modal
+          visible={showStatisticsModal}
+          transparent
+          statusBarTranslucent
+          animationType="slide"
+          onRequestClose={() => setShowStatisticsModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <Pressable
+              style={styles.modalBackground}
+              onPress={() => setShowStatisticsModal(false)}
+            >
+              <View style={styles.modalBackdrop} />
+            </Pressable>
+            <View style={[styles.modalContainer, styles.statisticsModalContainer]}>
+              <View style={styles.statisticsHeader}>
+                <Text style={styles.statisticsTitle}>투표 통계</Text>
+                <TouchableOpacity 
+                  onPress={() => setShowStatisticsModal(false)}
+                  style={styles.closeButton}
+                >
+                  <Feather name="x" size={24} color="#4A5568" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.statisticsTabContainer}>
+                <TouchableOpacity
+                  style={[styles.statisticsTabButton, activeStatTab === 'region' && styles.activeStatisticsTab]}
+                  onPress={() => setActiveStatTab('region')}
+                >
+                  <Text style={[styles.statisticsTabText, activeStatTab === 'region' && styles.activeStatisticsTabText]}>지역별</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.statisticsTabButton, activeStatTab === 'age' && styles.activeStatisticsTab]}
+                  onPress={() => setActiveStatTab('age')}
+                >
+                  <Text style={[styles.statisticsTabText, activeStatTab === 'age' && styles.activeStatisticsTabText]}>연령별</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.statisticsTabButton, activeStatTab === 'gender' && styles.activeStatisticsTab]}
+                  onPress={() => setActiveStatTab('gender')}
+                >
+                  <Text style={[styles.statisticsTabText, activeStatTab === 'gender' && styles.activeStatisticsTabText]}>성별</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.statisticsContent}>
+                {activeStatTab === 'region' && <RegionStatistics voteId={selectedVoteForStats} />}
+                {activeStatTab === 'age' && <AgeStatistics voteId={selectedVoteForStats} />}
+                {activeStatTab === 'gender' && <GenderStatistics voteId={selectedVoteForStats} />}
+              </View>
             </View>
           </View>
         </Modal>
@@ -1234,18 +1325,12 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   skeletonProfileImage: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: '#E2E8F0',
-    borderWidth: 3,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#CBD5E0',
+    borderWidth: 2,
     borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-    marginLeft: 12,
   },
   skeletonProfileInfo: {
     marginLeft: 20,
@@ -1292,28 +1377,37 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   skeletonPostContent: {
-    gap: 8,
-    marginBottom: 16,
+    height: 20,
+    backgroundColor: '#CBD5E0',
+    borderRadius: 8,
+    marginBottom: 5,
+    width: '90%',
+    marginHorizontal: 12,
   },
   skeletonText: {
-    height: 16,
-    backgroundColor: '#E2E8F0',
-    borderRadius: 4,
+    height: 14,
+    backgroundColor: '#CBD5E0',
+    borderRadius: 7,
+    marginBottom: 3,
     width: '80%',
   },
   skeletonOptions: {
-    gap: 8,
-    marginBottom: 12,
+    paddingHorizontal: 8,
+    gap: 3,
   },
   skeletonOption: {
-    height: 54,
-    backgroundColor: '#E2E8F0',
-    borderRadius: 12,
+    height: 40,
+    backgroundColor: '#CBD5E0',
+    borderRadius: 8,
+    width: '100%',
   },
   skeletonReactions: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: 16,
+    height: 28,
+    backgroundColor: '#CBD5E0',
+    borderRadius: 8,
+    marginTop: 6,
+    marginHorizontal: 12,
+    width: '90%',
   },
   skeletonReaction: {
     width: 24,
@@ -1322,27 +1416,29 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   skeletonItem: {
-    backgroundColor: '#F7FAFC',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    marginHorizontal: 4,
-    width: '100%',
+    backgroundColor: '#FFFFFF',
+    marginBottom: 0,
+    borderRadius: 0,
+    padding: 0,
+    borderBottomWidth: 0,
+    borderBottomColor: '#f0f0f0',
   },
   skeletonHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    padding: 12,
+    gap: 5,
   },
   skeletonUserInfo: {
     flex: 1,
   },
   skeletonTitle: {
     height: 24,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#CBD5E0',
     borderRadius: 12,
-    marginBottom: 16,
+    marginBottom: 3,
     width: '90%',
+    marginHorizontal: 12,
   },
   refreshIndicator: {
     position: 'absolute',
@@ -1358,6 +1454,49 @@ const styles = StyleSheet.create({
   loadingContainer: {
     padding: 16,
     alignItems: 'center',
+  },
+  statisticsModalContainer: {
+    height: '85%',
+  },
+  statisticsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  statisticsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#2D3748',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  statisticsTabContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+  },
+  statisticsTabButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  activeStatisticsTab: {},
+  statisticsTabText: {
+    fontSize: 15,
+    color: '#718096',
+    fontWeight: '500',
+  },
+  activeStatisticsTabText: {
+    color: '#1499D9',
+    fontWeight: '600',
+  },
+  statisticsContent: {
+    flex: 1,
   },
 });
 

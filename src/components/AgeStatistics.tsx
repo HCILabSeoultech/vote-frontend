@@ -141,7 +141,7 @@ const AgeStatistics: React.FC<AgeStatisticsProps> = ({ voteId }) => {
       }
       setError('연령별 통계를 불러오는데 실패했습니다.');
     } finally {
-      setLoading(false);
+      setTimeout(() => setLoading(false), 500);
     }
   }, [voteId]);
 
